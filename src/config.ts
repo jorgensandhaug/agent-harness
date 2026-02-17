@@ -27,6 +27,24 @@ const HarnessConfigSchema = z
 				env: {},
 				enabled: true,
 			},
+			codex: {
+				command: "codex",
+				extraArgs: [],
+				env: {},
+				enabled: true,
+			},
+			pi: {
+				command: "pi",
+				extraArgs: [],
+				env: {},
+				enabled: true,
+			},
+			opencode: {
+				command: "opencode",
+				extraArgs: [],
+				env: {},
+				enabled: true,
+			},
 		}),
 	})
 	.strict();
