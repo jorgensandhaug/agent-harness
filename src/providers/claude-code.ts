@@ -110,6 +110,18 @@ export const claudeCodeProvider: Provider = {
 		while (i < lines.length) {
 			const line = lines[i] ?? "";
 
+			// Check for tool end before tool start ("<tool> completed" also matches start regex)
+			const toolEndMatch = line.match(TOOL_END_PATTERN);
+			if (toolEndMatch) {
+				events.push({
+					kind: "tool_end",
+					tool: toolEndMatch[1] ?? "unknown",
+					output: "",
+				});
+				i++;
+				continue;
+			}
+
 			// Check for tool start
 			const toolStartMatch = line.match(TOOL_START_PATTERN);
 			if (toolStartMatch) {
@@ -117,18 +129,6 @@ export const claudeCodeProvider: Provider = {
 					kind: "tool_start",
 					tool: toolStartMatch[1] ?? "unknown",
 					input: toolStartMatch[2] ?? "",
-				});
-				i++;
-				continue;
-			}
-
-			// Check for tool end
-			const toolEndMatch = line.match(TOOL_END_PATTERN);
-			if (toolEndMatch) {
-				events.push({
-					kind: "tool_end",
-					tool: toolEndMatch[1] ?? "unknown",
-					output: "",
 				});
 				i++;
 				continue;
