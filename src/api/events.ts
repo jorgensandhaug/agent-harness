@@ -2,13 +2,14 @@ import type { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import type { EventBus } from "../events/bus.ts";
 import type { Manager } from "../session/manager.ts";
-import type { EventId } from "../types.ts";
+import { isValidEventId } from "../types.ts";
 
 export function registerEventRoutes(app: Hono, manager: Manager, eventBus: EventBus): void {
 	// SSE for all agents in a project
 	app.get("/api/v1/projects/:name/events", (c) => {
 		const projectName = c.req.param("name");
-		const since = c.req.query("since") as EventId | undefined;
+		const sinceRaw = c.req.query("since");
+		const since = sinceRaw && isValidEventId(sinceRaw) ? sinceRaw : undefined;
 
 		// Verify project exists
 		const projectResult = manager.getProject(projectName);
@@ -75,10 +76,11 @@ export function registerEventRoutes(app: Hono, manager: Manager, eventBus: Event
 	});
 
 	// SSE for a single agent
-	app.get("/api/v1/projects/:name/agents/:agentId/events", (c) => {
+	app.get("/api/v1/projects/:name/agents/:id/events", (c) => {
 		const projectName = c.req.param("name");
-		const agentId = c.req.param("agentId");
-		const since = c.req.query("since") as EventId | undefined;
+		const agentId = c.req.param("id");
+		const sinceRaw = c.req.query("since");
+		const since = sinceRaw && isValidEventId(sinceRaw) ? sinceRaw : undefined;
 
 		// Verify agent exists
 		const agentResult = manager.getAgent(projectName, agentId);

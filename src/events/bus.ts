@@ -42,8 +42,10 @@ export function createEventBus(maxHistory: number) {
 
 	function since(eventId: EventId, filter: EventFilter): readonly NormalizedEvent[] {
 		const counter = eventIdCounter(eventId);
+		if (counter === null) return [];
 		return history.filter((e) => {
-			if (eventIdCounter(e.id) <= counter) return false;
+			const eCounter = eventIdCounter(e.id);
+			if (eCounter === null || eCounter <= counter) return false;
 			return matchesFilter(e, filter);
 		});
 	}

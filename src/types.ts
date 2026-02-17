@@ -33,10 +33,15 @@ export function newEventId(): EventId {
 	return `evt-${eventCounter}` as EventId;
 }
 
-/** Parse an EventId to extract the counter value */
-export function eventIdCounter(id: EventId): number {
+/** Validate an event ID string has the expected format */
+export function isValidEventId(id: string): id is EventId {
+	return /^evt-\d+$/.test(id);
+}
+
+/** Parse an EventId to extract the counter value. Returns null for invalid IDs. */
+export function eventIdCounter(id: EventId): number | null {
 	const match = id.match(/^evt-(\d+)$/);
-	if (!match?.[1]) return 0;
+	if (!match?.[1]) return null;
 	return Number.parseInt(match[1], 10);
 }
 
