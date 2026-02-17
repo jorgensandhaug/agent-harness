@@ -1,10 +1,4 @@
-export type AgentStatus =
-	| "starting"
-	| "idle"
-	| "processing"
-	| "waiting_input"
-	| "error"
-	| "exited";
+export type AgentStatus = "starting" | "idle" | "processing" | "waiting_input" | "error" | "exited";
 
 export type ProviderEvent =
 	| { kind: "text"; content: string }

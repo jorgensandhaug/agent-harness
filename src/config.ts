@@ -20,16 +20,14 @@ const HarnessConfigSchema = z
 		pollIntervalMs: z.number().int().min(100).max(30000).default(1000),
 		captureLines: z.number().int().min(10).max(10000).default(500),
 		maxEventHistory: z.number().int().min(100).max(100000).default(10000),
-		providers: z
-			.record(ProviderConfigSchema)
-			.default({
-				"claude-code": {
-					command: "claude",
-					extraArgs: [],
-					env: {},
-					enabled: true,
-				},
-			}),
+		providers: z.record(ProviderConfigSchema).default({
+			"claude-code": {
+				command: "claude",
+				extraArgs: [],
+				env: {},
+				enabled: true,
+			},
+		}),
 	})
 	.strict();
 
@@ -37,6 +35,7 @@ export type HarnessConfig = z.infer<typeof HarnessConfigSchema>;
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 
 export async function loadConfig(path?: string): Promise<HarnessConfig> {
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
 	const configPath = path ?? process.env["HARNESS_CONFIG"] ?? "harness.json";
 
 	let raw: unknown = {};

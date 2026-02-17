@@ -38,10 +38,7 @@ export function createManager(config: HarnessConfig, store: Store, eventBus: Eve
 
 	// --- Projects ---
 
-	async function createProject(
-		name: string,
-		cwd: string,
-	): Promise<Result<Project, ManagerError>> {
+	async function createProject(name: string, cwd: string): Promise<Result<Project, ManagerError>> {
 		const pName = projectName(name);
 
 		if (store.getProject(pName)) {
@@ -127,9 +124,7 @@ export function createManager(config: HarnessConfig, store: Store, eventBus: Eve
 		}
 
 		// Override model if specified
-		const effectiveConfig = model
-			? { ...providerConfig, model }
-			: providerConfig;
+		const effectiveConfig = model ? { ...providerConfig, model } : providerConfig;
 
 		const id = newAgentId();
 		const wName = windowName(providerName);
@@ -138,13 +133,7 @@ export function createManager(config: HarnessConfig, store: Store, eventBus: Eve
 		const target = `${project.tmuxSession}:${wName}`;
 
 		// Create tmux window with the agent command
-		const windowResult = await tmux.createWindow(
-			project.tmuxSession,
-			wName,
-			project.cwd,
-			cmd,
-			env,
-		);
+		const windowResult = await tmux.createWindow(project.tmuxSession, wName, project.cwd, cmd, env);
 		if (!windowResult.ok) {
 			return err({
 				code: "TMUX_ERROR",
@@ -204,10 +193,7 @@ export function createManager(config: HarnessConfig, store: Store, eventBus: Eve
 		return ok(agent);
 	}
 
-	function getAgent(
-		projectNameStr: string,
-		id: string,
-	): Result<Agent, ManagerError> {
+	function getAgent(projectNameStr: string, id: string): Result<Agent, ManagerError> {
 		const agent = store.getAgent(agentId(id));
 		if (!agent || agent.project !== projectName(projectNameStr)) {
 			return err({ code: "AGENT_NOT_FOUND", id, project: projectNameStr });

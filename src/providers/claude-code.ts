@@ -4,13 +4,22 @@ import type { AgentStatus, Provider, ProviderConfig, ProviderEvent } from "./typ
  * Strip ANSI escape codes from a string for pattern matching.
  * Covers CSI sequences, OSC sequences, and other common escape patterns.
  */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape codes require control characters
+const ANSI_CSI = /\x1b\[[0-9;]*[A-Za-z]/g;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape codes require control characters
+const ANSI_OSC = /\x1b\][^\x07]*\x07/g;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape codes require control characters
+const ANSI_CHARSET = /\x1b[()][AB012]/g;
+// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape codes require control characters
+const ANSI_TWOCHAR = /\x1b[\x20-\x2f][\x30-\x7e]/g;
+
 function stripAnsi(text: string): string {
 	return text
-		.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "") // CSI sequences
-		.replace(/\x1b\][^\x07]*\x07/g, "") // OSC sequences
-		.replace(/\x1b[()][AB012]/g, "") // Character set selection
-		.replace(/\x1b[\x20-\x2f][\x30-\x7e]/g, "") // 2-char sequences
-		.replace(/\u00a0/g, " "); // Non-breaking spaces → regular spaces
+		.replace(ANSI_CSI, "")
+		.replace(ANSI_OSC, "")
+		.replace(ANSI_CHARSET, "")
+		.replace(ANSI_TWOCHAR, "")
+		.replace(/\u00a0/g, " ");
 }
 
 /** Patterns observed from Claude Code interactive mode (CAO research) */

@@ -72,9 +72,7 @@ export function registerAgentRoutes(app: Hono, manager: Manager): void {
 			return c.json(
 				{
 					error: "INVALID_REQUEST",
-					message: parsed.error.issues
-						.map((i) => `${i.path.join(".")}: ${i.message}`)
-						.join("; "),
+					message: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
 				},
 				400,
 			);
@@ -132,9 +130,7 @@ export function registerAgentRoutes(app: Hono, manager: Manager): void {
 			return c.json(
 				{
 					error: "INVALID_REQUEST",
-					message: parsed.error.issues
-						.map((i) => `${i.path.join(".")}: ${i.message}`)
-						.join("; "),
+					message: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
 				},
 				400,
 			);

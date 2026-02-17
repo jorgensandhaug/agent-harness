@@ -35,10 +35,7 @@ export function createPoller(
 		if (paneDeadResult.ok && paneDeadResult.value === "1") {
 			if (agent.status !== "exited") {
 				const from = agent.status;
-				manager.updateAgentStatus(
-					agent.id as AgentId,
-					"exited",
-				);
+				manager.updateAgentStatus(agent.id as AgentId, "exited");
 				eventBus.emit({
 					id: newEventId(),
 					ts: new Date().toISOString(),
@@ -76,19 +73,13 @@ export function createPoller(
 		const diff = diffCaptures(agent.lastCapturedOutput, currentOutput);
 
 		// Update stored output
-		manager.updateAgentOutput(
-			agent.id as AgentId,
-			currentOutput,
-		);
+		manager.updateAgentOutput(agent.id as AgentId, currentOutput);
 
 		// Parse current status
 		const newStatus = provider.parseStatus(currentOutput);
 		if (newStatus !== agent.status) {
 			const from = agent.status;
-			manager.updateAgentStatus(
-				agent.id as AgentId,
-				newStatus,
-			);
+			manager.updateAgentStatus(agent.id as AgentId, newStatus);
 			eventBus.emit({
 				id: newEventId(),
 				ts: new Date().toISOString(),
@@ -170,9 +161,7 @@ export function createPoller(
 
 		try {
 			const agents = store.listAgents();
-			const activeAgents = agents.filter(
-				(a) => a.status !== "exited",
-			);
+			const activeAgents = agents.filter((a) => a.status !== "exited");
 
 			const promises = activeAgents.map((agent) =>
 				pollAgent({

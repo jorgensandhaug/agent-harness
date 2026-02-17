@@ -31,10 +31,7 @@ export function createEventBus(maxHistory: number) {
 		}
 	}
 
-	function subscribe(
-		filter: EventFilter,
-		callback: (event: NormalizedEvent) => void,
-	): () => void {
+	function subscribe(filter: EventFilter, callback: (event: NormalizedEvent) => void): () => void {
 		const sub: Subscriber = { filter, callback };
 		subscribers.push(sub);
 		return () => {
@@ -43,10 +40,7 @@ export function createEventBus(maxHistory: number) {
 		};
 	}
 
-	function since(
-		eventId: EventId,
-		filter: EventFilter,
-	): readonly NormalizedEvent[] {
+	function since(eventId: EventId, filter: EventFilter): readonly NormalizedEvent[] {
 		const counter = eventIdCounter(eventId);
 		return history.filter((e) => {
 			if (eventIdCounter(e.id) <= counter) return false;

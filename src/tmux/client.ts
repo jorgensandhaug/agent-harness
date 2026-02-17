@@ -4,9 +4,7 @@ import { log } from "../log.ts";
 import { type Result, err, ok } from "../types.ts";
 import type { TmuxError, TmuxSessionInfo, TmuxWindowInfo } from "./types.ts";
 
-async function exec(
-	args: readonly string[],
-): Promise<Result<string, TmuxError>> {
+async function exec(args: readonly string[]): Promise<Result<string, TmuxError>> {
 	log.debug("tmux exec", { args });
 
 	let proc: ReturnType<typeof Bun.spawn>;
@@ -23,13 +21,9 @@ async function exec(
 	const stdoutStream = proc.stdout;
 	const stderrStream = proc.stderr;
 	const stdout =
-		stdoutStream && typeof stdoutStream !== "number"
-			? await new Response(stdoutStream).text()
-			: "";
+		stdoutStream && typeof stdoutStream !== "number" ? await new Response(stdoutStream).text() : "";
 	const stderr =
-		stderrStream && typeof stderrStream !== "number"
-			? await new Response(stderrStream).text()
-			: "";
+		stderrStream && typeof stderrStream !== "number" ? await new Response(stderrStream).text() : "";
 
 	if (exitCode !== 0) {
 		const cmd = `tmux ${args.join(" ")}`;
@@ -51,31 +45,11 @@ async function exec(
 	return ok(stdout);
 }
 
-export async function createSession(
-	name: string,
-	cwd: string,
-): Promise<Result<void, TmuxError>> {
-	const result = await exec([
-		"new-session",
-		"-d",
-		"-s",
-		name,
-		"-c",
-		cwd,
-		"-x",
-		"220",
-		"-y",
-		"50",
-	]);
+export async function createSession(name: string, cwd: string): Promise<Result<void, TmuxError>> {
+	const result = await exec(["new-session", "-d", "-s", name, "-c", cwd, "-x", "220", "-y", "50"]);
 	if (!result.ok) return result;
 	// Set remain-on-exit for this session's windows
-	const optResult = await exec([
-		"set-option",
-		"-t",
-		name,
-		"remain-on-exit",
-		"on",
-	]);
+	const optResult = await exec(["set-option", "-t", name, "remain-on-exit", "on"]);
 	if (!optResult.ok) return optResult;
 	return ok(undefined);
 }
@@ -106,10 +80,7 @@ export async function createWindow(
 	return ok(result.value.trim());
 }
 
-export async function sendInput(
-	target: string,
-	text: string,
-): Promise<Result<void, TmuxError>> {
+export async function sendInput(target: string, text: string): Promise<Result<void, TmuxError>> {
 	// Write text to temp file, load into tmux buffer, paste into target pane
 	const tempPath = join(tmpdir(), `ah-input-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 	await Bun.write(tempPath, text);
@@ -136,10 +107,7 @@ export async function sendInput(
 	}
 }
 
-export async function sendKeys(
-	target: string,
-	keys: string,
-): Promise<Result<void, TmuxError>> {
+export async function sendKeys(target: string, keys: string): Promise<Result<void, TmuxError>> {
 	const result = await exec(["send-keys", "-t", target, keys]);
 	if (!result.ok) return result;
 	return ok(undefined);
@@ -149,7 +117,7 @@ export async function capturePane(
 	target: string,
 	lines: number,
 ): Promise<Result<string, TmuxError>> {
-	return exec(["capture-pane", "-t", target, "-p", `-S`, `-${lines}`]);
+	return exec(["capture-pane", "-t", target, "-p", "-S", `-${lines}`]);
 }
 
 export async function startPipePane(
@@ -161,25 +129,19 @@ export async function startPipePane(
 	return ok(undefined);
 }
 
-export async function stopPipePane(
-	target: string,
-): Promise<Result<void, TmuxError>> {
+export async function stopPipePane(target: string): Promise<Result<void, TmuxError>> {
 	const result = await exec(["pipe-pane", "-t", target]);
 	if (!result.ok) return result;
 	return ok(undefined);
 }
 
-export async function killWindow(
-	target: string,
-): Promise<Result<void, TmuxError>> {
+export async function killWindow(target: string): Promise<Result<void, TmuxError>> {
 	const result = await exec(["kill-window", "-t", target]);
 	if (!result.ok) return result;
 	return ok(undefined);
 }
 
-export async function killSession(
-	name: string,
-): Promise<Result<void, TmuxError>> {
+export async function killSession(name: string): Promise<Result<void, TmuxError>> {
 	const result = await exec(["kill-session", "-t", name]);
 	if (!result.ok) return result;
 	return ok(undefined);
@@ -262,13 +224,7 @@ export async function getPaneVar(
 	target: string,
 	variable: string,
 ): Promise<Result<string, TmuxError>> {
-	const result = await exec([
-		"display-message",
-		"-t",
-		target,
-		"-p",
-		`#{${variable}}`,
-	]);
+	const result = await exec(["display-message", "-t", target, "-p", `#{${variable}}`]);
 	if (!result.ok) return result;
 	return ok(result.value.trim());
 }
