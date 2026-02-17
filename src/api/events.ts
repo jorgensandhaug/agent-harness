@@ -4,6 +4,29 @@ import type { EventBus } from "../events/bus.ts";
 import type { Manager } from "../session/manager.ts";
 import { isValidEventId } from "../types.ts";
 
+type StreamState = {
+	closed: boolean;
+	heartbeat: ReturnType<typeof setInterval> | null;
+	unsubscribe: (() => void) | null;
+};
+
+function cleanupStream(state: StreamState): void {
+	if (state.closed) return;
+	state.closed = true;
+	if (state.heartbeat) {
+		clearInterval(state.heartbeat);
+		state.heartbeat = null;
+	}
+	if (state.unsubscribe) {
+		state.unsubscribe();
+		state.unsubscribe = null;
+	}
+}
+
+function newStreamState(): StreamState {
+	return { closed: false, heartbeat: null, unsubscribe: null };
+}
+
 export function registerEventRoutes(app: Hono, manager: Manager, eventBus: EventBus): void {
 	// SSE for all agents in a project
 	app.get("/api/v1/projects/:name/events", (c) => {
@@ -11,7 +34,6 @@ export function registerEventRoutes(app: Hono, manager: Manager, eventBus: Event
 		const sinceRaw = c.req.query("since");
 		const since = sinceRaw && isValidEventId(sinceRaw) ? sinceRaw : undefined;
 
-		// Verify project exists
 		const projectResult = manager.getProject(projectName);
 		if (!projectResult.ok) {
 			return c.json(
@@ -22,8 +44,8 @@ export function registerEventRoutes(app: Hono, manager: Manager, eventBus: Event
 
 		return streamSSE(c, async (stream) => {
 			const filter = { project: projectName };
+			const state = newStreamState();
 
-			// Send any missed events since reconnect
 			if (since) {
 				const missed = eventBus.since(since, filter);
 				for (const event of missed) {
@@ -35,41 +57,24 @@ export function registerEventRoutes(app: Hono, manager: Manager, eventBus: Event
 				}
 			}
 
-			// Subscribe to new events
-			let closed = false;
-			const unsubscribe = eventBus.subscribe(filter, (event) => {
-				if (closed) return;
+			state.unsubscribe = eventBus.subscribe(filter, (event) => {
+				if (state.closed) return;
 				stream
-					.writeSSE({
-						id: event.id,
-						event: event.type,
-						data: JSON.stringify(event),
-					})
-					.catch(() => {
-						closed = true;
-					});
+					.writeSSE({ id: event.id, event: event.type, data: JSON.stringify(event) })
+					.catch(() => cleanupStream(state));
 			});
 
-			// Keep connection alive with heartbeat
-			const heartbeat = setInterval(() => {
-				if (closed) {
-					clearInterval(heartbeat);
+			state.heartbeat = setInterval(() => {
+				if (state.closed) {
+					cleanupStream(state);
 					return;
 				}
-				stream.writeSSE({ event: "heartbeat", data: "" }).catch(() => {
-					closed = true;
-				});
+				stream.writeSSE({ event: "heartbeat", data: "" }).catch(() => cleanupStream(state));
 			}, 15000);
 
-			// Wait for client disconnect
-			stream.onAbort(() => {
-				closed = true;
-				clearInterval(heartbeat);
-				unsubscribe();
-			});
+			stream.onAbort(() => cleanupStream(state));
 
-			// Keep stream open — wait indefinitely until abort
-			while (!closed) {
+			while (!state.closed) {
 				await Bun.sleep(1000);
 			}
 		});
@@ -82,7 +87,6 @@ export function registerEventRoutes(app: Hono, manager: Manager, eventBus: Event
 		const sinceRaw = c.req.query("since");
 		const since = sinceRaw && isValidEventId(sinceRaw) ? sinceRaw : undefined;
 
-		// Verify agent exists
 		const agentResult = manager.getAgent(projectName, agentId);
 		if (!agentResult.ok) {
 			return c.json(
@@ -96,8 +100,8 @@ export function registerEventRoutes(app: Hono, manager: Manager, eventBus: Event
 
 		return streamSSE(c, async (stream) => {
 			const filter = { project: projectName, agentId };
+			const state = newStreamState();
 
-			// Send missed events
 			if (since) {
 				const missed = eventBus.since(since, filter);
 				for (const event of missed) {
@@ -109,38 +113,24 @@ export function registerEventRoutes(app: Hono, manager: Manager, eventBus: Event
 				}
 			}
 
-			// Subscribe
-			let closed = false;
-			const unsubscribe = eventBus.subscribe(filter, (event) => {
-				if (closed) return;
+			state.unsubscribe = eventBus.subscribe(filter, (event) => {
+				if (state.closed) return;
 				stream
-					.writeSSE({
-						id: event.id,
-						event: event.type,
-						data: JSON.stringify(event),
-					})
-					.catch(() => {
-						closed = true;
-					});
+					.writeSSE({ id: event.id, event: event.type, data: JSON.stringify(event) })
+					.catch(() => cleanupStream(state));
 			});
 
-			const heartbeat = setInterval(() => {
-				if (closed) {
-					clearInterval(heartbeat);
+			state.heartbeat = setInterval(() => {
+				if (state.closed) {
+					cleanupStream(state);
 					return;
 				}
-				stream.writeSSE({ event: "heartbeat", data: "" }).catch(() => {
-					closed = true;
-				});
+				stream.writeSSE({ event: "heartbeat", data: "" }).catch(() => cleanupStream(state));
 			}, 15000);
 
-			stream.onAbort(() => {
-				closed = true;
-				clearInterval(heartbeat);
-				unsubscribe();
-			});
+			stream.onAbort(() => cleanupStream(state));
 
-			while (!closed) {
+			while (!state.closed) {
 				await Bun.sleep(1000);
 			}
 		});
