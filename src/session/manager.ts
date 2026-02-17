@@ -86,8 +86,14 @@ export function createManager(config: HarnessConfig, store: Store, eventBus: Eve
 			return err({ code: "PROJECT_NOT_FOUND", name });
 		}
 
-		// Kill tmux session
-		await tmux.killSession(project.tmuxSession);
+		// Kill tmux session — propagate failure
+		const killResult = await tmux.killSession(project.tmuxSession);
+		if (!killResult.ok) {
+			return err({
+				code: "TMUX_ERROR",
+				message: `Failed to kill session '${project.tmuxSession}': ${JSON.stringify(killResult.error)}`,
+			});
+		}
 
 		store.removeProject(pName);
 		log.info("project deleted", { name });
@@ -274,13 +280,20 @@ export function createManager(config: HarnessConfig, store: Store, eventBus: Eve
 		if (!agentResult.ok) return agentResult;
 		const agent = agentResult.value;
 
-		// Send Escape then Ctrl-C
-		await tmux.sendKeys(agent.tmuxTarget, "Escape");
-		const result = await tmux.sendKeys(agent.tmuxTarget, "C-c");
-		if (!result.ok) {
+		// Send Escape then Ctrl-C — check both calls
+		const escResult = await tmux.sendKeys(agent.tmuxTarget, "Escape");
+		if (!escResult.ok) {
 			return err({
 				code: "TMUX_ERROR",
-				message: `Failed to send abort: ${JSON.stringify(result.error)}`,
+				message: `Failed to send Escape: ${JSON.stringify(escResult.error)}`,
+			});
+		}
+
+		const ctrlcResult = await tmux.sendKeys(agent.tmuxTarget, "C-c");
+		if (!ctrlcResult.ok) {
+			return err({
+				code: "TMUX_ERROR",
+				message: `Failed to send Ctrl-C: ${JSON.stringify(ctrlcResult.error)}`,
 			});
 		}
 
@@ -295,17 +308,29 @@ export function createManager(config: HarnessConfig, store: Store, eventBus: Eve
 		if (!agentResult.ok) return agentResult;
 		const agent = agentResult.value;
 
+		// Try to gracefully exit first
 		const providerResult = getProvider(agent.provider);
 		if (providerResult.ok) {
-			// Try to gracefully exit
 			const exitCmd = providerResult.value.exitCommand();
-			await tmux.sendInput(agent.tmuxTarget, `${exitCmd}\n`);
-			// Wait a moment for graceful exit
-			await Bun.sleep(1000);
+			const exitSendResult = await tmux.sendInput(agent.tmuxTarget, `${exitCmd}\n`);
+			if (exitSendResult.ok) {
+				await Bun.sleep(1000);
+			} else {
+				log.warn("failed to send exit command", {
+					agentId: id,
+					error: JSON.stringify(exitSendResult.error),
+				});
+			}
 		}
 
-		// Kill the window regardless
-		await tmux.killWindow(agent.tmuxTarget);
+		// Kill the window — propagate failure
+		const killResult = await tmux.killWindow(agent.tmuxTarget);
+		if (!killResult.ok) {
+			return err({
+				code: "TMUX_ERROR",
+				message: `Failed to kill window '${agent.tmuxTarget}': ${JSON.stringify(killResult.error)}`,
+			});
+		}
 
 		// Emit exit event
 		eventBus.emit({
