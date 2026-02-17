@@ -4,8 +4,11 @@ export type ProviderEvent =
 	| { kind: "text"; content: string }
 	| { kind: "tool_start"; tool: string; input: string }
 	| { kind: "tool_end"; tool: string; output: string }
+	| { kind: "permission_requested"; description: string }
+	| { kind: "question_asked"; question: string; options: readonly string[] }
 	| { kind: "error"; message: string }
-	| { kind: "completion"; summary: string };
+	| { kind: "completion"; summary: string }
+	| { kind: "unknown"; raw: string };
 
 export interface ProviderConfig {
 	command: string;

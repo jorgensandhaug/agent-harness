@@ -130,6 +130,27 @@ export function createPoller(
 							output: pe.output,
 						});
 						break;
+					case "permission_requested":
+						eventBus.emit({
+							id: newEventId(),
+							ts,
+							project: agent.project,
+							agentId: agent.id,
+							type: "permission_requested",
+							description: pe.description,
+						});
+						break;
+					case "question_asked":
+						eventBus.emit({
+							id: newEventId(),
+							ts,
+							project: agent.project,
+							agentId: agent.id,
+							type: "question_asked",
+							question: pe.question,
+							options: pe.options,
+						});
+						break;
 					case "error":
 						eventBus.emit({
 							id: newEventId(),
@@ -148,6 +169,16 @@ export function createPoller(
 							agentId: agent.id,
 							type: "output",
 							text: pe.summary,
+						});
+						break;
+					case "unknown":
+						eventBus.emit({
+							id: newEventId(),
+							ts,
+							project: agent.project,
+							agentId: agent.id,
+							type: "unknown",
+							raw: pe.raw,
 						});
 						break;
 				}

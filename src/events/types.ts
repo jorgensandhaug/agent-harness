@@ -68,6 +68,31 @@ export type NormalizedEvent =
 			agentId: string;
 			type: "input_sent";
 			text: string;
+	  }
+	| {
+			id: EventId;
+			ts: string;
+			project: string;
+			agentId: string;
+			type: "permission_requested";
+			description: string;
+	  }
+	| {
+			id: EventId;
+			ts: string;
+			project: string;
+			agentId: string;
+			type: "question_asked";
+			question: string;
+			options: readonly string[];
+	  }
+	| {
+			id: EventId;
+			ts: string;
+			project: string;
+			agentId: string;
+			type: "unknown";
+			raw: string;
 	  };
 
 export type EventFilter = {

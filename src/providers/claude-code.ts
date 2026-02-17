@@ -27,6 +27,9 @@ const IDLE_PATTERN = /^[> ]*>\s*$/m;
 const PROCESSING_PATTERN = /✻/;
 const PERMISSION_PATTERN =
 	/\b(Allow|Approve|Deny|allow|approve|deny|y\/n|Y\/n|yes\/no)\b.*[?:]\s*$/m;
+const PERMISSION_DESC_PATTERN = /(?:Allow|Approve|Do you want to)\s+(.+?)\s*[?:]\s*$/m;
+const QUESTION_PATTERN = /\?\s*(?:\(([^)]+)\))?\s*$/m;
+const QUESTION_OPTIONS_PATTERN = /\(([^)]+)\)/;
 const ERROR_PATTERN = /\bError\b|\bERROR\b|\bfailed\b|\bFailed\b/;
 const TOOL_START_PATTERN = /⏺\s+(\w+)(?:\s*\(([^)]*)\))?/;
 const TOOL_END_PATTERN = /⏺\s+(\w+)\s+completed/i;
@@ -131,6 +134,32 @@ export const claudeCodeProvider: Provider = {
 				continue;
 			}
 
+			// Check for permission prompts (Allow/Approve/y/n)
+			if (PERMISSION_PATTERN.test(line)) {
+				const descMatch = line.match(PERMISSION_DESC_PATTERN);
+				events.push({
+					kind: "permission_requested",
+					description: descMatch?.[1]?.trim() ?? line.trim(),
+				});
+				i++;
+				continue;
+			}
+
+			// Check for questions with optional choices
+			if (QUESTION_PATTERN.test(line) && !PERMISSION_PATTERN.test(line)) {
+				const optionsMatch = line.match(QUESTION_OPTIONS_PATTERN);
+				const options = optionsMatch?.[1]
+					? optionsMatch[1].split(/[/,|]/).map((o) => o.trim())
+					: [];
+				events.push({
+					kind: "question_asked",
+					question: line.trim(),
+					options,
+				});
+				i++;
+				continue;
+			}
+
 			// Check for completion
 			if (COMPLETION_PATTERN.test(line)) {
 				events.push({
@@ -151,12 +180,24 @@ export const claudeCodeProvider: Provider = {
 				continue;
 			}
 
-			// Regular text output — skip empty lines and prompt indicators
+			// Skip empty lines and prompt/spinner indicators
 			const trimmed = line.trim();
-			if (trimmed.length > 0 && !IDLE_PATTERN.test(line) && !PROCESSING_PATTERN.test(line)) {
+			if (trimmed.length === 0 || IDLE_PATTERN.test(line) || PROCESSING_PATTERN.test(line)) {
+				i++;
+				continue;
+			}
+
+			// Check if this looks like recognizable text output (alphanumeric content)
+			if (/[a-zA-Z0-9]/.test(trimmed)) {
 				events.push({
 					kind: "text",
 					content: trimmed,
+				});
+			} else {
+				// Unparseable output — preserve for debugging
+				events.push({
+					kind: "unknown",
+					raw: trimmed,
 				});
 			}
 
