@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 import { z } from "zod";
 import type { Manager } from "../session/manager.ts";
+import { mapManagerError } from "./errors.ts";
 
 const CreateProjectBody = z.object({
 	name: z
@@ -10,31 +11,6 @@ const CreateProjectBody = z.object({
 		.regex(/^[a-zA-Z0-9_-]+$/, "Name must be alphanumeric with dashes/underscores"),
 	cwd: z.string().min(1),
 });
-
-function mapError(error: { code: string; name?: string; message?: string }) {
-	switch (error.code) {
-		case "PROJECT_NOT_FOUND":
-			return {
-				status: 404 as const,
-				body: { error: "PROJECT_NOT_FOUND", message: `Project '${error.name}' not found` },
-			};
-		case "PROJECT_EXISTS":
-			return {
-				status: 409 as const,
-				body: { error: "PROJECT_EXISTS", message: `Project '${error.name}' already exists` },
-			};
-		case "TMUX_ERROR":
-			return {
-				status: 500 as const,
-				body: { error: "TMUX_ERROR", message: error.message ?? "tmux error" },
-			};
-		default:
-			return {
-				status: 500 as const,
-				body: { error: "INTERNAL_ERROR", message: "Unknown error" },
-			};
-	}
-}
 
 export function registerProjectRoutes(app: Hono, manager: Manager): void {
 	app.post("/api/v1/projects", async (c) => {
@@ -52,7 +28,7 @@ export function registerProjectRoutes(app: Hono, manager: Manager): void {
 
 		const result = await manager.createProject(parsed.data.name, parsed.data.cwd);
 		if (!result.ok) {
-			const mapped = mapError(result.error);
+			const mapped = mapManagerError(result.error);
 			return c.json(mapped.body, mapped.status);
 		}
 
@@ -68,7 +44,7 @@ export function registerProjectRoutes(app: Hono, manager: Manager): void {
 		const name = c.req.param("name");
 		const projectResult = manager.getProject(name);
 		if (!projectResult.ok) {
-			const mapped = mapError(projectResult.error);
+			const mapped = mapManagerError(projectResult.error);
 			return c.json(mapped.body, mapped.status);
 		}
 
@@ -84,7 +60,7 @@ export function registerProjectRoutes(app: Hono, manager: Manager): void {
 		const name = c.req.param("name");
 		const result = await manager.deleteProject(name);
 		if (!result.ok) {
-			const mapped = mapError(result.error);
+			const mapped = mapManagerError(result.error);
 			return c.json(mapped.body, mapped.status);
 		}
 
