@@ -55,7 +55,7 @@ export const piProvider: Provider = {
 	},
 
 	formatInput(message: string): string {
-		return `${message}\n`;
+		return message;
 	},
 
 	exitCommand(): string {

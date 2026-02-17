@@ -56,7 +56,7 @@ export const codexProvider: Provider = {
 	},
 
 	formatInput(message: string): string {
-		return `${message}\n`;
+		return message;
 	},
 
 	exitCommand(): string {

@@ -93,8 +93,8 @@ export const claudeCodeProvider: Provider = {
 	},
 
 	formatInput(message: string): string {
-		// Claude Code accepts text pasted at its prompt followed by Enter
-		return `${message}\n`;
+		// tmux client submits with Enter after paste.
+		return message;
 	},
 
 	exitCommand(): string {

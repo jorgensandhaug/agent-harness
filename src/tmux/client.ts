@@ -81,7 +81,7 @@ export async function createWindow(
 }
 
 export async function sendInput(target: string, text: string): Promise<Result<void, TmuxError>> {
-	// Write text to temp file, load into tmux buffer, paste into target pane
+	// Write text to temp file, load into tmux buffer, paste into target pane, then submit.
 	const tempPath = join(tmpdir(), `ah-input-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 	await Bun.write(tempPath, text);
 
@@ -89,8 +89,13 @@ export async function sendInput(target: string, text: string): Promise<Result<vo
 		const loadResult = await exec(["load-buffer", tempPath]);
 		if (!loadResult.ok) return loadResult;
 
-		const pasteResult = await exec(["paste-buffer", "-t", target, "-d", "-p"]);
+		// Avoid bracketed paste mode here; some TUIs keep pasted newlines in the editor
+		// instead of submitting on Enter when bracketed paste is enabled.
+		const pasteResult = await exec(["paste-buffer", "-t", target, "-d"]);
 		if (!pasteResult.ok) return pasteResult;
+
+		const enterResult = await exec(["send-keys", "-t", target, "Enter"]);
+		if (!enterResult.ok) return enterResult;
 
 		return ok(undefined);
 	} finally {

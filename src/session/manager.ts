@@ -27,6 +27,18 @@ export type ManagerError =
 	| { code: "TMUX_ERROR"; message: string };
 
 export function createManager(config: HarnessConfig, store: Store, eventBus: EventBus) {
+	const envInitialDelayRaw = process.env["HARNESS_INITIAL_TASK_DELAY_MS"];
+	const envInitialDelay =
+		envInitialDelayRaw !== undefined ? Number.parseInt(envInitialDelayRaw, 10) : null;
+
+	function initialTaskDelayMs(providerName: string): number {
+		if (envInitialDelay !== null && Number.isFinite(envInitialDelay) && envInitialDelay >= 0) {
+			return envInitialDelay;
+		}
+		// Claude Code startup can take multiple seconds before input is accepted.
+		return providerName === "claude-code" ? 7000 : 2000;
+	}
+
 	function tmuxSessionName(name: ProjectName): string {
 		return `${config.tmuxPrefix}-${name}`;
 	}
@@ -175,13 +187,15 @@ export function createManager(config: HarnessConfig, store: Store, eventBus: Eve
 
 		log.info("agent created", { id, provider: providerName, project: projectNameStr });
 
-		// Send the initial task after a brief delay to let the agent start
+		// Send initial task after provider startup delay so the TUI is ready to accept input.
+		const delayMs = initialTaskDelayMs(providerName);
 		setTimeout(async () => {
 			const formattedInput = provider.formatInput(task);
 			const inputResult = await tmux.sendInput(target, formattedInput);
 			if (!inputResult.ok) {
 				log.error("failed to send initial task", {
 					agentId: id,
+					delayMs,
 					error: JSON.stringify(inputResult.error),
 				});
 			} else {
@@ -194,7 +208,7 @@ export function createManager(config: HarnessConfig, store: Store, eventBus: Eve
 					text: task,
 				});
 			}
-		}, 2000);
+		}, delayMs);
 
 		return ok(agent);
 	}
@@ -312,7 +326,7 @@ export function createManager(config: HarnessConfig, store: Store, eventBus: Eve
 		const providerResult = getProvider(agent.provider);
 		if (providerResult.ok) {
 			const exitCmd = providerResult.value.exitCommand();
-			const exitSendResult = await tmux.sendInput(agent.tmuxTarget, `${exitCmd}\n`);
+			const exitSendResult = await tmux.sendInput(agent.tmuxTarget, exitCmd);
 			if (exitSendResult.ok) {
 				await Bun.sleep(1000);
 			} else {

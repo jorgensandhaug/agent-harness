@@ -99,21 +99,22 @@ describe("tmux/client.command-shape", () => {
 		]);
 
 		expect(state.calls[4]?.slice(0, 3)).toEqual(["tmux", "load-buffer", expect.any(String)]);
-		expect(state.calls[5]).toEqual(["tmux", "paste-buffer", "-t", "ah-p:1.0", "-d", "-p"]);
-		expect(state.calls[6]).toEqual(["tmux", "send-keys", "-t", "ah-p:1.0", "C-c"]);
-		expect(state.calls[7]).toEqual(["tmux", "capture-pane", "-t", "ah-p:1.0", "-p", "-S", "-200"]);
-		expect(state.calls[8]).toEqual(["tmux", "pipe-pane", "-t", "ah-p:1.0", "cat >> /tmp/agent.log"]);
-		expect(state.calls[9]).toEqual(["tmux", "pipe-pane", "-t", "ah-p:1.0"]);
-		expect(state.calls[10]).toEqual(["tmux", "kill-window", "-t", "ah-p:1.0"]);
-		expect(state.calls[11]).toEqual(["tmux", "kill-session", "-t", "ah-p"]);
-		expect(state.calls[12]).toEqual(["tmux", "has-session", "-t", "ah-p"]);
-		expect(state.calls[13]).toEqual([
+		expect(state.calls[5]).toEqual(["tmux", "paste-buffer", "-t", "ah-p:1.0", "-d"]);
+		expect(state.calls[6]).toEqual(["tmux", "send-keys", "-t", "ah-p:1.0", "Enter"]);
+		expect(state.calls[7]).toEqual(["tmux", "send-keys", "-t", "ah-p:1.0", "C-c"]);
+		expect(state.calls[8]).toEqual(["tmux", "capture-pane", "-t", "ah-p:1.0", "-p", "-S", "-200"]);
+		expect(state.calls[9]).toEqual(["tmux", "pipe-pane", "-t", "ah-p:1.0", "cat >> /tmp/agent.log"]);
+		expect(state.calls[10]).toEqual(["tmux", "pipe-pane", "-t", "ah-p:1.0"]);
+		expect(state.calls[11]).toEqual(["tmux", "kill-window", "-t", "ah-p:1.0"]);
+		expect(state.calls[12]).toEqual(["tmux", "kill-session", "-t", "ah-p"]);
+		expect(state.calls[13]).toEqual(["tmux", "has-session", "-t", "ah-p"]);
+		expect(state.calls[14]).toEqual([
 			"tmux",
 			"list-sessions",
 			"-F",
 			"#{session_name}\t#{session_windows}\t#{session_created}\t#{session_attached}",
 		]);
-		expect(state.calls[14]).toEqual([
+		expect(state.calls[15]).toEqual([
 			"tmux",
 			"list-windows",
 			"-t",
@@ -121,7 +122,7 @@ describe("tmux/client.command-shape", () => {
 			"-F",
 			"#{window_index}\t#{window_name}\t#{window_active}\t#{pane_id}",
 		]);
-		expect(state.calls[15]).toEqual(["tmux", "display-message", "-t", "ah-p:1.0", "-p", "#{pane_dead}"]);
-		expect(state.calls[16]).toEqual(["tmux", "set-environment", "-t", "ah-p", "B", "2"]);
+		expect(state.calls[16]).toEqual(["tmux", "display-message", "-t", "ah-p:1.0", "-p", "#{pane_dead}"]);
+		expect(state.calls[17]).toEqual(["tmux", "set-environment", "-t", "ah-p", "B", "2"]);
 	});
 });
