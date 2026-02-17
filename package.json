@@ -7,7 +7,13 @@
     "start": "bun run src/index.ts",
     "typecheck": "tsc --noEmit",
     "check": "biome check src/",
-    "test": "bun test"
+    "test": "bun test",
+    "smoke": "bun run src/smoke.ts",
+    "smoke:claude": "bun run src/smoke.ts --provider claude-code",
+    "smoke:codex": "bun run src/smoke.ts --provider codex",
+    "smoke:pi": "bun run src/smoke.ts --provider pi",
+    "smoke:opencode": "bun run src/smoke.ts --provider opencode",
+    "smoke:all": "bun run src/smoke.ts --all"
   },
   "dependencies": {
     "hono": "^4.7.0",
