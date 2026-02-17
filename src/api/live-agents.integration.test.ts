@@ -66,8 +66,18 @@ function makeConfig(tmuxPrefix: string): HarnessConfig {
 		captureLines: 200,
 		maxEventHistory: 5000,
 		providers: {
-			"claude-code": { command: "claude", extraArgs: [], env: {}, enabled: true },
-			codex: { command: "codex", extraArgs: [], env: {}, enabled: true },
+			"claude-code": {
+				command: "claude",
+				extraArgs: ["--dangerously-skip-permissions", "--permission-mode", "bypassPermissions"],
+				env: {},
+				enabled: true,
+			},
+			codex: {
+				command: "codex",
+				extraArgs: ["--yolo", "--dangerously-bypass-approvals-and-sandbox"],
+				env: {},
+				enabled: true,
+			},
 			pi: { command: "pi", extraArgs: [], env: {}, enabled: true },
 			opencode: { command: "opencode", extraArgs: [], env: {}, enabled: true },
 		},

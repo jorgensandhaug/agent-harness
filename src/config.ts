@@ -23,13 +23,13 @@ const HarnessConfigSchema = z
 		providers: z.record(ProviderConfigSchema).default({
 			"claude-code": {
 				command: "claude",
-				extraArgs: [],
+				extraArgs: ["--dangerously-skip-permissions", "--permission-mode", "bypassPermissions"],
 				env: {},
 				enabled: true,
 			},
 			codex: {
 				command: "codex",
-				extraArgs: [],
+				extraArgs: ["--yolo", "--dangerously-bypass-approvals-and-sandbox"],
 				env: {},
 				enabled: true,
 			},

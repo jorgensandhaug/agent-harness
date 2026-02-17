@@ -32,6 +32,15 @@ describe("config/load.defaults", () => {
 			"opencode",
 			"pi",
 		]);
+		expect(config.providers["claude-code"]?.extraArgs).toEqual([
+			"--dangerously-skip-permissions",
+			"--permission-mode",
+			"bypassPermissions",
+		]);
+		expect(config.providers.codex?.extraArgs).toEqual([
+			"--yolo",
+			"--dangerously-bypass-approvals-and-sandbox",
+		]);
 	});
 });
 

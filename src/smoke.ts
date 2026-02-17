@@ -104,14 +104,14 @@ function makeConfig(prefix: string): HarnessConfig {
 		providers: {
 			"claude-code": {
 				command: "claude",
-				extraArgs: [],
+				extraArgs: ["--dangerously-skip-permissions", "--permission-mode", "bypassPermissions"],
 				env: {},
 				model: process.env.TEST_MODEL_CLAUDE,
 				enabled: true,
 			},
 			codex: {
 				command: "codex",
-				extraArgs: [],
+				extraArgs: ["--yolo", "--dangerously-bypass-approvals-and-sandbox"],
 				env: {},
 				model: process.env.TEST_MODEL_CODEX,
 				enabled: true,
