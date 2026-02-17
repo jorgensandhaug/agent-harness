@@ -141,3 +141,63 @@ test/
 - Integration tests cover tmux client lifecycle and all HTTP endpoints.
 - Live smoke tests exist and pass for all 4 providers when `LIVE_AGENT_TESTS=1`.
 - Default test run remains free and fast.
+
+## Visual Smoke Test (bun run smoke)
+
+Purpose: manual debugging tool to compare harness-detected state vs real agent TUI in tmux.
+
+### CLI entrypoints
+- `bun run smoke` (default provider: `claude-code`)
+- `bun run smoke:claude`
+- `bun run smoke:codex`
+- `bun run smoke:pi`
+- `bun run smoke:opencode`
+
+### Execution flow
+1. Start harness server on ephemeral port with test-safe config (`pollIntervalMs=500`, low-cost model override).
+2. Create temporary project via HTTP API.
+3. Spawn one real agent via `POST /api/v1/projects/:name/agents` with trivial prompt (`Reply with exactly: 4`).
+4. Print tmux attach command immediately: `tmux attach -t <session>`.
+5. Subscribe to SSE for that agent and render live dashboard until user quits (`q` or Ctrl-C).
+6. On exit, ask cleanup choice: keep session for inspection or delete agent+project.
+
+### Dashboard format
+- Top status line (updated every 2s):
+  - provider, project, agent id, tmux target
+  - current detected status
+  - last status transition timestamp
+- Middle event feed (append-only):
+  - `[HH:MM:SS] <event_type> <short payload>`
+  - highlight `status_changed`, `error`, `permission_requested`, `question_asked`
+- Bottom pane snapshot (refresh every 2s):
+  - last N lines from `/output` endpoint (raw capture-pane text)
+  - clear divider so human can compare with tmux-attached TUI
+
+### Interface choice
+- Use HTTP API path, not direct module calls.
+- Reason: validates real external behavior end-to-end (routing, manager, poller, SSE, tmux integration), matching production usage.
+
+### Provider execution mode
+- Default: one provider per run for visual focus.
+- `bun run smoke:all` optional convenience mode: run providers sequentially (`claude -> codex -> pi -> opencode`), one short session each, with per-provider summary.
+
+### Transition visibility
+- Keep in-memory `previousStatus`.
+- On change, print explicit transition line:
+  - `[HH:MM:SS] STATUS idle -> processing`
+- Use ANSI colors in terminal output:
+  - `idle=green`, `processing=yellow`, `waiting_input=magenta`, `error=red`, `exited=gray`.
+- Always print non-color text labels too (readable without color support).
+
+### Manual validation checklist
+- Harness status matches what human sees in tmux TUI.
+- Status transitions happen at believable times (no stuck `starting`, no false `error`).
+- Permission/question prompts appear as corresponding events.
+- Captured pane content in dashboard tracks tmux output with expected lag (<2s typical).
+- Cleanup behavior works (keep-or-delete choice).
+
+### Cost controls for smoke CLI
+- Default to cheapest model env vars (`TEST_MODEL_*`).
+- Use exactly one tiny prompt unless user passes `--prompt`.
+- Single-agent run by default.
+- Hard timeout per run (e.g., 90s) with auto-abort and cleanup prompt.
