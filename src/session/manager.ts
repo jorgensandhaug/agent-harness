@@ -18,7 +18,7 @@ import {
 import type { Store } from "./store.ts";
 import type { Agent, Project } from "./types.ts";
 
-type ManagerError =
+export type ManagerError =
 	| { code: "PROJECT_NOT_FOUND"; name: string }
 	| { code: "PROJECT_EXISTS"; name: string }
 	| { code: "AGENT_NOT_FOUND"; id: string; project: string }

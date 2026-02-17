@@ -1,10 +1,4 @@
-type ManagerError =
-	| { code: "PROJECT_NOT_FOUND"; name: string }
-	| { code: "PROJECT_EXISTS"; name: string }
-	| { code: "AGENT_NOT_FOUND"; id: string; project: string }
-	| { code: "UNKNOWN_PROVIDER"; name: string }
-	| { code: "PROVIDER_DISABLED"; name: string }
-	| { code: "TMUX_ERROR"; message: string };
+import type { ManagerError } from "../session/manager.ts";
 
 type MappedError = {
 	status: 400 | 404 | 409 | 500;
