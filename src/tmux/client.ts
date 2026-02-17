@@ -95,14 +95,13 @@ export async function sendInput(target: string, text: string): Promise<Result<vo
 		return ok(undefined);
 	} finally {
 		try {
-			const file = Bun.file(tempPath);
-			if (await file.exists()) {
-				await Bun.write(tempPath, ""); // Clear contents
-				const { unlink } = await import("node:fs/promises");
-				await unlink(tempPath);
-			}
-		} catch {
-			// Best-effort cleanup
+			const { unlink } = await import("node:fs/promises");
+			await unlink(tempPath);
+		} catch (e) {
+			log.debug("temp file cleanup failed", {
+				path: tempPath,
+				error: e instanceof Error ? e.message : String(e),
+			});
 		}
 	}
 }

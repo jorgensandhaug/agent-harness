@@ -58,14 +58,16 @@ async function main(): Promise<void> {
 		// Stop accepting new requests
 		server.stop(true);
 
-		// Send exit commands to active agents
+		// Send exit commands to active agents (best-effort, log failures)
 		const agents = store.listAgents();
 		for (const agent of agents) {
 			if (agent.status !== "exited") {
-				try {
-					await manager.deleteAgent(agent.project, agent.id);
-				} catch {
-					// Best-effort shutdown
+				const result = await manager.deleteAgent(agent.project, agent.id);
+				if (!result.ok) {
+					log.warn("failed to cleanly delete agent during shutdown", {
+						agentId: agent.id,
+						error: JSON.stringify(result.error),
+					});
 				}
 			}
 		}
