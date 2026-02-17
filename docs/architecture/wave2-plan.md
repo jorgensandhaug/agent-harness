@@ -1,7 +1,7 @@
 # Wave 2: Architecture Plan
 
 **Date**: 2026-02-17
-**Input**: Wave 1 research + design principles
+**Input**: Wave 1 research + Rivet sandbox-agent research + design principles
 **Scope**: Module structure, provider abstraction, tmux integration, HTTP API, event system, configuration
 
 ---
@@ -143,8 +143,11 @@ type ProviderEvent =
   | { kind: "text"; content: string }
   | { kind: "tool_start"; tool: string; input: string }
   | { kind: "tool_end"; tool: string; output: string }
+  | { kind: "permission_requested"; description: string }
+  | { kind: "question_asked"; question: string; options: readonly string[] }
   | { kind: "error"; message: string }
-  | { kind: "completion"; summary: string };
+  | { kind: "completion"; summary: string }
+  | { kind: "unknown"; raw: string };  // Preserve unparseable output for debugging
 ```
 
 ### Provider-Specific Notes
@@ -152,7 +155,7 @@ type ProviderEvent =
 | Provider | Start Command | Idle Pattern | Input Method | Known Challenges |
 |----------|--------------|--------------|--------------|------------------|
 | Claude Code | `claude` (interactive) | `> ` prompt or `$` after `-p` | paste-buffer (multi-line safe) | ANSI codes, non-breaking spaces, `⏺` markers, `✻` spinner |
-| Codex | `codex` (interactive) | Prompt pattern (TBD) | paste-buffer | Requires git repo, interactive mode less documented |
+| Codex | `codex` (interactive) | Prompt pattern (TBD) | paste-buffer | Requires git repo, interactive mode less documented. Also has undocumented `codex app-server` JSON-RPC mode (see Future section) |
 | Pi | `pi` (interactive) | Prompt pattern (TBD) | paste-buffer | No MCP, extension-based tools |
 | OpenCode | `opencode` (interactive) | Prompt pattern (TBD) | paste-buffer | Task tool subagent hangs (issue #6573) |
 
@@ -478,6 +481,31 @@ type NormalizedEvent =
       agentId: string;
       type: "input_sent";
       text: string;
+    }
+  | {
+      id: EventId;
+      ts: string;
+      project: string;
+      agentId: string;
+      type: "permission_requested";
+      description: string;   // What the agent wants to do (file edit, command, etc.)
+    }
+  | {
+      id: EventId;
+      ts: string;
+      project: string;
+      agentId: string;
+      type: "question_asked";
+      question: string;
+      options: readonly string[];  // Available choices, if any
+    }
+  | {
+      id: EventId;
+      ts: string;
+      project: string;
+      agentId: string;
+      type: "unknown";
+      raw: string;            // Unparseable output preserved for debugging
     };
 ```
 
@@ -651,9 +679,84 @@ These were not resolved by the Wave 1 research and need empirical testing:
 | 3 | **ANSI escape code handling** | capture-pane may include ANSI codes depending on flags | Test with `-e` flag (preserve escapes) vs without; strip for parsing, preserve for display |
 | 4 | **Multi-line input edge cases** | Some agents may interpret pasted multi-line input differently | Test load-buffer+paste-buffer with each agent, verify bracketed paste mode |
 | 5 | **OpenCode subagent hang (issue #6573)** | May affect reliability when OpenCode spawns subagents | Monitor for hangs, implement timeout + abort fallback |
-| 6 | **Permission prompt handling** | Agents may ask for user confirmation (y/n) — unclear if API should auto-approve or relay | Expose as `waiting_input` status; let API caller decide via `/input` endpoint |
+| 6 | **Permission prompt handling** | Agents may ask for user confirmation (y/n) — unclear if API should auto-approve or relay | Expose as `waiting_input` status + `permission_requested`/`question_asked` events; API caller responds via `/input` endpoint |
 | 7 | **tmux history memory** | Long-running agents accumulate scrollback — unclear memory impact | Set `history-limit` per window, test with large outputs |
 | 8 | **Crash recovery** | If harness crashes, tmux sessions survive but state is lost | On startup, scan for orphaned `{prefix}-*` sessions and optionally reclaim |
+
+---
+
+## Future: Alternative Integration Paths
+
+The v1 architecture runs all agents in **interactive mode** inside tmux for maximum human observability. Rivet's sandbox-agent research reveals two alternative patterns that trade observability for parsing reliability. These are documented here for future consideration if regex-based TUI parsing proves too brittle.
+
+### Subprocess-per-Turn Model
+
+Used by Rivet for Claude Code, Amp, Pi. Each user message spawns a new CLI process. Multi-turn context preserved via resume flags.
+
+```
+Turn 1: claude --print --output-format stream-json "implement feature X"
+         → process runs, streams JSON to stdout, exits
+Turn 2: claude --print --output-format stream-json --resume SESSION_ID "fix the tests"
+         → new process, same session context, exits when done
+```
+
+**Advantages**: Structured JSON output (no regex). Clean process lifecycle (spawn → stream → exit). Built-in session resumption.
+**Disadvantages**: Human observer sees JSON streaming in tmux — less readable than TUI. Process startup overhead per turn.
+**When to adopt**: If regex patterns for a provider keep breaking on CLI updates, switch that provider to subprocess-per-turn mode while keeping tmux as the visual layer.
+
+### Persistent Server Model
+
+Used by Rivet for Codex (`app-server` JSON-RPC over stdio) and OpenCode (`serve` HTTP API). Single long-running process handles multiple sessions.
+
+**Codex `app-server`** (undocumented — discovered via Rivet source):
+```
+codex app-server  # Runs indefinitely, JSON-RPC over stdin/stdout
+→ initialize / initialized handshake
+→ thread/start → returns thread_id
+→ turn/start with thread_id → notifications stream back
+```
+
+**OpenCode `serve`**:
+```
+opencode serve --port 4200  # HTTP API + SSE
+→ POST /session → create session
+→ POST /session/{id}/prompt → send message
+→ GET /event/subscribe → SSE event stream
+```
+
+**Advantages**: No process spawn overhead. Multiplexed sessions. Structured protocol.
+**Disadvantages**: Human observer sees a server process in tmux — minimal visual output. Port management for OpenCode (each instance needs a unique port). Codex `app-server` is undocumented/unstable.
+**When to adopt**: For headless/CI use cases where human observation isn't needed. Could run alongside tmux-based interactive agents.
+
+### Hybrid Approach
+
+Nothing prevents mixing models per provider. For example:
+- Claude Code: interactive in tmux (well-documented TUI patterns from CAO)
+- Codex: `app-server` JSON-RPC (if interactive patterns prove undocumented)
+- Pi: interactive or RPC (both viable)
+- OpenCode: interactive or `serve` (HTTP API is well-documented)
+
+The provider abstraction already supports this — `buildCommand()` and `parseStatus()`/`parseOutputDiff()` can be implemented differently per provider. The tmux window still exists for all modes (even server modes show logs).
+
+---
+
+## Rivet Evaluation
+
+Ideas from Rivet sandbox-agent evaluated against this plan:
+
+| Rivet Idea | Verdict | Rationale |
+|------------|---------|-----------|
+| **Universal event schema with `Unknown` variant** | **Adopted** | Added `unknown` type to both `ProviderEvent` and `NormalizedEvent`. Preserves unparseable output for debugging instead of silently dropping it. |
+| **`permission_requested` / `question_asked` events** | **Adopted** | Rivet's `PermissionAsked` and `QuestionAsked` are more actionable than a generic `waiting_input` status. Added as both `ProviderEvent` kinds and `NormalizedEvent` types. API callers can now distinguish what the agent needs. |
+| **Subprocess-per-turn model** | **Deferred** | Documented as future alternative. v1 prioritizes human observability (interactive TUI in tmux) over parsing reliability. Will revisit per-provider if regex breaks. |
+| **Codex `app-server` JSON-RPC** | **Noted** | Undocumented OpenAI API discovered via Rivet. Added to Provider-Specific Notes and Future section. Potentially more reliable than interactive Codex, but stability unclear. |
+| **Persistent server model (OpenCode `serve`)** | **Deferred** | Already known from Wave 1. Documented as future path. Interactive mode preferred for v1 observability. |
+| **Agent binary installation/management** | **Not adopted** | Out of scope. We assume agents are already installed. Users manage their own CLIs. |
+| **Credential extraction** | **Not adopted** | Out of scope. Agents use their own auth (config files, env vars). No need for harness to manage credentials. |
+| **Inspector UI** | **Not adopted** | tmux IS the UI. No web frontend needed — `tmux attach` provides full observability. |
+| **Embedded SDK mode** | **Not adopted** | Harness is daemon-only. No embedded mode for v1. |
+| **ACP JSON-RPC envelope** | **Not adopted** | Adds indirection. Direct REST is simpler and sufficient. |
+| **No disk persistence** | **Disagree** | Rivet uses in-memory only. We start in-memory for MVP but plan for bun:sqlite persistence. Sessions should survive daemon restarts. |
 
 ---
 
