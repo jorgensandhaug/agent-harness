@@ -408,6 +408,32 @@ describe("http/subscriptions", () => {
 	});
 });
 
+describe("http/webhook", () => {
+	it("reports webhook unconfigured and rejects test calls", async () => {
+		if (!env) throw new Error("env missing");
+		const statusResponse = await fetch(`${env.baseUrl}/api/v1/webhook/status`);
+		expect(statusResponse.status).toBe(200);
+		const statusJson = await statusResponse.json();
+		expect(statusJson.configured).toBe(false);
+
+		const testResponse = await apiJson(env.baseUrl, "/api/v1/webhook/test", {
+			method: "POST",
+			body: "{}",
+		});
+		expect(testResponse.status).toBe(400);
+		const testJson = await testResponse.json();
+		expect(testJson.error).toBe("WEBHOOK_NOT_CONFIGURED");
+
+		const probeResponse = await apiJson(env.baseUrl, "/api/v1/webhook/probe-receiver", {
+			method: "POST",
+			body: "{}",
+		});
+		expect(probeResponse.status).toBe(400);
+		const probeJson = await probeResponse.json();
+		expect(probeJson.error).toBe("WEBHOOK_NOT_CONFIGURED");
+	});
+});
+
 describe("http/projects.crud", () => {
 	it("supports create/list/get/delete project endpoints", async () => {
 		if (!env) throw new Error("env missing");

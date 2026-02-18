@@ -70,6 +70,8 @@ describe("subscriptions/discovery", () => {
 		expect(discovered.length).toBe(2);
 		const claude = discovered.find((entry) => entry.subscription.provider === "claude-code");
 		expect(claude?.source).toBe("discovered");
+		expect(claude?.provenance.method).toBe("claude_source_dir");
+		expect(claude?.provenance.locatorPath).toBe(claudeDir);
 		expect(claude?.subscription).toEqual({
 			provider: "claude-code",
 			mode: "oauth",
@@ -79,6 +81,7 @@ describe("subscriptions/discovery", () => {
 
 		const codex = discovered.find((entry) => entry.subscription.provider === "codex");
 		expect(codex?.source).toBe("discovered");
+		expect(codex?.provenance.method).toBe("codex_source_dir");
 		expect(codex?.subscription).toEqual({
 			provider: "codex",
 			mode: "chatgpt",
@@ -119,6 +122,7 @@ describe("subscriptions/discovery", () => {
 			sourceDir: codexDir,
 			enforceWorkspace: false,
 		});
+		expect(discovered[0]?.provenance.method).toBe("codex_source_dir");
 	});
 
 	it("discovers claude token files and de-dupes by token value", async () => {
@@ -166,7 +170,8 @@ describe("subscriptions/discovery", () => {
 				(entry) =>
 					entry.subscription.provider === "claude-code" &&
 					typeof entry.subscription.tokenFile === "string" &&
-					entry.subscription.tokenFile === distinctTokenFile,
+					entry.subscription.tokenFile === distinctTokenFile &&
+					entry.provenance.method === "claude_token_file",
 			),
 		).toBe(true);
 	});

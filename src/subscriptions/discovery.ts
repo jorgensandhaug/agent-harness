@@ -8,6 +8,22 @@ export type DiscoveredSubscription = {
 	id: string;
 	subscription: SubscriptionConfig;
 	source: "discovered";
+	provenance: DiscoveryProvenance;
+};
+
+export type DiscoveryProvenance = {
+	discoveredAt: string;
+	method: "claude_source_dir" | "claude_token_file" | "codex_source_dir";
+	locatorKind: "sourceDir" | "tokenFile";
+	locatorPath: string;
+	label: string;
+	candidateReasons: readonly string[];
+	metadata: Record<string, string | number | boolean | null>;
+};
+
+type PathCandidate = {
+	path: string;
+	reasons: readonly string[];
 };
 
 function normalizePath(path: string): string {
@@ -35,6 +51,15 @@ function sanitizeIdSegment(value: string): string {
 
 function shortHash(value: string): string {
 	return createHash("sha1").update(value).digest("hex").slice(0, 8);
+}
+
+function addReason(bucket: Map<string, Set<string>>, path: string, reason: string): void {
+	const existing = bucket.get(path);
+	if (existing) {
+		existing.add(reason);
+		return;
+	}
+	bucket.set(path, new Set([reason]));
 }
 
 function claudeLabelFromDir(sourceDir: string): string {
@@ -100,19 +125,19 @@ function collectCandidateDirs(
 	extraDirs: readonly string[],
 	envDir: string | undefined,
 	includeDefaults: boolean,
-): Promise<readonly string[]> {
+): Promise<readonly PathCandidate[]> {
 	const home = homedir();
-	const candidates = new Set<string>();
+	const candidates = new Map<string, Set<string>>();
 	if (includeDefaults) {
-		candidates.add(normalizePath(defaultDir));
+		addReason(candidates, normalizePath(defaultDir), "default_dir");
 		if (envDir && envDir.trim().length > 0) {
-			candidates.add(normalizePath(envDir));
+			addReason(candidates, normalizePath(envDir), "env_dir");
 		}
 	}
 	for (const dir of extraDirs) {
 		const trimmed = dir.trim();
 		if (trimmed.length === 0) continue;
-		candidates.add(normalizePath(trimmed));
+		addReason(candidates, normalizePath(trimmed), "explicit_dir");
 	}
 
 	return (async () => {
@@ -120,19 +145,24 @@ function collectCandidateDirs(
 			const names = await readDirNames(home);
 			for (const name of names) {
 				if (name.startsWith(prefix)) {
-					candidates.add(normalizePath(join(home, name)));
+					addReason(candidates, normalizePath(join(home, name)), "home_prefix_scan");
 				}
 			}
 		}
-		return Array.from(candidates).sort((a, b) => a.localeCompare(b));
+		return Array.from(candidates.entries())
+			.map(([path, reasons]) => ({
+				path,
+				reasons: Array.from(reasons).sort((a, b) => a.localeCompare(b)),
+			}))
+			.sort((a, b) => a.path.localeCompare(b.path));
 	})();
 }
 
 async function collectClaudeTokenFiles(
 	extraPaths: readonly string[],
 	includeDefaults: boolean,
-): Promise<readonly string[]> {
-	const candidates = new Set<string>();
+): Promise<readonly PathCandidate[]> {
+	const candidates = new Map<string, Set<string>>();
 	if (includeDefaults) {
 		const defaultDirs = [
 			join(homedir(), "dotfiles", "secrets", "profiles", "claude"),
@@ -142,7 +172,7 @@ async function collectClaudeTokenFiles(
 			const entries = await readDirNamesWithTypes(dir);
 			for (const entry of entries) {
 				if (!entry.isFile() || !entry.name.endsWith(".token")) continue;
-				candidates.add(normalizePath(join(dir, entry.name)));
+				addReason(candidates, normalizePath(join(dir, entry.name)), "default_token_dir_scan");
 			}
 		}
 	}
@@ -152,7 +182,7 @@ async function collectClaudeTokenFiles(
 		if (trimmed.length === 0) continue;
 		const normalized = normalizePath(trimmed);
 		if (trimmed.endsWith(".token")) {
-			candidates.add(normalized);
+			addReason(candidates, normalized, "explicit_token_file");
 			continue;
 		}
 
@@ -160,15 +190,24 @@ async function collectClaudeTokenFiles(
 		if (entries.length > 0) {
 			for (const entry of entries) {
 				if (!entry.isFile() || !entry.name.endsWith(".token")) continue;
-				candidates.add(normalizePath(join(normalized, entry.name)));
+				addReason(
+					candidates,
+					normalizePath(join(normalized, entry.name)),
+					"explicit_token_dir_scan",
+				);
 			}
 			continue;
 		}
 
-		candidates.add(normalized);
+		addReason(candidates, normalized, "explicit_token_path");
 	}
 
-	return Array.from(candidates).sort((a, b) => a.localeCompare(b));
+	return Array.from(candidates.entries())
+		.map(([path, reasons]) => ({
+			path,
+			reasons: Array.from(reasons).sort((a, b) => a.localeCompare(b)),
+		}))
+		.sort((a, b) => a.path.localeCompare(b.path));
 }
 
 function requirePathList(
@@ -263,7 +302,8 @@ export async function discoverSubscriptions(
 	const seenClaudeTokenHashes = new Set<string>();
 	const seenClaudeLabels = new Set<string>();
 
-	for (const dir of claudeCandidates) {
+	for (const candidate of claudeCandidates) {
+		const dir = candidate.path;
 		const credentialsPath = join(dir, ".credentials.json");
 		if (!(await fileExists(credentialsPath))) continue;
 		const label = claudeLabelFromDir(dir);
@@ -286,10 +326,23 @@ export async function discoverSubscriptions(
 				mode: "oauth",
 				sourceDir: dir,
 			},
+			provenance: {
+				discoveredAt: new Date().toISOString(),
+				method: "claude_source_dir",
+				locatorKind: "sourceDir",
+				locatorPath: dir,
+				label,
+				candidateReasons: candidate.reasons,
+				metadata: {
+					credentialsPath,
+					tokenFingerprint: token ? shortHash(token) : null,
+				},
+			},
 		});
 	}
 
-	for (const tokenFile of claudeTokenFileCandidates) {
+	for (const candidate of claudeTokenFileCandidates) {
+		const tokenFile = candidate.path;
 		if (!(await fileExists(tokenFile))) continue;
 		const tokenText = await Bun.file(tokenFile)
 			.text()
@@ -313,10 +366,23 @@ export async function discoverSubscriptions(
 				mode: "oauth",
 				tokenFile,
 			},
+			provenance: {
+				discoveredAt: new Date().toISOString(),
+				method: "claude_token_file",
+				locatorKind: "tokenFile",
+				locatorPath: tokenFile,
+				label,
+				candidateReasons: candidate.reasons,
+				metadata: {
+					tokenLength: token.length,
+					tokenFingerprint: shortHash(token),
+				},
+			},
 		});
 	}
 
-	for (const dir of codexCandidates) {
+	for (const candidate of codexCandidates) {
+		const dir = candidate.path;
 		const authPath = join(dir, "auth.json");
 		if (!(await fileExists(authPath))) continue;
 		const auth = await readJson(authPath);
@@ -326,6 +392,9 @@ export async function discoverSubscriptions(
 		if (!mode) continue;
 		const workspaceId = extractCodexAccountId(auth);
 		const id = autoIdForCodexDir(dir);
+		const label = sanitizeIdSegment(
+			basename(dir) === ".codex" ? "default" : basename(dir).replace(/^\.codex-?/, ""),
+		);
 		discovered.push({
 			id,
 			source: "discovered",
@@ -335,6 +404,19 @@ export async function discoverSubscriptions(
 				sourceDir: dir,
 				...(workspaceId ? { workspaceId } : {}),
 				enforceWorkspace: false,
+			},
+			provenance: {
+				discoveredAt: new Date().toISOString(),
+				method: "codex_source_dir",
+				locatorKind: "sourceDir",
+				locatorPath: dir,
+				label: label.length > 0 ? label : "profile",
+				candidateReasons: candidate.reasons,
+				metadata: {
+					authPath,
+					inferredMode: mode,
+					workspaceId: workspaceId ?? null,
+				},
 			},
 		});
 	}

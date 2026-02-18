@@ -81,19 +81,32 @@ export function createManager(
 		id: string;
 		subscription: SubscriptionConfig;
 		source: "configured" | "discovered";
+		locator: {
+			kind: "sourceDir" | "tokenFile";
+			path: string;
+		};
+		provenance: Record<string, unknown>;
 	};
 
-	function subscriptionSignature(subscription: SubscriptionConfig): string {
+	function subscriptionLocator(subscription: SubscriptionConfig): {
+		kind: "sourceDir" | "tokenFile";
+		path: string;
+	} {
 		if (subscription.provider === "claude-code") {
 			if (typeof subscription.sourceDir === "string" && subscription.sourceDir.trim().length > 0) {
-				return `${subscription.provider}:sourceDir:${resolve(subscription.sourceDir)}`;
+				return { kind: "sourceDir", path: resolve(subscription.sourceDir) };
 			}
 			if (typeof subscription.tokenFile === "string" && subscription.tokenFile.trim().length > 0) {
-				return `${subscription.provider}:tokenFile:${resolve(subscription.tokenFile)}`;
+				return { kind: "tokenFile", path: resolve(subscription.tokenFile) };
 			}
-			return `${subscription.provider}:invalid`;
+			return { kind: "sourceDir", path: "(missing)" };
 		}
-		return `${subscription.provider}:${resolve(subscription.sourceDir)}`;
+		return { kind: "sourceDir", path: resolve(subscription.sourceDir) };
+	}
+
+	function subscriptionSignature(subscription: SubscriptionConfig): string {
+		const locator = subscriptionLocator(subscription);
+		return `${subscription.provider}:${locator.kind}:${locator.path}`;
 	}
 
 	async function resolveSubscriptions(): Promise<readonly ResolvedSubscription[]> {
@@ -102,6 +115,11 @@ export function createManager(
 				id,
 				subscription,
 				source: "configured",
+				locator: subscriptionLocator(subscription),
+				provenance: {
+					source: "configured",
+					configKey: id,
+				},
 			}),
 		);
 		const merged = [...configured];
@@ -129,6 +147,8 @@ export function createManager(
 					id,
 					subscription: entry.subscription,
 					source: "discovered",
+					locator: subscriptionLocator(entry.subscription),
+					provenance: entry.provenance,
 				});
 			}
 		}
@@ -519,6 +539,9 @@ export function createManager(
 			entries.map(async (entry) => ({
 				...(await summarizeSubscription(entry.id, entry.subscription)),
 				source: entry.source,
+				locator: entry.locator,
+				subscription: entry.subscription,
+				provenance: entry.provenance,
 			})),
 		);
 		return summaries.sort((a, b) => a.id.localeCompare(b.id));

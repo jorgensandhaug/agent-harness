@@ -22,6 +22,74 @@ type LifecycleState = {
 	sinceMs: number;
 };
 
+type DeliverySource = "status_change" | "safety_net" | "manual_test";
+
+export type WebhookDeliveryAttempt = {
+	ts: string;
+	source: DeliverySource;
+	event: WebhookEvent;
+	project: string;
+	agentId: string;
+	provider: string;
+	status: string;
+	attempt: number;
+	ok: boolean;
+	httpStatus: number | null;
+	error: string | null;
+	lastMessagePreview: string | null;
+};
+
+export type WebhookClientStatus = {
+	enabled: true;
+	startedAt: string;
+	config: {
+		url: string;
+		tokenConfigured: boolean;
+		events: readonly WebhookEvent[];
+		safetyNet: WebhookConfig["safetyNet"];
+	};
+	counters: {
+		attempts: number;
+		successes: number;
+		failures: number;
+		retries: number;
+		manualTests: number;
+		safetyNetCycles: number;
+		safetyNetWarnings: number;
+	};
+	lastAttemptAt: string | null;
+	lastSuccessAt: string | null;
+	lastFailureAt: string | null;
+	lastSafetyNetWarningAt: string | null;
+	trackedAgents: {
+		lifecycle: number;
+		deliveredTerminal: number;
+		stuckWarned: number;
+	};
+	recentAttempts: readonly WebhookDeliveryAttempt[];
+};
+
+export type WebhookTestInput = {
+	event?: WebhookEvent;
+	project?: string;
+	agentId?: string;
+	provider?: string;
+	status?: string;
+	lastMessage?: string | null;
+};
+
+export type WebhookTestResult = {
+	ok: boolean;
+	payload: WebhookPayload;
+};
+
+export type WebhookClient = (() => void) & {
+	getStatus: () => WebhookClientStatus;
+	sendTestWebhook: (input?: WebhookTestInput) => Promise<WebhookTestResult>;
+};
+
+const MAX_RECENT_ATTEMPTS = 200;
+
 function statusToWebhookEvent(to: AgentStatus): WebhookEvent | null {
 	switch (to) {
 		case "idle":
@@ -32,6 +100,17 @@ function statusToWebhookEvent(to: AgentStatus): WebhookEvent | null {
 			return "agent_exited";
 		default:
 			return null;
+	}
+}
+
+function defaultStatusForEvent(event: WebhookEvent): string {
+	switch (event) {
+		case "agent_completed":
+			return "idle";
+		case "agent_error":
+			return "error";
+		case "agent_exited":
+			return "exited";
 	}
 }
 
@@ -48,47 +127,11 @@ function parseIsoMs(value: string): number | null {
 	return Number.isFinite(ms) ? ms : null;
 }
 
-async function postWebhook(
-	url: string,
-	payload: WebhookPayload,
-	token: string | undefined,
-): Promise<boolean> {
-	const headers: { "Content-Type": string; Authorization?: string } = {
-		"Content-Type": "application/json",
-	};
-	if (token) {
-		headers.Authorization = `Bearer ${token}`;
-	}
-
-	try {
-		const response = await fetch(url, {
-			method: "POST",
-			headers,
-			body: JSON.stringify(payload),
-			signal: AbortSignal.timeout(10_000),
-		});
-		if (!response.ok) {
-			log.warn("webhook POST failed", { url, status: response.status });
-			return false;
-		}
-		return true;
-	} catch (error) {
-		log.warn("webhook POST error", {
-			url,
-			error: error instanceof Error ? error.message : String(error),
-		});
-		return false;
-	}
-}
-
-async function postWebhookWithRetry(
-	webhookConfig: WebhookConfig,
-	payload: WebhookPayload,
-): Promise<boolean> {
-	const ok = await postWebhook(webhookConfig.url, payload, webhookConfig.token);
-	if (ok) return true;
-	log.info("webhook retry", { url: webhookConfig.url, event: payload.event });
-	return postWebhook(webhookConfig.url, payload, webhookConfig.token);
+function previewText(value: string | null): string | null {
+	if (typeof value !== "string") return null;
+	const normalized = value.replace(/\s+/g, " ").trim();
+	if (normalized.length === 0) return null;
+	return normalized.slice(0, 140);
 }
 
 async function getLastMessage(store: Store, agentId: AgentId): Promise<string | null> {
@@ -103,44 +146,40 @@ async function getLastMessage(store: Store, agentId: AgentId): Promise<string | 
 	}
 }
 
-async function sendTerminalWebhook(
-	webhookConfig: WebhookConfig,
-	store: Store,
-	input: {
-		project: string;
-		agentId: string;
-		provider: string;
-		status: AgentStatus;
-		timestamp: string;
-	},
-): Promise<boolean> {
-	const webhookEvent = statusToWebhookEvent(input.status);
-	if (!webhookEvent) return false;
-	if (!webhookConfig.events.includes(webhookEvent)) return false;
-
-	const lastMessage = await getLastMessage(store, input.agentId as AgentId);
-	const payload: WebhookPayload = {
-		event: webhookEvent,
-		project: input.project,
-		agentId: input.agentId,
-		provider: input.provider,
-		status: input.status,
-		lastMessage,
-		timestamp: input.timestamp,
-	};
-
-	return postWebhookWithRetry(webhookConfig, payload);
-}
-
 export function createWebhookClient(
 	webhookConfig: WebhookConfig,
 	eventBus: EventBus,
 	store: Store,
-): () => void {
+): WebhookClient {
 	const lifecycleByAgent = new Map<string, LifecycleState>();
 	const deliveredTerminalStatusByAgent = new Map<string, AgentStatus>();
 	const lastStuckWarnAtMsByAgent = new Map<string, number>();
 	let safetyNetTimer: ReturnType<typeof setInterval> | null = null;
+
+	const runtime = {
+		startedAt: new Date().toISOString(),
+		lastAttemptAt: null as string | null,
+		lastSuccessAt: null as string | null,
+		lastFailureAt: null as string | null,
+		lastSafetyNetWarningAt: null as string | null,
+		counters: {
+			attempts: 0,
+			successes: 0,
+			failures: 0,
+			retries: 0,
+			manualTests: 0,
+			safetyNetCycles: 0,
+			safetyNetWarnings: 0,
+		},
+		recentAttempts: [] as WebhookDeliveryAttempt[],
+	};
+
+	function pushAttempt(attempt: WebhookDeliveryAttempt): void {
+		runtime.recentAttempts.push(attempt);
+		if (runtime.recentAttempts.length > MAX_RECENT_ATTEMPTS) {
+			runtime.recentAttempts.splice(0, runtime.recentAttempts.length - MAX_RECENT_ATTEMPTS);
+		}
+	}
 
 	function updateLifecycle(agentId: string, status: AgentStatus, sinceMs: number): void {
 		lifecycleByAgent.set(agentId, { status, sinceMs });
@@ -150,6 +189,132 @@ export function createWebhookClient(
 		if (!isStuckCandidateStatus(status)) {
 			lastStuckWarnAtMsByAgent.delete(agentId);
 		}
+	}
+
+	async function postWebhookAttempt(
+		payload: WebhookPayload,
+		source: DeliverySource,
+		attempt: number,
+	): Promise<boolean> {
+		const ts = new Date().toISOString();
+		runtime.counters.attempts += 1;
+		runtime.lastAttemptAt = ts;
+
+		const headers: { "Content-Type": string; Authorization?: string } = {
+			"Content-Type": "application/json",
+		};
+		if (webhookConfig.token) {
+			headers.Authorization = `Bearer ${webhookConfig.token}`;
+		}
+
+		try {
+			const response = await fetch(webhookConfig.url, {
+				method: "POST",
+				headers,
+				body: JSON.stringify(payload),
+				signal: AbortSignal.timeout(10_000),
+			});
+			if (!response.ok) {
+				runtime.counters.failures += 1;
+				runtime.lastFailureAt = ts;
+				pushAttempt({
+					ts,
+					source,
+					event: payload.event,
+					project: payload.project,
+					agentId: payload.agentId,
+					provider: payload.provider,
+					status: payload.status,
+					attempt,
+					ok: false,
+					httpStatus: response.status,
+					error: `http_${response.status}`,
+					lastMessagePreview: previewText(payload.lastMessage),
+				});
+				log.warn("webhook POST failed", { url: webhookConfig.url, status: response.status });
+				return false;
+			}
+
+			runtime.counters.successes += 1;
+			runtime.lastSuccessAt = ts;
+			pushAttempt({
+				ts,
+				source,
+				event: payload.event,
+				project: payload.project,
+				agentId: payload.agentId,
+				provider: payload.provider,
+				status: payload.status,
+				attempt,
+				ok: true,
+				httpStatus: response.status,
+				error: null,
+				lastMessagePreview: previewText(payload.lastMessage),
+			});
+			return true;
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			runtime.counters.failures += 1;
+			runtime.lastFailureAt = ts;
+			pushAttempt({
+				ts,
+				source,
+				event: payload.event,
+				project: payload.project,
+				agentId: payload.agentId,
+				provider: payload.provider,
+				status: payload.status,
+				attempt,
+				ok: false,
+				httpStatus: null,
+				error: message,
+				lastMessagePreview: previewText(payload.lastMessage),
+			});
+			log.warn("webhook POST error", {
+				url: webhookConfig.url,
+				error: message,
+			});
+			return false;
+		}
+	}
+
+	async function postWebhookWithRetry(
+		payload: WebhookPayload,
+		source: DeliverySource,
+	): Promise<boolean> {
+		const ok = await postWebhookAttempt(payload, source, 1);
+		if (ok) return true;
+		runtime.counters.retries += 1;
+		log.info("webhook retry", { url: webhookConfig.url, event: payload.event, source });
+		return postWebhookAttempt(payload, source, 2);
+	}
+
+	async function sendTerminalWebhook(
+		source: "status_change" | "safety_net",
+		input: {
+			project: string;
+			agentId: string;
+			provider: string;
+			status: AgentStatus;
+			timestamp: string;
+		},
+	): Promise<boolean> {
+		const webhookEvent = statusToWebhookEvent(input.status);
+		if (!webhookEvent) return false;
+		if (!webhookConfig.events.includes(webhookEvent)) return false;
+
+		const lastMessage = await getLastMessage(store, input.agentId as AgentId);
+		const payload: WebhookPayload = {
+			event: webhookEvent,
+			project: input.project,
+			agentId: input.agentId,
+			provider: input.provider,
+			status: input.status,
+			lastMessage,
+			timestamp: input.timestamp,
+		};
+
+		return postWebhookWithRetry(payload, source);
 	}
 
 	const unsubscribe = eventBus.subscribe(
@@ -162,11 +327,10 @@ export function createWebhookClient(
 			if (event.from !== "processing") return;
 			if (!isTerminalStatus(event.to)) return;
 
-			// Fire-and-forget: fetch lastMessage then POST (with one retry)
 			void (async () => {
 				const agent = store.getAgent(event.agentId as AgentId);
 				const provider = agent?.provider ?? "unknown";
-				const sent = await sendTerminalWebhook(webhookConfig, store, {
+				const sent = await sendTerminalWebhook("status_change", {
 					project: event.project,
 					agentId: event.agentId,
 					provider,
@@ -184,6 +348,7 @@ export function createWebhookClient(
 		const settings = webhookConfig.safetyNet;
 		if (!settings.enabled) return;
 
+		runtime.counters.safetyNetCycles += 1;
 		const nowMs = Date.now();
 		const nowIso = new Date(nowMs).toISOString();
 		const agents = store.listAgents();
@@ -198,7 +363,7 @@ export function createWebhookClient(
 				if (isTerminalStatus(agent.status)) {
 					if (deliveredTerminalStatusByAgent.get(agent.id) !== agent.status) {
 						const timestamp = agent.lastActivity.trim().length > 0 ? agent.lastActivity : nowIso;
-						const sent = await sendTerminalWebhook(webhookConfig, store, {
+						const sent = await sendTerminalWebhook("safety_net", {
 							project: agent.project,
 							agentId: agent.id,
 							provider: agent.provider,
@@ -216,7 +381,7 @@ export function createWebhookClient(
 			if (isTerminalStatus(agent.status)) {
 				if (deliveredTerminalStatusByAgent.get(agent.id) !== agent.status) {
 					const timestamp = agent.lastActivity.trim().length > 0 ? agent.lastActivity : nowIso;
-					const sent = await sendTerminalWebhook(webhookConfig, store, {
+					const sent = await sendTerminalWebhook("safety_net", {
 						project: agent.project,
 						agentId: agent.id,
 						provider: agent.provider,
@@ -238,6 +403,8 @@ export function createWebhookClient(
 			if (nowMs - lastWarnMs < settings.stuckWarnIntervalMs) continue;
 
 			lastStuckWarnAtMsByAgent.set(agent.id, nowMs);
+			runtime.counters.safetyNetWarnings += 1;
+			runtime.lastSafetyNetWarningAt = new Date(nowMs).toISOString();
 			log.warn("webhook safety-net detected stuck agent", {
 				project: agent.project,
 				agentId: agent.id,
@@ -253,6 +420,46 @@ export function createWebhookClient(
 				lastStuckWarnAtMsByAgent.delete(agentId);
 			}
 		}
+	}
+
+	function getStatus(): WebhookClientStatus {
+		return {
+			enabled: true,
+			startedAt: runtime.startedAt,
+			config: {
+				url: webhookConfig.url,
+				tokenConfigured: typeof webhookConfig.token === "string" && webhookConfig.token.length > 0,
+				events: [...webhookConfig.events],
+				safetyNet: { ...webhookConfig.safetyNet },
+			},
+			counters: { ...runtime.counters },
+			lastAttemptAt: runtime.lastAttemptAt,
+			lastSuccessAt: runtime.lastSuccessAt,
+			lastFailureAt: runtime.lastFailureAt,
+			lastSafetyNetWarningAt: runtime.lastSafetyNetWarningAt,
+			trackedAgents: {
+				lifecycle: lifecycleByAgent.size,
+				deliveredTerminal: deliveredTerminalStatusByAgent.size,
+				stuckWarned: lastStuckWarnAtMsByAgent.size,
+			},
+			recentAttempts: [...runtime.recentAttempts],
+		};
+	}
+
+	async function sendTestWebhook(input: WebhookTestInput = {}): Promise<WebhookTestResult> {
+		runtime.counters.manualTests += 1;
+		const event = input.event ?? webhookConfig.events[0] ?? "agent_completed";
+		const payload: WebhookPayload = {
+			event,
+			project: input.project ?? "__inspect_test__",
+			agentId: input.agentId ?? "__inspect_test__",
+			provider: input.provider ?? "inspect",
+			status: input.status ?? defaultStatusForEvent(event),
+			lastMessage: input.lastMessage ?? "manual inspector webhook test",
+			timestamp: new Date().toISOString(),
+		};
+		const ok = await postWebhookWithRetry(payload, "manual_test");
+		return { ok, payload };
 	}
 
 	if (webhookConfig.safetyNet.enabled) {
@@ -273,11 +480,15 @@ export function createWebhookClient(
 		safetyNetIntervalMs: webhookConfig.safetyNet.intervalMs,
 	});
 
-	return () => {
+	const stop = (() => {
 		unsubscribe();
 		if (safetyNetTimer) {
 			clearInterval(safetyNetTimer);
 			safetyNetTimer = null;
 		}
-	};
+	}) as WebhookClient;
+
+	stop.getStatus = getStatus;
+	stop.sendTestWebhook = sendTestWebhook;
+	return stop;
 }

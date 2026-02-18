@@ -5,6 +5,7 @@ import type { EventBus } from "../events/bus.ts";
 import type { Manager } from "../session/manager.ts";
 import type { Store } from "../session/store.ts";
 import * as tmux from "../tmux/client.ts";
+import type { WebhookClient } from "../webhook/client.ts";
 import { registerAgentRoutes } from "./agents.ts";
 import { registerDebugRoutes } from "./debug.ts";
 import { registerEventRoutes } from "./events.ts";
@@ -12,6 +13,7 @@ import { registerHealthRoutes } from "./health.ts";
 import { registerInspectRoutes } from "./inspect.ts";
 import { registerProjectRoutes } from "./projects.ts";
 import { registerSubscriptionRoutes } from "./subscriptions.ts";
+import { registerWebhookRoutes } from "./webhook.ts";
 
 export function createApp(
 	manager: Manager,
@@ -20,6 +22,7 @@ export function createApp(
 	debugTracker: DebugTracker,
 	startTime: number,
 	authToken?: string,
+	webhookClient?: WebhookClient | null,
 ) {
 	const app = new Hono();
 
@@ -68,6 +71,7 @@ export function createApp(
 	registerProjectRoutes(app, manager);
 	registerAgentRoutes(app, manager);
 	registerSubscriptionRoutes(app, manager);
+	registerWebhookRoutes(app, webhookClient ?? null);
 	registerDebugRoutes(app, manager, debugTracker);
 	registerEventRoutes(app, manager, eventBus);
 	registerInspectRoutes(app);

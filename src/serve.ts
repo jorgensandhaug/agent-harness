@@ -34,7 +34,7 @@ export async function serveCommand(): Promise<void> {
 	log.info("event bus initialized");
 	const debugTracker = createDebugTracker(config, eventBus);
 	log.info("debug tracker initialized");
-	const stopWebhookClient = config.webhook
+	const webhookClient = config.webhook
 		? createWebhookClient(config.webhook, eventBus, store)
 		: null;
 
@@ -46,7 +46,15 @@ export async function serveCommand(): Promise<void> {
 	poller.start();
 
 	// 7. Create and start HTTP server
-	const app = createApp(manager, store, eventBus, debugTracker, startTime, config.auth?.token);
+	const app = createApp(
+		manager,
+		store,
+		eventBus,
+		debugTracker,
+		startTime,
+		config.auth?.token,
+		webhookClient,
+	);
 
 	const server = Bun.serve({
 		port: config.port,
@@ -68,7 +76,7 @@ export async function serveCommand(): Promise<void> {
 		// Stop poller
 		poller.stop();
 		debugTracker.stop();
-		stopWebhookClient?.();
+		webhookClient?.();
 
 		// Stop accepting new requests
 		server.stop(true);

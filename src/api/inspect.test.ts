@@ -44,8 +44,11 @@ describe("api/inspect.route", () => {
 		expect(html).toContain("Connect Existing");
 		expect(html).toContain("Status source");
 		expect(html).toContain("Subscription (optional)");
+		expect(html).toContain("Subscription details (full)");
 		expect(html).toContain("Internals messages");
 		expect(html).toContain("Last assistant message (internals)");
+		expect(html).toContain("Webhook status + tests");
+		expect(html).toContain("/api/v1/webhook/status");
 		expect(html).toContain("/messages?limit=");
 		expect(html).toContain("/messages/last");
 		expect(html).toContain("/api/v1/projects");

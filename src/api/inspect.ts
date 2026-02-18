@@ -89,6 +89,16 @@ const INSPECT_HTML = String.raw`<!doctype html>
 				min-height: 320px;
 			}
 
+			.subscription-details {
+				grid-column: span 6;
+				min-height: 300px;
+			}
+
+			.webhook {
+				grid-column: span 6;
+				min-height: 300px;
+			}
+
 			.debug {
 				grid-column: span 12;
 				min-height: 220px;
@@ -101,6 +111,8 @@ const INSPECT_HTML = String.raw`<!doctype html>
 				.output,
 				.messages,
 				.last-message,
+				.subscription-details,
+				.webhook,
 				.debug {
 					grid-column: span 12;
 				}
@@ -362,6 +374,21 @@ const INSPECT_HTML = String.raw`<!doctype html>
 				<pre id="last-message-log">(none)</pre>
 			</section>
 
+			<section class="card subscription-details">
+				<label>Subscription details (full)</label>
+				<pre id="subscription-details-log">(none)</pre>
+			</section>
+
+			<section class="card webhook">
+				<label>Webhook status + tests</label>
+				<div class="actions" style="margin-bottom: 8px">
+					<button id="refresh-webhook">Refresh webhook</button>
+					<button id="send-webhook-test" class="primary">Send webhook test</button>
+					<button id="probe-webhook-receiver">Probe receiver</button>
+				</div>
+				<pre id="webhook-log">(none)</pre>
+			</section>
+
 			<section class="card debug">
 				<label>Internal inspector state</label>
 				<pre id="internal-state">{}</pre>
@@ -392,6 +419,7 @@ const INSPECT_HTML = String.raw`<!doctype html>
 						projectName: "",
 						agentId: "",
 						subscriptionId: "",
+						subscriptions: [],
 						status: "idle",
 						lastStatusSource: "",
 						messagesSource: "",
@@ -412,6 +440,10 @@ const INSPECT_HTML = String.raw`<!doctype html>
 						messages: [],
 						lastAssistantMessage: null,
 						debug: null,
+						webhookStatus: null,
+						webhookLastTest: null,
+						webhookProbe: null,
+						lastWebhookRefreshAt: "",
 						mismatchBadges: [],
 						stream: null,
 						pollTimer: null,
@@ -454,6 +486,11 @@ const INSPECT_HTML = String.raw`<!doctype html>
 						outputLog: document.getElementById("output-log"),
 						messagesLog: document.getElementById("messages-log"),
 						lastMessageLog: document.getElementById("last-message-log"),
+						subscriptionDetailsLog: document.getElementById("subscription-details-log"),
+						refreshWebhook: document.getElementById("refresh-webhook"),
+						sendWebhookTest: document.getElementById("send-webhook-test"),
+						probeWebhookReceiver: document.getElementById("probe-webhook-receiver"),
+						webhookLog: document.getElementById("webhook-log"),
 						internalState: document.getElementById("internal-state"),
 					};
 
@@ -601,6 +638,7 @@ const INSPECT_HTML = String.raw`<!doctype html>
 							projectName: state.projectName || null,
 							agentId: state.agentId || null,
 							subscriptionId: state.subscriptionId || null,
+							subscriptionCount: Array.isArray(state.subscriptions) ? state.subscriptions.length : 0,
 							status: state.status || null,
 							lastStatusSource: state.lastStatusSource || null,
 							messagesSource: state.messagesSource || null,
@@ -619,9 +657,14 @@ const INSPECT_HTML = String.raw`<!doctype html>
 							eventCounts: state.eventCounts,
 							mismatchBadges: state.mismatchBadges,
 							lastError: state.lastError || null,
+							webhookStatus: state.webhookStatus,
+							webhookLastTest: state.webhookLastTest,
+							webhookProbe: state.webhookProbe,
 							debugEndpoint: state.debug,
 						};
 
+						renderSubscriptionDetails();
+						renderWebhookPanel();
 						renderMessages();
 						el.internalState.textContent = JSON.stringify(debugState, null, 2);
 					}
@@ -659,6 +702,19 @@ const INSPECT_HTML = String.raw`<!doctype html>
 						const source =
 							typeof subscription.source === "string" ? subscription.source : "configured";
 						const valid = subscription.valid === false ? "invalid" : "ok";
+						const locatorPath =
+							subscription.locator &&
+							typeof subscription.locator === "object" &&
+							typeof subscription.locator.path === "string"
+								? subscription.locator.path
+								: typeof subscription.sourceDir === "string"
+									? subscription.sourceDir
+									: null;
+						const locatorShort = locatorPath
+							? locatorPath.length > 36
+								? "…/" + locatorPath.slice(-35)
+								: locatorPath
+							: "unknown-path";
 						const reason =
 							subscription.valid === false &&
 							typeof subscription.reason === "string" &&
@@ -666,7 +722,19 @@ const INSPECT_HTML = String.raw`<!doctype html>
 								? ", " + subscription.reason
 								: "";
 						return (
-							id + " (" + provider + "/" + mode + ", " + source + ", " + valid + reason + ")"
+							id +
+							" (" +
+							provider +
+							"/" +
+							mode +
+							", " +
+							source +
+							", " +
+							valid +
+							", " +
+							locatorShort +
+							reason +
+							")"
 						);
 					}
 
@@ -701,6 +769,47 @@ const INSPECT_HTML = String.raw`<!doctype html>
 						el.subscriptionHint.textContent = text;
 					}
 
+					function renderSubscriptionDetails() {
+						const selectedId = String(el.subscription.value || "").trim();
+						const list = Array.isArray(state.subscriptions) ? state.subscriptions : [];
+						if (list.length === 0) {
+							el.subscriptionDetailsLog.textContent = "(no subscriptions loaded)";
+							return;
+						}
+						if (!selectedId) {
+							el.subscriptionDetailsLog.textContent = JSON.stringify(
+								{
+									note: "no subscription selected; using provider default",
+									provider: String(el.provider.value || ""),
+									availableCount: list.length,
+									availableIds: list.map((subscription) => String(subscription.id || "")),
+								},
+								null,
+								2,
+							);
+							return;
+						}
+
+						const selected = list.find(
+							(subscription) => String(subscription.id || "") === selectedId,
+						);
+						if (!selected) {
+							el.subscriptionDetailsLog.textContent = "(selected subscription not found in latest list)";
+							return;
+						}
+						el.subscriptionDetailsLog.textContent = JSON.stringify(selected, null, 2);
+					}
+
+					function renderWebhookPanel() {
+						const payload = {
+							webhookStatus: state.webhookStatus,
+							lastTest: state.webhookLastTest,
+							lastProbe: state.webhookProbe,
+							lastWebhookRefreshAt: state.lastWebhookRefreshAt || null,
+						};
+						el.webhookLog.textContent = JSON.stringify(payload, null, 2);
+					}
+
 					async function refreshSubscriptionsList() {
 						const provider = normalizeProviderId(String(el.provider.value || "").trim());
 						const response = await api("/api/v1/subscriptions");
@@ -708,11 +817,14 @@ const INSPECT_HTML = String.raw`<!doctype html>
 							setSelectOptions(el.subscription, [], "(failed to load subscriptions)");
 							setSubscriptionHint("failed to load subscriptions (HTTP " + response.status + ")");
 							state.lastError = "load subscriptions failed: " + response.status;
+							state.subscriptions = [];
+							renderSubscriptionDetails();
 							renderState();
 							return;
 						}
 						const json = await response.json();
 						const subscriptions = Array.isArray(json.subscriptions) ? json.subscriptions : [];
+						state.subscriptions = subscriptions;
 						const providerSubscriptions = subscriptions.filter((subscription) => {
 							if (!subscription || typeof subscription !== "object") {
 								return false;
@@ -737,6 +849,7 @@ const INSPECT_HTML = String.raw`<!doctype html>
 
 						if (subscriptions.length === 0) {
 							setSubscriptionHint("no subscriptions configured");
+							renderSubscriptionDetails();
 							return;
 						}
 
@@ -748,6 +861,7 @@ const INSPECT_HTML = String.raw`<!doctype html>
 									summarizeSubscriptionsByProvider(subscriptions) +
 									")",
 							);
+							renderSubscriptionDetails();
 							return;
 						}
 
@@ -763,6 +877,87 @@ const INSPECT_HTML = String.raw`<!doctype html>
 								String(invalidCount) +
 								" invalid)",
 						);
+						renderSubscriptionDetails();
+					}
+
+					async function refreshWebhookStatus() {
+						try {
+							const response = await api("/api/v1/webhook/status");
+							if (!response.ok) {
+								state.lastError = "webhook status failed: " + response.status;
+								return;
+							}
+							const json = await response.json();
+							state.webhookStatus = json;
+							state.lastWebhookRefreshAt = new Date().toISOString();
+						} catch (error) {
+							state.lastError =
+								error instanceof Error ? error.message : "webhook status request failed";
+						}
+						renderWebhookPanel();
+						renderState();
+					}
+
+					async function sendWebhookTest() {
+						try {
+							const payload = {
+								project: state.projectName || "__inspect__",
+								agentId: state.agentId || "__inspect__",
+								provider: String(el.provider.value || "") || "inspect",
+								status: state.status || "idle",
+								lastMessage:
+									state.lastAssistantMessage &&
+									typeof state.lastAssistantMessage === "object" &&
+									typeof state.lastAssistantMessage.text === "string"
+										? state.lastAssistantMessage.text
+										: "manual inspector webhook test",
+							};
+							const response = await api("/api/v1/webhook/test", {
+								method: "POST",
+								body: JSON.stringify(payload),
+							});
+							const json = await response.json().catch(() => ({}));
+							state.webhookLastTest = {
+								httpStatus: response.status,
+								payload,
+								response: json,
+							};
+							if (!response.ok) {
+								state.lastError = "webhook test failed: " + response.status;
+							} else {
+								pushEvent("[" + stamp() + "] webhook test sent");
+							}
+						} catch (error) {
+							state.lastError =
+								error instanceof Error ? error.message : "webhook test request failed";
+						}
+						await refreshWebhookStatus();
+						renderWebhookPanel();
+						renderState();
+					}
+
+					async function probeWebhookReceiver() {
+						try {
+							const response = await api("/api/v1/webhook/probe-receiver", {
+								method: "POST",
+								body: JSON.stringify({}),
+							});
+							const json = await response.json().catch(() => ({}));
+							state.webhookProbe = {
+								httpStatus: response.status,
+								response: json,
+							};
+							if (!response.ok) {
+								state.lastError = "webhook probe failed: " + response.status;
+							} else {
+								pushEvent("[" + stamp() + "] webhook receiver probe completed");
+							}
+						} catch (error) {
+							state.lastError =
+								error instanceof Error ? error.message : "webhook probe request failed";
+						}
+						renderWebhookPanel();
+						renderState();
 					}
 
 				async function refreshAgentsList() {
@@ -1046,6 +1241,13 @@ const INSPECT_HTML = String.raw`<!doctype html>
 
 							state.lastPollAt = new Date().toISOString();
 							state.lastError = pollErrors.join("; ");
+							const nowMs = Date.now();
+							const lastWebhookMs = state.lastWebhookRefreshAt
+								? Date.parse(state.lastWebhookRefreshAt)
+								: Number.NaN;
+							if (!Number.isFinite(lastWebhookMs) || nowMs - lastWebhookMs >= 5000) {
+								void refreshWebhookStatus();
+							}
 						} catch (error) {
 							state.lastError = error instanceof Error ? error.message : String(error);
 						}
@@ -1303,6 +1505,9 @@ const INSPECT_HTML = String.raw`<!doctype html>
 				el.provider.addEventListener("change", () => {
 					void refreshSubscriptionsList();
 				});
+				el.subscription.addEventListener("change", () => {
+					renderSubscriptionDetails();
+				});
 				el.existingProject.addEventListener("change", () => {
 					void refreshAgentsList();
 				});
@@ -1324,11 +1529,23 @@ const INSPECT_HTML = String.raw`<!doctype html>
 				el.deleteProject.addEventListener("click", () => {
 					void deleteProject();
 				});
+				el.refreshWebhook.addEventListener("click", () => {
+					void refreshWebhookStatus();
+				});
+				el.sendWebhookTest.addEventListener("click", () => {
+					void sendWebhookTest();
+				});
+				el.probeWebhookReceiver.addEventListener("click", () => {
+					void probeWebhookReceiver();
+				});
 
 				el.projectName.value = "inspect-" + Date.now();
 				el.projectCwd.value = ".";
 				void refreshSubscriptionsList();
+				void refreshWebhookStatus();
 				void refreshProjectsList();
+				renderSubscriptionDetails();
+				renderWebhookPanel();
 				renderState();
 			})();
 		</script>
