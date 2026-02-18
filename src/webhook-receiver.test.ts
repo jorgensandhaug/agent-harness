@@ -199,7 +199,7 @@ describe("webhook-receiver/actions", () => {
 				body,
 				authHeader: request.headers.get("authorization"),
 			});
-			return new Response(null, { status: 202 });
+			return new Response(null, { status: 200 });
 		}) as typeof fetch;
 
 		await runActions(
@@ -214,11 +214,11 @@ describe("webhook-receiver/actions", () => {
 		);
 
 		expect(calls.length).toBe(1);
-		expect(calls[0]?.url).toBe("http://127.0.0.1:18789/hooks/agent");
+		expect(calls[0]?.url).toBe("http://127.0.0.1:18789/hooks/wake");
 		expect(calls[0]?.authHeader).toBe("Bearer tok-123");
-		const body = calls[0]?.body as { message: string; sessionKey: string };
-		expect(body.sessionKey).toBe("main-session");
-		expect(body.message).toContain("sessionKey=main-session");
+		const body = calls[0]?.body as { text: string; mode: string };
+		expect(body.mode).toBe("now");
+		expect(body.text).not.toContain("sessionKey=main-session");
 	});
 });
 

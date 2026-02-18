@@ -214,19 +214,22 @@ async function runHooksAction(config: ReceiverConfig, payload: WebhookPayload): 
 	if (!hooksUrl) {
 		throw new Error("hooks endpoint is not configured");
 	}
-	const message = formatEventMessage(payload);
-	const body = { message, sessionKey: payload.sessionKey };
+	const parsedHooksUrl = new URL(hooksUrl);
+	const wakePath = parsedHooksUrl.pathname.replace(/\/[^/]*$/, "/wake");
+	const wakeUrl = `${parsedHooksUrl.origin}${wakePath}${parsedHooksUrl.search}`;
+	const wakePayload: WebhookPayload = { ...payload, sessionKey: null };
+	const body = { text: formatEventMessage(wakePayload), mode: "now" as const };
 	const headers = new Headers({ "Content-Type": "application/json" });
 	if (config.openclawHooksToken) {
 		headers.set("Authorization", `Bearer ${config.openclawHooksToken}`);
 	}
-	const response = await fetch(hooksUrl, {
+	const response = await fetch(wakeUrl, {
 		method: "POST",
 		headers,
 		body: JSON.stringify(body),
 		signal: AbortSignal.timeout(10000),
 	});
-	if (response.status !== 202) {
+	if (response.status !== 200) {
 		throw new Error(`hooks endpoint http ${response.status}`);
 	}
 }
