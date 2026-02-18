@@ -50,11 +50,16 @@ export async function serveCommand(): Promise<void> {
 
 	const server = Bun.serve({
 		port: config.port,
+		hostname: config.bindAddress,
 		fetch: app.fetch,
 		idleTimeout: 120,
 	});
 
-	log.info("server started", { port: server.port, url: `http://localhost:${server.port}` });
+	log.info("server started", {
+		port: server.port,
+		bindAddress: config.bindAddress,
+		url: `http://${config.bindAddress}:${server.port}`,
+	});
 
 	// 8. Graceful shutdown
 	const shutdown = async () => {

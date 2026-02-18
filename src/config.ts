@@ -13,11 +13,26 @@ const ProviderConfigSchema = z
 
 const WebhookEventSchema = z.enum(["agent_completed", "agent_error", "agent_exited"]);
 
+const WebhookSafetyNetConfigSchema = z
+	.object({
+		enabled: z.boolean().default(false),
+		intervalMs: z.number().int().min(1000).max(300000).default(30000),
+		stuckAfterMs: z.number().int().min(1000).max(86400000).default(180000),
+		stuckWarnIntervalMs: z.number().int().min(1000).max(86400000).default(300000),
+	})
+	.strict();
+
 const WebhookConfigSchema = z
 	.object({
 		url: z.string().url(),
 		token: z.string().min(1).optional(),
 		events: z.array(WebhookEventSchema).min(1),
+		safetyNet: WebhookSafetyNetConfigSchema.default({
+			enabled: false,
+			intervalMs: 30000,
+			stuckAfterMs: 180000,
+			stuckWarnIntervalMs: 300000,
+		}),
 	})
 	.strict();
 
@@ -60,6 +75,7 @@ const SubscriptionConfigSchema = z.discriminatedUnion("provider", [
 const HarnessConfigSchema = z
 	.object({
 		port: z.number().int().min(1).max(65535).default(7070),
+		bindAddress: z.string().min(1).default("127.0.0.1"),
 		tmuxPrefix: z.string().min(1).default("ah"),
 		logDir: z.string().default("./logs"),
 		logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
@@ -117,6 +133,7 @@ export type HarnessConfig = z.infer<typeof HarnessConfigSchema>;
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 export type WebhookConfig = z.infer<typeof WebhookConfigSchema>;
 export type WebhookEvent = z.infer<typeof WebhookEventSchema>;
+export type WebhookSafetyNetConfig = z.infer<typeof WebhookSafetyNetConfigSchema>;
 export type SubscriptionConfig = z.infer<typeof SubscriptionConfigSchema>;
 
 export async function loadConfig(path?: string): Promise<HarnessConfig> {
@@ -147,15 +164,31 @@ export async function loadConfig(path?: string): Promise<HarnessConfig> {
 		throw new Error(`Invalid config: ${issues.join("; ")}`);
 	}
 
-	const config = result.data;
+	let config = result.data;
 	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
 	const authTokenFromEnv = process.env["AH_AUTH_TOKEN"];
 	if (typeof authTokenFromEnv === "string" && authTokenFromEnv.trim().length > 0) {
-		return {
+		config = {
 			...config,
 			auth: {
 				...(config.auth ?? {}),
 				token: authTokenFromEnv.trim(),
+			},
+		};
+	}
+
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+	const webhookTokenFromEnv = process.env["AH_WEBHOOK_TOKEN"];
+	if (
+		typeof webhookTokenFromEnv === "string" &&
+		webhookTokenFromEnv.trim().length > 0 &&
+		config.webhook
+	) {
+		config = {
+			...config,
+			webhook: {
+				...config.webhook,
+				token: webhookTokenFromEnv.trim(),
 			},
 		};
 	}

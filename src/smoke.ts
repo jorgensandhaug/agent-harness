@@ -201,6 +201,7 @@ function makeConfig(prefix: string): HarnessConfig {
 
 	return {
 		port: 0,
+		bindAddress: "127.0.0.1",
 		tmuxPrefix: prefix,
 		logDir: "./logs",
 		logLevel: "info",

@@ -20,6 +20,7 @@ const ReceiverActionSchema = z.enum(["stdout_log", "discord_webhook", "openclaw_
 const ReceiverConfigSchema = z
 	.object({
 		port: z.number().int().min(1).max(65535),
+		bindAddress: z.string().min(1).default("127.0.0.1"),
 		token: z.string().min(1).optional(),
 		actions: z.array(ReceiverActionSchema).min(1),
 		discordWebhookUrl: z.string().url().optional(),
@@ -44,6 +45,7 @@ export type ReceiverConfig = z.infer<typeof ReceiverConfigSchema>;
 
 type EnvSource = Readonly<{
 	AH_WEBHOOK_RECEIVER_PORT?: string;
+	AH_WEBHOOK_RECEIVER_BIND_ADDRESS?: string;
 	AH_WEBHOOK_RECEIVER_TOKEN?: string;
 	AH_WEBHOOK_RECEIVER_ACTIONS?: string;
 	AH_WEBHOOK_RECEIVER_DISCORD_WEBHOOK_URL?: string;
@@ -85,6 +87,7 @@ function parseIntWithDefault(value: string | undefined, fallback: number): numbe
 export function loadConfig(env: EnvSource = process.env as EnvSource): ReceiverConfig {
 	const parsed = ReceiverConfigSchema.safeParse({
 		port: parseIntWithDefault(env.AH_WEBHOOK_RECEIVER_PORT, 7071),
+		bindAddress: env.AH_WEBHOOK_RECEIVER_BIND_ADDRESS?.trim() || "127.0.0.1",
 		token: env.AH_WEBHOOK_RECEIVER_TOKEN?.trim() || undefined,
 		actions: parseCsv(env.AH_WEBHOOK_RECEIVER_ACTIONS) ?? ["stdout_log"],
 		discordWebhookUrl: env.AH_WEBHOOK_RECEIVER_DISCORD_WEBHOOK_URL?.trim() || undefined,
@@ -238,11 +241,13 @@ export function startWebhookReceiver(config: ReceiverConfig): ReturnType<typeof 
 	const app = createReceiverApp(config);
 	const server = Bun.serve({
 		port: config.port,
+		hostname: config.bindAddress,
 		fetch: app.fetch,
 		idleTimeout: 120,
 	});
 	receiverLog("info", "webhook receiver started", {
 		port: server.port,
+		bindAddress: config.bindAddress,
 		actions: config.actions,
 		tokenRequired: Boolean(config.token),
 	});

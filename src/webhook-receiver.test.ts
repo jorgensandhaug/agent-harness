@@ -19,6 +19,7 @@ afterEach(() => {
 function baseConfig(overrides: Partial<ReceiverConfig> = {}): ReceiverConfig {
 	return {
 		port: 7071,
+		bindAddress: "127.0.0.1",
 		token: undefined,
 		actions: ["stdout_log"],
 		discordWebhookUrl: undefined,
@@ -45,6 +46,7 @@ describe("webhook-receiver/loadConfig", () => {
 	it("loads defaults", () => {
 		const config = loadConfig({});
 		expect(config.port).toBe(7071);
+		expect(config.bindAddress).toBe("127.0.0.1");
 		expect(config.actions).toEqual(["stdout_log"]);
 		expect(config.openclawCommand).toBe("openclaw");
 		expect(config.openclawArgs).toEqual(["system", "event"]);

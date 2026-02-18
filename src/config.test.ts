@@ -6,6 +6,7 @@ import { loadConfig } from "./config.ts";
 
 const cleanupPaths: string[] = [];
 const originalAuthToken = process.env.AH_AUTH_TOKEN;
+const originalWebhookToken = process.env.AH_WEBHOOK_TOKEN;
 
 afterEach(async () => {
 	for (const path of cleanupPaths.splice(0)) {
@@ -15,6 +16,11 @@ afterEach(async () => {
 		process.env.AH_AUTH_TOKEN = undefined;
 	} else {
 		process.env.AH_AUTH_TOKEN = originalAuthToken;
+	}
+	if (originalWebhookToken === undefined) {
+		process.env.AH_WEBHOOK_TOKEN = undefined;
+	} else {
+		process.env.AH_WEBHOOK_TOKEN = originalWebhookToken;
 	}
 });
 
@@ -30,6 +36,7 @@ describe("config/load.defaults", () => {
 		const config = await loadConfig(join(dir, "missing.json"));
 
 		expect(config.port).toBe(7070);
+		expect(config.bindAddress).toBe("127.0.0.1");
 		expect(config.tmuxPrefix).toBe("ah");
 		expect(config.pollIntervalMs).toBe(1000);
 		expect(Object.keys(config.providers).sort()).toEqual([
@@ -106,6 +113,56 @@ describe("config/load.valid-file", () => {
 		expect(config.subscriptions["codex-plus"]?.provider).toBe("codex");
 		expect(config.subscriptions["codex-plus"]?.mode).toBe("chatgpt");
 	});
+
+	it("applies webhook safety-net defaults", async () => {
+		const dir = await makeTempDir();
+		const path = join(dir, "harness.json");
+		await writeFile(
+			path,
+			JSON.stringify({
+				webhook: {
+					url: "https://example.test/hook",
+					events: ["agent_completed"],
+				},
+			}),
+		);
+
+		const config = await loadConfig(path);
+		expect(config.webhook?.safetyNet).toEqual({
+			enabled: false,
+			intervalMs: 30000,
+			stuckAfterMs: 180000,
+			stuckWarnIntervalMs: 300000,
+		});
+	});
+
+	it("parses webhook safety-net config override", async () => {
+		const dir = await makeTempDir();
+		const path = join(dir, "harness.json");
+		await writeFile(
+			path,
+			JSON.stringify({
+				webhook: {
+					url: "https://example.test/hook",
+					events: ["agent_error"],
+					safetyNet: {
+						enabled: true,
+						intervalMs: 5000,
+						stuckAfterMs: 45000,
+						stuckWarnIntervalMs: 60000,
+					},
+				},
+			}),
+		);
+
+		const config = await loadConfig(path);
+		expect(config.webhook?.safetyNet).toEqual({
+			enabled: true,
+			intervalMs: 5000,
+			stuckAfterMs: 45000,
+			stuckWarnIntervalMs: 60000,
+		});
+	});
 });
 
 describe("config/load.auth", () => {
@@ -136,6 +193,25 @@ describe("config/load.auth", () => {
 
 		const config = await loadConfig(path);
 		expect(config.auth?.token).toBe("from-env-token");
+	});
+
+	it("overrides webhook token from AH_WEBHOOK_TOKEN env", async () => {
+		const dir = await makeTempDir();
+		const path = join(dir, "harness.json");
+		await writeFile(
+			path,
+			JSON.stringify({
+				webhook: {
+					url: "https://example.test/hook",
+					token: "from-file-webhook-token",
+					events: ["agent_completed"],
+				},
+			}),
+		);
+		process.env.AH_WEBHOOK_TOKEN = "from-env-webhook-token";
+
+		const config = await loadConfig(path);
+		expect(config.webhook?.token).toBe("from-env-webhook-token");
 	});
 });
 

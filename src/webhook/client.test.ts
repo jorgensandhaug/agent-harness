@@ -68,6 +68,24 @@ async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<voi
 	}
 }
 
+function webhookConfig(
+	overrides: Partial<WebhookConfig> & Pick<WebhookConfig, "url" | "events">,
+): WebhookConfig {
+	return {
+		url: overrides.url,
+		events: overrides.events,
+		token: overrides.token,
+		safetyNet:
+			overrides.safetyNet ??
+			({
+				enabled: false,
+				intervalMs: 30000,
+				stuckAfterMs: 180000,
+				stuckWarnIntervalMs: 300000,
+			} satisfies WebhookConfig["safetyNet"]),
+	};
+}
+
 describe("webhook/client", () => {
 	it("posts completion webhook with last assistant message", async () => {
 		const runtimeDir = await mkdtemp(join(tmpdir(), "ah-webhook-client-"));
@@ -92,11 +110,11 @@ describe("webhook/client", () => {
 			return new Response(null, { status: 200 });
 		}) as typeof fetch;
 
-		const config: WebhookConfig = {
+		const config = webhookConfig({
 			url: "https://example.test/hook",
 			token: "secret",
 			events: ["agent_completed"],
-		};
+		});
 
 		const unsubscribe = createWebhookClient(config, bus, store);
 		bus.emit({
@@ -137,10 +155,10 @@ describe("webhook/client", () => {
 			return new Response(null, { status: 200 });
 		}) as typeof fetch;
 
-		const config: WebhookConfig = {
+		const config = webhookConfig({
 			url: "https://example.test/hook",
 			events: ["agent_error"],
-		};
+		});
 		const unsubscribe = createWebhookClient(config, bus, store);
 
 		bus.emit({
@@ -173,10 +191,10 @@ describe("webhook/client", () => {
 			return new Response(null, { status: 200 });
 		}) as typeof fetch;
 
-		const config: WebhookConfig = {
+		const config = webhookConfig({
 			url: "https://example.test/hook",
 			events: ["agent_error"],
-		};
+		});
 		const unsubscribe = createWebhookClient(config, bus, store);
 
 		bus.emit({
@@ -205,10 +223,10 @@ describe("webhook/client", () => {
 			return new Response(null, { status: 200 });
 		}) as typeof fetch;
 
-		const config: WebhookConfig = {
+		const config = webhookConfig({
 			url: "https://example.test/hook",
 			events: ["agent_completed"],
-		};
+		});
 		const unsubscribe = createWebhookClient(config, bus, store);
 		unsubscribe();
 
@@ -224,5 +242,87 @@ describe("webhook/client", () => {
 
 		await Bun.sleep(25);
 		expect(callCount).toBe(0);
+	});
+
+	it("safety-net posts terminal webhook for already-completed agent", async () => {
+		const store = createStore();
+		store.addAgent(baseAgent());
+		const bus = createEventBus(100);
+
+		const calls: Array<{ payload: unknown }> = [];
+		(globalThis as { fetch: typeof fetch }).fetch = (async (
+			input: RequestInfo | URL,
+			init?: RequestInit,
+		) => {
+			const request = new Request(input, init);
+			calls.push({
+				payload: await request.json(),
+			});
+			return new Response(null, { status: 200 });
+		}) as typeof fetch;
+
+		const unsubscribe = createWebhookClient(
+			webhookConfig({
+				url: "https://example.test/hook",
+				events: ["agent_completed"],
+				safetyNet: {
+					enabled: true,
+					intervalMs: 20,
+					stuckAfterMs: 1000,
+					stuckWarnIntervalMs: 1000,
+				},
+			}),
+			bus,
+			store,
+		);
+
+		await waitFor(() => calls.length === 1);
+		expect(calls[0]?.payload).toEqual({
+			event: "agent_completed",
+			project: "proj-1",
+			agentId: "abcd1234",
+			provider: "codex",
+			status: "idle",
+			lastMessage: null,
+			timestamp: expect.any(String),
+		});
+
+		await Bun.sleep(60);
+		expect(calls.length).toBe(1);
+		unsubscribe();
+	});
+
+	it("safety-net retries on next cycle when terminal webhook delivery keeps failing", async () => {
+		const store = createStore();
+		store.addAgent(baseAgent());
+		const bus = createEventBus(100);
+
+		let attempts = 0;
+		(globalThis as { fetch: typeof fetch }).fetch = (async () => {
+			attempts++;
+			if (attempts < 3) {
+				return new Response(null, { status: 500 });
+			}
+			return new Response(null, { status: 200 });
+		}) as typeof fetch;
+
+		const unsubscribe = createWebhookClient(
+			webhookConfig({
+				url: "https://example.test/hook",
+				events: ["agent_completed"],
+				safetyNet: {
+					enabled: true,
+					intervalMs: 20,
+					stuckAfterMs: 1000,
+					stuckWarnIntervalMs: 1000,
+				},
+			}),
+			bus,
+			store,
+		);
+
+		await waitFor(() => attempts >= 3);
+		expect(attempts).toBeGreaterThanOrEqual(3);
+		unsubscribe();
 	});
 });

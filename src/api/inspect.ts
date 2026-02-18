@@ -214,13 +214,19 @@ const INSPECT_HTML = String.raw`<!doctype html>
 				background: #fbfaf7;
 			}
 
-			.status-line {
-				margin-top: 10px;
-				font-size: 12px;
-				color: var(--muted);
-			}
-		</style>
-	</head>
+				.status-line {
+					margin-top: 10px;
+					font-size: 12px;
+					color: var(--muted);
+				}
+
+				.hint-line {
+					margin-top: 5px;
+					font-size: 12px;
+					color: var(--muted);
+				}
+			</style>
+		</head>
 	<body>
 		<header>
 			<h1>Agent Harness Inspector</h1>
@@ -258,6 +264,7 @@ const INSPECT_HTML = String.raw`<!doctype html>
 				<div class="row">
 					<label for="subscription">Subscription (optional)</label>
 					<select id="subscription"></select>
+					<div id="subscription-hint" class="hint-line">loading subscriptions...</div>
 				</div>
 
 				<div class="row">
@@ -416,10 +423,11 @@ const INSPECT_HTML = String.raw`<!doctype html>
 					existingProject: document.getElementById("existing-project"),
 					existingAgent: document.getElementById("existing-agent"),
 					provider: document.getElementById("provider"),
-					model: document.getElementById("model"),
-					subscription: document.getElementById("subscription"),
-					task: document.getElementById("task"),
-					startAgent: document.getElementById("start-agent"),
+						model: document.getElementById("model"),
+						subscription: document.getElementById("subscription"),
+						subscriptionHint: document.getElementById("subscription-hint"),
+						task: document.getElementById("task"),
+						startAgent: document.getElementById("start-agent"),
 					reconnect: document.getElementById("reconnect-stream"),
 					refreshProjects: document.getElementById("refresh-projects"),
 					connectExisting: document.getElementById("connect-existing"),
@@ -643,45 +651,115 @@ const INSPECT_HTML = String.raw`<!doctype html>
 					}
 				}
 
-				function subscriptionLabel(subscription) {
-					const id = String(subscription.id || "");
-					const mode = typeof subscription.mode === "string" ? subscription.mode : "unknown";
-					const provider =
-						typeof subscription.provider === "string" ? subscription.provider : "unknown";
-					const valid = subscription.valid === false ? "invalid" : "ok";
-					return id + " (" + provider + "/" + mode + ", " + valid + ")";
-				}
-
-				async function refreshSubscriptionsList() {
-					const provider = String(el.provider.value || "").trim();
-					const response = await api("/api/v1/subscriptions");
-					if (!response.ok) {
-						setSelectOptions(el.subscription, [], "(failed to load subscriptions)");
-						state.lastError = "load subscriptions failed: " + response.status;
-						renderState();
-						return;
+					function subscriptionLabel(subscription) {
+						const id = String(subscription.id || "");
+						const mode = typeof subscription.mode === "string" ? subscription.mode : "unknown";
+						const provider =
+							typeof subscription.provider === "string" ? subscription.provider : "unknown";
+						const valid = subscription.valid === false ? "invalid" : "ok";
+						const reason =
+							subscription.valid === false &&
+							typeof subscription.reason === "string" &&
+							subscription.reason.length > 0
+								? ", " + subscription.reason
+								: "";
+						return id + " (" + provider + "/" + mode + ", " + valid + reason + ")";
 					}
-					const json = await response.json();
-					const subscriptions = Array.isArray(json.subscriptions) ? json.subscriptions : [];
-					const options = subscriptions
-						.filter(
-							(subscription) =>
-								subscription &&
-								typeof subscription === "object" &&
-								subscription.provider === provider,
-						)
-						.map((subscription) => ({
-							value: String(subscription.id || ""),
-							label: subscriptionLabel(subscription),
-						}));
 
-					const withDefault = [{ value: "", label: "(none / provider default)" }, ...options];
-					const selected = String(el.subscription.value || "").trim();
-					setSelectOptions(el.subscription, withDefault, "(none / provider default)");
-					if (selected && withDefault.some((option) => option.value === selected)) {
-						el.subscription.value = selected;
+					function normalizeProviderId(provider) {
+						if (provider === "claude") {
+							return "claude-code";
+						}
+						return provider;
 					}
-				}
+
+					function summarizeSubscriptionsByProvider(subscriptions) {
+						const counts = {};
+						for (const subscription of subscriptions) {
+							if (!subscription || typeof subscription !== "object") {
+								continue;
+							}
+							const rawProvider =
+								typeof subscription.provider === "string" && subscription.provider.length > 0
+									? subscription.provider
+									: "unknown";
+							const provider = normalizeProviderId(rawProvider);
+							counts[provider] = (counts[provider] || 0) + 1;
+						}
+
+						return Object.entries(counts)
+							.sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+							.map(([provider, count]) => String(provider) + "=" + String(count))
+							.join(", ");
+					}
+
+					function setSubscriptionHint(text) {
+						el.subscriptionHint.textContent = text;
+					}
+
+					async function refreshSubscriptionsList() {
+						const provider = normalizeProviderId(String(el.provider.value || "").trim());
+						const response = await api("/api/v1/subscriptions");
+						if (!response.ok) {
+							setSelectOptions(el.subscription, [], "(failed to load subscriptions)");
+							setSubscriptionHint("failed to load subscriptions (HTTP " + response.status + ")");
+							state.lastError = "load subscriptions failed: " + response.status;
+							renderState();
+							return;
+						}
+						const json = await response.json();
+						const subscriptions = Array.isArray(json.subscriptions) ? json.subscriptions : [];
+						const providerSubscriptions = subscriptions.filter((subscription) => {
+							if (!subscription || typeof subscription !== "object") {
+								return false;
+							}
+							const subscriptionProvider = normalizeProviderId(
+								typeof subscription.provider === "string" ? subscription.provider : "",
+							);
+							return subscriptionProvider === provider;
+						});
+						const options = providerSubscriptions
+							.map((subscription) => ({
+								value: String(subscription.id || ""),
+								label: subscriptionLabel(subscription),
+							}));
+
+						const withDefault = [{ value: "", label: "(none / provider default)" }, ...options];
+						const selected = String(el.subscription.value || "").trim();
+						setSelectOptions(el.subscription, withDefault, "(none / provider default)");
+						if (selected && withDefault.some((option) => option.value === selected)) {
+							el.subscription.value = selected;
+						}
+
+						if (subscriptions.length === 0) {
+							setSubscriptionHint("no subscriptions configured");
+							return;
+						}
+
+						if (providerSubscriptions.length === 0) {
+							setSubscriptionHint(
+								"none for provider '" +
+									provider +
+									"' (available: " +
+									summarizeSubscriptionsByProvider(subscriptions) +
+									")",
+							);
+							return;
+						}
+
+						const invalidCount = providerSubscriptions.filter(
+							(subscription) => subscription.valid === false,
+						).length;
+						setSubscriptionHint(
+							"provider '" +
+								provider +
+								"': " +
+								String(providerSubscriptions.length) +
+								" found (" +
+								String(invalidCount) +
+								" invalid)",
+						);
+					}
 
 				async function refreshAgentsList() {
 					const project = String(el.existingProject.value || "").trim();
