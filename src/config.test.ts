@@ -52,6 +52,12 @@ describe("config/load.defaults", () => {
 		]);
 		expect(config.providers.codex?.extraArgs).toEqual(["--yolo"]);
 		expect(config.subscriptions).toEqual({});
+		expect(config.subscriptionDiscovery).toEqual({
+			enabled: true,
+			includeDefaults: true,
+			claudeDirs: [],
+			codexDirs: [],
+		});
 	});
 });
 
@@ -161,6 +167,30 @@ describe("config/load.valid-file", () => {
 			intervalMs: 5000,
 			stuckAfterMs: 45000,
 			stuckWarnIntervalMs: 60000,
+		});
+	});
+
+	it("parses subscription discovery config override", async () => {
+		const dir = await makeTempDir();
+		const path = join(dir, "harness.json");
+		await writeFile(
+			path,
+			JSON.stringify({
+				subscriptionDiscovery: {
+					enabled: false,
+					includeDefaults: false,
+					claudeDirs: ["/home/jorge/.claude-work"],
+					codexDirs: ["/home/jorge/.codex-team"],
+				},
+			}),
+		);
+
+		const config = await loadConfig(path);
+		expect(config.subscriptionDiscovery).toEqual({
+			enabled: false,
+			includeDefaults: false,
+			claudeDirs: ["/home/jorge/.claude-work"],
+			codexDirs: ["/home/jorge/.codex-team"],
 		});
 	});
 });

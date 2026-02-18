@@ -60,12 +60,12 @@ export async function createSession(name: string, cwd: string): Promise<Result<v
 	const result = await exec(["new-session", "-d", "-s", name, "-c", cwd, "-x", "220", "-y", "50"]);
 	if (!result.ok) return result;
 	// Set defaults for future windows in this session.
-	const optResult = await exec(["set-option", "-g", "-t", name, "remain-on-exit", "on"]);
+	const optResult = await exec(["set-option", "-t", name, "remain-on-exit", "on"]);
 	if (!optResult.ok) return optResult;
 	// Disable auto window renaming so session:window targets remain stable.
-	const allowRenameResult = await exec(["set-option", "-g", "-t", name, "allow-rename", "off"]);
+	const allowRenameResult = await exec(["set-option", "-t", name, "allow-rename", "off"]);
 	if (!allowRenameResult.ok) return allowRenameResult;
-	const autoRenameResult = await exec(["set-option", "-g", "-t", name, "automatic-rename", "off"]);
+	const autoRenameResult = await exec(["set-option", "-t", name, "automatic-rename", "off"]);
 	if (!autoRenameResult.ok) return autoRenameResult;
 	return ok(undefined);
 }

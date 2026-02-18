@@ -84,7 +84,6 @@ describe("tmux/client.command-shape", () => {
 		expect(state.calls).toContainEqual([
 			"tmux",
 			"set-option",
-			"-g",
 			"-t",
 			"ah-p",
 			"remain-on-exit",
@@ -93,7 +92,6 @@ describe("tmux/client.command-shape", () => {
 		expect(state.calls).toContainEqual([
 			"tmux",
 			"set-option",
-			"-g",
 			"-t",
 			"ah-p",
 			"allow-rename",
@@ -102,7 +100,6 @@ describe("tmux/client.command-shape", () => {
 		expect(state.calls).toContainEqual([
 			"tmux",
 			"set-option",
-			"-g",
 			"-t",
 			"ah-p",
 			"automatic-rename",

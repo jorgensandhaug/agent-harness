@@ -1,0 +1,120 @@
+import { afterEach, describe, expect, it } from "bun:test";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { discoverSubscriptions } from "./discovery.ts";
+
+const tempDirs: string[] = [];
+
+afterEach(async () => {
+	for (const dir of tempDirs.splice(0, tempDirs.length)) {
+		await rm(dir, { recursive: true, force: true });
+	}
+});
+
+async function makeTempDir(prefix: string): Promise<string> {
+	const dir = await mkdtemp(join(tmpdir(), prefix));
+	tempDirs.push(dir);
+	return dir;
+}
+
+describe("subscriptions/discovery", () => {
+	it("returns empty list when discovery is disabled", async () => {
+		const discovered = await discoverSubscriptions({
+			enabled: false,
+			includeDefaults: false,
+			claudeDirs: [],
+			codexDirs: [],
+		});
+		expect(discovered).toEqual([]);
+	});
+
+	it("discovers claude + codex chatgpt profiles from explicit dirs", async () => {
+		const root = await makeTempDir("ah-discovery-");
+		const claudeDir = join(root, ".claude-work");
+		const codexDir = join(root, ".codex-team");
+		await mkdir(claudeDir, { recursive: true });
+		await mkdir(codexDir, { recursive: true });
+
+		await Bun.write(
+			join(claudeDir, ".credentials.json"),
+			JSON.stringify({
+				claudeAiOauth: {
+					accessToken: "sk-ant-oat01-test",
+					scopes: ["user:inference"],
+				},
+			}),
+		);
+		await Bun.write(
+			join(codexDir, "auth.json"),
+			JSON.stringify({
+				tokens: {
+					id_token: "id-token",
+					access_token: "access-token",
+					refresh_token: "refresh-token",
+					account_id: "acct_123",
+				},
+				last_refresh: "2026-02-18T00:00:00Z",
+			}),
+		);
+
+		const discovered = await discoverSubscriptions({
+			enabled: true,
+			includeDefaults: false,
+			claudeDirs: [claudeDir],
+			codexDirs: [codexDir],
+		});
+
+		expect(discovered.length).toBe(2);
+		const claude = discovered.find((entry) => entry.subscription.provider === "claude-code");
+		expect(claude?.source).toBe("discovered");
+		expect(claude?.subscription).toEqual({
+			provider: "claude-code",
+			mode: "oauth",
+			sourceDir: claudeDir,
+		});
+		expect(claude?.id.startsWith("auto-claude-")).toBe(true);
+
+		const codex = discovered.find((entry) => entry.subscription.provider === "codex");
+		expect(codex?.source).toBe("discovered");
+		expect(codex?.subscription).toEqual({
+			provider: "codex",
+			mode: "chatgpt",
+			sourceDir: codexDir,
+			workspaceId: "acct_123",
+			enforceWorkspace: false,
+		});
+		expect(codex?.id.startsWith("auto-codex-")).toBe(true);
+	});
+
+	it("respects explicit codex auth_mode=apikey when both token and key fields exist", async () => {
+		const root = await makeTempDir("ah-discovery-");
+		const codexDir = join(root, ".codex-mixed");
+		await mkdir(codexDir, { recursive: true });
+		await Bun.write(
+			join(codexDir, "auth.json"),
+			JSON.stringify({
+				auth_mode: "apikey",
+				OPENAI_API_KEY: "sk-test",
+				tokens: {
+					id_token: "id-token",
+				},
+			}),
+		);
+
+		const discovered = await discoverSubscriptions({
+			enabled: true,
+			includeDefaults: false,
+			claudeDirs: [],
+			codexDirs: [codexDir],
+		});
+
+		expect(discovered).toHaveLength(1);
+		expect(discovered[0]?.subscription).toEqual({
+			provider: "codex",
+			mode: "apikey",
+			sourceDir: codexDir,
+			enforceWorkspace: false,
+		});
+	});
+});

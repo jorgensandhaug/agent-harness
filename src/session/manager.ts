@@ -19,6 +19,7 @@ import { log } from "../log.ts";
 import { getProvider } from "../providers/registry.ts";
 import type { AgentStatus } from "../providers/types.ts";
 import { summarizeSubscription } from "../subscriptions/credentials.ts";
+import { discoverSubscriptions } from "../subscriptions/discovery.ts";
 import * as tmux from "../tmux/client.ts";
 import {
 	type AgentId,
@@ -76,6 +77,55 @@ export function createManager(
 		"CLAUDE_CODE_OAUTH_TOKEN",
 	];
 	const CODEX_AUTH_ENV_KEYS = ["OPENAI_API_KEY", "CODEX_API_KEY"];
+	type ResolvedSubscription = {
+		id: string;
+		subscription: SubscriptionConfig;
+		source: "configured" | "discovered";
+	};
+
+	function subscriptionSignature(subscription: SubscriptionConfig): string {
+		return `${subscription.provider}:${resolve(subscription.sourceDir)}`;
+	}
+
+	async function resolveSubscriptions(): Promise<readonly ResolvedSubscription[]> {
+		const configured: ResolvedSubscription[] = Object.entries(config.subscriptions).map(
+			([id, subscription]) => ({
+				id,
+				subscription,
+				source: "configured",
+			}),
+		);
+		const merged = [...configured];
+		const usedIds = new Set(merged.map((entry) => entry.id));
+		const configuredSignatures = new Set(
+			configured.map((entry) => subscriptionSignature(entry.subscription)),
+		);
+		const discovery = config.subscriptionDiscovery;
+		if (discovery?.enabled === true) {
+			const discovered = await discoverSubscriptions(discovery);
+			for (const entry of discovered) {
+				const signature = subscriptionSignature(entry.subscription);
+				if (configuredSignatures.has(signature)) continue;
+
+				let id = entry.id;
+				if (usedIds.has(id)) {
+					let counter = 2;
+					while (usedIds.has(`${entry.id}-${counter}`)) {
+						counter += 1;
+					}
+					id = `${entry.id}-${counter}`;
+				}
+				usedIds.add(id);
+				merged.push({
+					id,
+					subscription: entry.subscription,
+					source: "discovered",
+				});
+			}
+		}
+
+		return merged.sort((a, b) => a.id.localeCompare(b.id));
+	}
 
 	async function ensureSecureDir(path: string): Promise<void> {
 		await mkdir(path, { recursive: true, mode: 0o700 });
@@ -436,9 +486,12 @@ export function createManager(
 	}
 
 	async function listSubscriptions() {
-		const entries = Object.entries(config.subscriptions);
+		const entries = await resolveSubscriptions();
 		const summaries = await Promise.all(
-			entries.map(async ([id, subscription]) => summarizeSubscription(id, subscription)),
+			entries.map(async (entry) => ({
+				...(await summarizeSubscription(entry.id, entry.subscription)),
+				source: entry.source,
+			})),
 		);
 		return summaries.sort((a, b) => a.id.localeCompare(b.id));
 	}
@@ -500,19 +553,20 @@ export function createManager(
 
 		let subscription: SubscriptionConfig | undefined;
 		if (subscriptionId !== undefined) {
-			const selected = config.subscriptions[subscriptionId];
+			const available = await resolveSubscriptions();
+			const selected = available.find((entry) => entry.id === subscriptionId);
 			if (!selected) {
 				return err({ code: "SUBSCRIPTION_NOT_FOUND", id: subscriptionId });
 			}
-			if (selected.provider !== providerName) {
+			if (selected.subscription.provider !== providerName) {
 				return err({
 					code: "SUBSCRIPTION_PROVIDER_MISMATCH",
 					id: subscriptionId,
 					provider: providerName,
-					subscriptionProvider: selected.provider,
+					subscriptionProvider: selected.subscription.provider,
 				});
 			}
-			const summary = await summarizeSubscription(subscriptionId, selected);
+			const summary = await summarizeSubscription(subscriptionId, selected.subscription);
 			if (!summary.valid) {
 				return err({
 					code: "SUBSCRIPTION_INVALID",
@@ -520,7 +574,7 @@ export function createManager(
 					reason: summary.reason ?? "unknown validation error",
 				});
 			}
-			subscription = selected;
+			subscription = selected.subscription;
 		}
 
 		// Override model if specified

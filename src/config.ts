@@ -72,6 +72,15 @@ const SubscriptionConfigSchema = z.discriminatedUnion("provider", [
 	CodexSubscriptionSchema,
 ]);
 
+const SubscriptionDiscoveryConfigSchema = z
+	.object({
+		enabled: z.boolean().default(true),
+		includeDefaults: z.boolean().default(true),
+		claudeDirs: z.array(z.string().min(1)).default([]),
+		codexDirs: z.array(z.string().min(1)).default([]),
+	})
+	.strict();
+
 const HarnessConfigSchema = z
 	.object({
 		port: z.number().int().min(1).max(65535).default(7070),
@@ -85,6 +94,7 @@ const HarnessConfigSchema = z
 		auth: AuthConfigSchema.optional(),
 		webhook: WebhookConfigSchema.optional(),
 		subscriptions: z.record(SubscriptionConfigSchema).default({}),
+		subscriptionDiscovery: SubscriptionDiscoveryConfigSchema.optional(),
 		providers: z.record(ProviderConfigSchema).default({
 			"claude-code": {
 				command: "claude",
@@ -135,6 +145,7 @@ export type WebhookConfig = z.infer<typeof WebhookConfigSchema>;
 export type WebhookEvent = z.infer<typeof WebhookEventSchema>;
 export type WebhookSafetyNetConfig = z.infer<typeof WebhookSafetyNetConfigSchema>;
 export type SubscriptionConfig = z.infer<typeof SubscriptionConfigSchema>;
+export type SubscriptionDiscoveryConfig = z.infer<typeof SubscriptionDiscoveryConfigSchema>;
 
 export async function loadConfig(path?: string): Promise<HarnessConfig> {
 	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
@@ -189,6 +200,18 @@ export async function loadConfig(path?: string): Promise<HarnessConfig> {
 			webhook: {
 				...config.webhook,
 				token: webhookTokenFromEnv.trim(),
+			},
+		};
+	}
+
+	if (!config.subscriptionDiscovery) {
+		config = {
+			...config,
+			subscriptionDiscovery: {
+				enabled: true,
+				includeDefaults: true,
+				claudeDirs: [],
+				codexDirs: [],
 			},
 		};
 	}

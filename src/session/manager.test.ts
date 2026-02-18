@@ -600,4 +600,52 @@ describe("session/manager.subscriptions", () => {
 		);
 		expect(await runtimeCredentials.exists()).toBe(true);
 	});
+
+	it("discovers codex subscriptions and allows selecting discovered id", async () => {
+		const discoveredDir = await makeTempDir("ah-sub-codex-discovered-");
+		await Bun.write(
+			join(discoveredDir, "auth.json"),
+			JSON.stringify({
+				tokens: {
+					id_token: "id-token",
+					access_token: "access-token",
+					refresh_token: "refresh-token",
+					account_id: "acct-discovered",
+				},
+				last_refresh: "2026-02-18T00:00:00Z",
+			}),
+		);
+
+		const config = makeConfig();
+		config.subscriptionDiscovery = {
+			enabled: true,
+			includeDefaults: false,
+			claudeDirs: [],
+			codexDirs: [discoveredDir],
+		};
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(config, store, eventBus);
+
+		const projectRes = await manager.createProject("ps3", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const subscriptions = await manager.listSubscriptions();
+		expect(subscriptions).toHaveLength(1);
+		expect(subscriptions[0]?.source).toBe("discovered");
+		const discoveredId = subscriptions[0]?.id;
+		if (!discoveredId) throw new Error("missing discovered subscription id");
+
+		const createRes = await manager.createAgent(
+			"ps3",
+			"codex",
+			"Reply with exactly: 4",
+			undefined,
+			discoveredId,
+		);
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+		expect(createRes.value.subscriptionId).toBe(discoveredId);
+	});
 });

@@ -656,6 +656,8 @@ const INSPECT_HTML = String.raw`<!doctype html>
 						const mode = typeof subscription.mode === "string" ? subscription.mode : "unknown";
 						const provider =
 							typeof subscription.provider === "string" ? subscription.provider : "unknown";
+						const source =
+							typeof subscription.source === "string" ? subscription.source : "configured";
 						const valid = subscription.valid === false ? "invalid" : "ok";
 						const reason =
 							subscription.valid === false &&
@@ -663,7 +665,9 @@ const INSPECT_HTML = String.raw`<!doctype html>
 							subscription.reason.length > 0
 								? ", " + subscription.reason
 								: "";
-						return id + " (" + provider + "/" + mode + ", " + valid + reason + ")";
+						return (
+							id + " (" + provider + "/" + mode + ", " + source + ", " + valid + reason + ")"
+						);
 					}
 
 					function normalizeProviderId(provider) {
