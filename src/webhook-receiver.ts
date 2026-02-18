@@ -28,6 +28,7 @@ const ReceiverConfigSchema = z
 		openclawHooksUrl: z.string().url().optional(),
 		openclawHooksToken: z.string().min(1).optional(),
 		gatewayToken: z.string().min(1).optional(),
+		discordBotToken: z.string().min(1).optional(),
 	})
 	.strict();
 
@@ -43,6 +44,7 @@ type EnvSource = Readonly<{
 	AH_WEBHOOK_RECEIVER_HOOKS_URL?: string;
 	AH_WEBHOOK_RECEIVER_HOOKS_TOKEN?: string;
 	AH_WEBHOOK_RECEIVER_GATEWAY_TOKEN?: string;
+	AH_WEBHOOK_RECEIVER_DISCORD_BOT_TOKEN?: string;
 	XDG_CONFIG_HOME?: string;
 	HOME?: string;
 }>;
@@ -133,6 +135,8 @@ export function loadConfig(env: EnvSource = process.env as EnvSource): ReceiverC
 		typeof fileConfig.openclawHooksToken === "string" ? fileConfig.openclawHooksToken : undefined;
 	const fileGatewayToken =
 		typeof fileConfig.gatewayToken === "string" ? fileConfig.gatewayToken : undefined;
+	const fileDiscordBotToken =
+		typeof fileConfig.discordBotToken === "string" ? fileConfig.discordBotToken : undefined;
 
 	const parsed = ReceiverConfigSchema.safeParse({
 		...fileConfig,
@@ -142,6 +146,8 @@ export function loadConfig(env: EnvSource = process.env as EnvSource): ReceiverC
 		openclawHooksUrl: env.AH_WEBHOOK_RECEIVER_HOOKS_URL?.trim() || fileHooksUrl,
 		openclawHooksToken: env.AH_WEBHOOK_RECEIVER_HOOKS_TOKEN?.trim() || fileHooksToken,
 		gatewayToken: env.AH_WEBHOOK_RECEIVER_GATEWAY_TOKEN?.trim() || fileGatewayToken,
+		discordBotToken:
+			env.AH_WEBHOOK_RECEIVER_DISCORD_BOT_TOKEN?.trim() || fileDiscordBotToken,
 	});
 
 	if (parsed.success) return parsed.data;
@@ -174,17 +180,47 @@ export function formatEventMessage(payload: WebhookPayload): string {
 	return `${header}\n${extraLine}\n${tail.slice(0, 1200)}`;
 }
 
+function parseDiscordChannelId(discordChannel: string): string {
+	const trimmed = discordChannel.trim();
+	if (!trimmed) throw new Error("discordChannel is empty");
+	if (/^\d+$/.test(trimmed)) return trimmed;
+	throw new Error("discordChannel must be numeric id");
+}
+
 async function runDiscordAction(config: ReceiverConfig, payload: WebhookPayload): Promise<void> {
+	const message = formatEventMessage(payload).slice(0, 2000);
+
+	if (config.discordBotToken) {
+		const channelId = parseDiscordChannelId(payload.discordChannel!);
+		const response = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bot ${config.discordBotToken}`,
+			},
+			body: JSON.stringify({
+				content: message,
+				allowed_mentions: { parse: [] },
+			}),
+			signal: AbortSignal.timeout(10000),
+		});
+		if (!response.ok) {
+			const body = await response.text().catch(() => "");
+			throw new Error(`discord api http ${response.status}: ${body.slice(0, 200)}`);
+		}
+		return;
+	}
+
 	const hooksUrl = config.openclawHooksUrl;
 	if (!hooksUrl) {
 		throw new Error("hooks/tools endpoint is not configured");
 	}
+
 	// Derive gateway base URL from hooks URL (e.g. http://host:port/hooks/agent -> http://host:port)
 	const parsedHooksUrl = new URL(hooksUrl);
 	const pathWithoutHooks = parsedHooksUrl.pathname.replace(/\/hooks\/.*$/, "");
 	const baseUrl = `${parsedHooksUrl.origin}${pathWithoutHooks}`;
 	const toolsUrl = `${baseUrl}/tools/invoke`;
-	const message = formatEventMessage(payload);
 	const headers = new Headers({ "Content-Type": "application/json" });
 	if (config.gatewayToken) {
 		headers.set("Authorization", `Bearer ${config.gatewayToken}`);
@@ -350,7 +386,23 @@ export function createReceiverApp(config: ReceiverConfig): Hono {
 			return c.json({ error: "invalid_payload", issues }, 400);
 		}
 
-		await runActions(config, parsed.data);
+		receiverLog("info", "received webhook event", {
+			event: parsed.data.event,
+			project: parsed.data.project,
+			agentId: parsed.data.agentId,
+			status: parsed.data.status,
+			hasDiscordChannel: Boolean(parsed.data.discordChannel),
+			hasSessionKey: Boolean(parsed.data.sessionKey),
+		});
+
+		void runActions(config, parsed.data).catch((error) => {
+			receiverLog("error", "receiver action pipeline failed", {
+				error: error instanceof Error ? error.message : String(error),
+				event: parsed.data.event,
+				project: parsed.data.project,
+				agentId: parsed.data.agentId,
+			});
+		});
 		return c.json({ ok: true });
 	});
 
@@ -370,6 +422,7 @@ export function startWebhookReceiver(config: ReceiverConfig): ReturnType<typeof 
 		bindAddress: config.bindAddress,
 		tokenRequired: Boolean(config.token),
 		hooksConfigured: Boolean(config.openclawHooksUrl),
+		discordDirectConfigured: Boolean(config.discordBotToken),
 	});
 	return server;
 }

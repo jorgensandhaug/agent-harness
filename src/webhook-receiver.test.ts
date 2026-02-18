@@ -38,6 +38,7 @@ function baseConfig(overrides: Partial<ReceiverConfig> = {}): ReceiverConfig {
 		openclawHooksUrl: undefined,
 		openclawHooksToken: undefined,
 		gatewayToken: undefined,
+		discordBotToken: undefined,
 		...overrides,
 	};
 }
@@ -69,10 +70,12 @@ describe("webhook-receiver/loadConfig", () => {
 			AH_WEBHOOK_RECEIVER_HOOKS_URL: "http://127.0.0.1:18789/hooks/agent",
 			AH_WEBHOOK_RECEIVER_HOOKS_TOKEN: "tok-123",
 			AH_WEBHOOK_RECEIVER_GATEWAY_TOKEN: "gateway-123",
+			AH_WEBHOOK_RECEIVER_DISCORD_BOT_TOKEN: "discord-bot-token-123",
 		});
 		expect(config.openclawHooksUrl).toBe("http://127.0.0.1:18789/hooks/agent");
 		expect(config.openclawHooksToken).toBe("tok-123");
 		expect(config.gatewayToken).toBe("gateway-123");
+		expect(config.discordBotToken).toBe("discord-bot-token-123");
 	});
 
 	it("loads config from explicit AH_WEBHOOK_RECEIVER_CONFIG file", async () => {
@@ -119,18 +122,21 @@ describe("webhook-receiver/loadConfig", () => {
 				port: 7373,
 				openclawHooksToken: "from-file-token",
 				gatewayToken: "from-file-gateway-token",
+				discordBotToken: "from-file-discord-token",
 			}),
 		);
 
 		const config = loadConfig({
 			AH_WEBHOOK_RECEIVER_CONFIG: path,
-			AH_WEBHOOK_RECEIVER_PORT: "7474",
-			AH_WEBHOOK_RECEIVER_HOOKS_TOKEN: "from-env-token",
-			AH_WEBHOOK_RECEIVER_GATEWAY_TOKEN: "from-env-gateway-token",
-		});
+				AH_WEBHOOK_RECEIVER_PORT: "7474",
+				AH_WEBHOOK_RECEIVER_HOOKS_TOKEN: "from-env-token",
+				AH_WEBHOOK_RECEIVER_GATEWAY_TOKEN: "from-env-gateway-token",
+				AH_WEBHOOK_RECEIVER_DISCORD_BOT_TOKEN: "from-env-discord-token",
+			});
 		expect(config.port).toBe(7474);
 		expect(config.openclawHooksToken).toBe("from-env-token");
 		expect(config.gatewayToken).toBe("from-env-gateway-token");
+		expect(config.discordBotToken).toBe("from-env-discord-token");
 	});
 });
 
@@ -186,6 +192,43 @@ describe("webhook-receiver/actions", () => {
 		expect(body.args.message).toContain("discordChannel=alerts");
 	});
 
+	it("posts directly to discord api when discord bot token is configured", async () => {
+		const calls: Array<{ url: string; body: unknown; authHeader: string | null }> = [];
+		(globalThis as { fetch: typeof fetch }).fetch = (async (
+			input: RequestInfo | URL,
+			init?: RequestInit,
+		) => {
+			const request = new Request(input, init);
+			const body = await request.json();
+			calls.push({
+				url: request.url,
+				body,
+				authHeader: request.headers.get("authorization"),
+			});
+			return new Response(JSON.stringify({ id: "123" }), { status: 200 });
+		}) as typeof fetch;
+
+		await runActions(
+			baseConfig({
+				discordBotToken: "discord-bot-token-456",
+			}),
+			{
+				...basePayload(),
+				discordChannel: "1473266182177165354",
+			},
+		);
+
+		expect(calls.length).toBe(1);
+		expect(calls[0]?.url).toBe("https://discord.com/api/v10/channels/1473266182177165354/messages");
+		expect(calls[0]?.authHeader).toBe("Bot discord-bot-token-456");
+		const body = calls[0]?.body as {
+			content: string;
+			allowed_mentions: { parse: string[] };
+		};
+		expect(body.content).toContain("discordChannel=1473266182177165354");
+		expect(body.allowed_mentions.parse).toEqual([]);
+	});
+
 	it("requires gateway token for chat.send when payload has sessionKey", async () => {
 		let caughtError: Error | null = null;
 		try {
@@ -233,6 +276,44 @@ describe("webhook-receiver/http", () => {
 			}),
 		);
 		expect(withToken.status).toBe(200);
+	});
+
+	it("acks webhook immediately even when downstream action is slow", async () => {
+		let resolveFetch: ((value: Response) => void) | null = null;
+		(globalThis as { fetch: typeof fetch }).fetch = (() => {
+			return new Promise<Response>((resolve) => {
+				resolveFetch = resolve;
+			});
+		}) as typeof fetch;
+
+		const app = createReceiverApp(
+			baseConfig({
+				openclawHooksUrl: "http://127.0.0.1:18789/hooks/agent",
+				gatewayToken: "gateway-token-456",
+			}),
+		);
+
+		const responsePromise = app.fetch(
+			new Request("http://localhost/harness-webhook", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					...basePayload(),
+					discordChannel: "alerts",
+				}),
+			}),
+		);
+
+		const response = await Promise.race([
+			responsePromise,
+			new Promise<Response>((_, reject) =>
+				setTimeout(() => reject(new Error("webhook response timed out")), 100),
+			),
+		]);
+		expect(response.status).toBe(200);
+
+		resolveFetch?.(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+		await responsePromise;
 	});
 });
 

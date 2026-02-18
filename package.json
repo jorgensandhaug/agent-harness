@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "bun run --watch src/cli.ts serve",
     "start": "bun run src/cli.ts serve",
+    "start:receiver": "bun run src/webhook-receiver-cli.ts",
     "inspect": "bun run src/cli.ts serve",
     "build": "bun build --compile src/cli.ts --outfile agent-harness",
     "build:receiver": "bun build --compile src/webhook-receiver.ts --outfile agent-harness-receiver",
