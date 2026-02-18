@@ -108,19 +108,26 @@ function collectCandidateDirs(
 }
 
 function inferCodexMode(auth: Record<string, unknown>): "chatgpt" | "apikey" | null {
-	const explicitMode = nonEmptyString(auth.auth_mode);
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+	const explicitMode = nonEmptyString(auth["auth_mode"]);
 	if (explicitMode === "chatgpt" || explicitMode === "apikey") {
 		return explicitMode;
 	}
 
-	const apiKey = nonEmptyString(auth.OPENAI_API_KEY);
-	const tokens = parseJsonObject(auth.tokens);
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+	const apiKey = nonEmptyString(auth["OPENAI_API_KEY"]);
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+	const tokens = parseJsonObject(auth["tokens"]);
 	const hasTokens = Boolean(
 		tokens &&
-			(nonEmptyString(tokens.id_token) ||
-				nonEmptyString(tokens.access_token) ||
-				nonEmptyString(tokens.refresh_token) ||
-				nonEmptyString(tokens.account_id)),
+			// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+			(nonEmptyString(tokens["id_token"]) ||
+				// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+				nonEmptyString(tokens["access_token"]) ||
+				// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+				nonEmptyString(tokens["refresh_token"]) ||
+				// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+				nonEmptyString(tokens["account_id"])),
 	);
 
 	if (hasTokens) return "chatgpt";
@@ -129,9 +136,11 @@ function inferCodexMode(auth: Record<string, unknown>): "chatgpt" | "apikey" | n
 }
 
 function extractCodexAccountId(auth: Record<string, unknown>): string | undefined {
-	const tokens = parseJsonObject(auth.tokens);
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+	const tokens = parseJsonObject(auth["tokens"]);
 	if (!tokens) return undefined;
-	const accountId = nonEmptyString(tokens.account_id);
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+	const accountId = nonEmptyString(tokens["account_id"]);
 	return accountId ?? undefined;
 }
 
