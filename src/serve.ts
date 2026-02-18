@@ -7,6 +7,7 @@ import { createPoller } from "./poller/poller.ts";
 import { createManager } from "./session/manager.ts";
 import { createStore } from "./session/store.ts";
 import * as tmux from "./tmux/client.ts";
+import { createWebhookClient } from "./webhook/client.ts";
 
 export async function serveCommand(): Promise<void> {
 	const startTime = Date.now();
@@ -33,6 +34,9 @@ export async function serveCommand(): Promise<void> {
 	log.info("event bus initialized");
 	const debugTracker = createDebugTracker(config, eventBus);
 	log.info("debug tracker initialized");
+	const stopWebhookClient = config.webhook
+		? createWebhookClient(config.webhook, eventBus, store)
+		: null;
 
 	// 5. Initialize session manager
 	const manager = createManager(config, store, eventBus, debugTracker);
@@ -59,6 +63,7 @@ export async function serveCommand(): Promise<void> {
 		// Stop poller
 		poller.stop();
 		debugTracker.stop();
+		stopWebhookClient?.();
 
 		// Stop accepting new requests
 		server.stop(true);

@@ -3,8 +3,8 @@ import type { EventBus } from "../events/bus.ts";
 import type { NormalizedEvent } from "../events/types.ts";
 import { log } from "../log.ts";
 import type { AgentStatus } from "../providers/types.ts";
-import type { Store } from "../session/store.ts";
 import { readAgentMessages } from "../session/messages.ts";
+import type { Store } from "../session/store.ts";
 import type { AgentId } from "../types.ts";
 
 export type WebhookPayload = {
@@ -35,9 +35,11 @@ async function postWebhook(
 	payload: WebhookPayload,
 	token: string | undefined,
 ): Promise<boolean> {
-	const headers: Record<string, string> = { "Content-Type": "application/json" };
+	const headers: { "Content-Type": string; Authorization?: string } = {
+		"Content-Type": "application/json",
+	};
 	if (token) {
-		headers["Authorization"] = `Bearer ${token}`;
+		headers.Authorization = `Bearer ${token}`;
 	}
 
 	try {
