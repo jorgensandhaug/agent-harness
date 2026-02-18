@@ -34,6 +34,7 @@ const ReceiverConfigSchema = z
 
 type WebhookPayload = z.infer<typeof WebhookPayloadSchema>;
 export type ReceiverConfig = z.infer<typeof ReceiverConfigSchema>;
+type ReceiverFileConfig = Partial<ReceiverConfig>;
 
 type EnvSource = Readonly<{
 	AH_WEBHOOK_RECEIVER_CONFIG?: string;
@@ -101,13 +102,13 @@ function resolveReceiverConfigPath(env: EnvSource): string {
 	return candidates[0] ?? "webhook-receiver.json";
 }
 
-function readReceiverFileConfig(path: string): Record<string, unknown> {
+function readReceiverFileConfig(path: string): ReceiverFileConfig {
 	if (!existsSync(path)) return {};
 	try {
 		const raw = JSON.parse(readFileSync(path, "utf8"));
 		if (raw && typeof raw === "object" && !Array.isArray(raw)) {
 			receiverLog("info", "receiver config loaded", { path });
-			return raw as Record<string, unknown>;
+			return raw as ReceiverFileConfig;
 		}
 		receiverLog("warn", "receiver config must be a JSON object, ignoring file", { path });
 		return {};
@@ -222,13 +223,17 @@ async function runDiscordAction(config: ReceiverConfig, payload: WebhookPayload)
 }
 
 async function runHooksAction(config: ReceiverConfig, payload: WebhookPayload): Promise<void> {
+	const hooksUrl = config.openclawHooksUrl;
+	if (!hooksUrl) {
+		throw new Error("hooks endpoint is not configured");
+	}
 	const message = formatEventMessage(payload);
 	const body = { message, sessionKey: payload.sessionKey };
-	const headers: Record<string, string> = { "Content-Type": "application/json" };
+	const headers = new Headers({ "Content-Type": "application/json" });
 	if (config.openclawHooksToken) {
-		headers.Authorization = `Bearer ${config.openclawHooksToken}`;
+		headers.set("Authorization", `Bearer ${config.openclawHooksToken}`);
 	}
-	const response = await fetch(config.openclawHooksUrl!, {
+	const response = await fetch(hooksUrl, {
 		method: "POST",
 		headers,
 		body: JSON.stringify(body),
