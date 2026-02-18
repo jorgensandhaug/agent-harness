@@ -209,31 +209,82 @@ async function runDiscordAction(config: ReceiverConfig, payload: WebhookPayload)
 	}
 }
 
-async function runHooksAction(config: ReceiverConfig, payload: WebhookPayload): Promise<void> {
+async function runChatSendAction(config: ReceiverConfig, payload: WebhookPayload): Promise<void> {
 	const hooksUrl = config.openclawHooksUrl;
 	if (!hooksUrl) {
-		throw new Error("hooks endpoint is not configured");
+		throw new Error("hooks URL not configured (needed to derive gateway WebSocket URL)");
 	}
-	const parsedHooksUrl = new URL(hooksUrl);
-	const wakePath = parsedHooksUrl.pathname.replace(/\/[^/]*$/, "/wake");
-	const wakeUrl = `${parsedHooksUrl.origin}${wakePath}${parsedHooksUrl.search}`;
-	const wakePayload: WebhookPayload = { ...payload, sessionKey: null };
-	const body = { text: formatEventMessage(wakePayload), mode: "now" as const };
-	const headers = new Headers({ "Content-Type": "application/json" });
-	if (config.openclawHooksToken) {
-		headers.set("Authorization", `Bearer ${config.openclawHooksToken}`);
+	const gatewayToken = config.gatewayToken;
+	if (!gatewayToken) {
+		throw new Error("gateway token not configured (needed for chat.send auth)");
 	}
-	const response = await fetch(wakeUrl, {
-		method: "POST",
-		headers,
-		body: JSON.stringify(body),
-		signal: AbortSignal.timeout(10000),
-	});
-	if (response.status !== 200) {
-		throw new Error(`hooks endpoint http ${response.status}`);
-	}
-}
 
+	const parsedUrl = new URL(hooksUrl);
+	const wsProtocol = parsedUrl.protocol === "https:" ? "wss:" : "ws:";
+	const wsUrl = `${wsProtocol}//${parsedUrl.host}`;
+
+	const message = formatEventMessage(payload);
+	const sessionKey = payload.sessionKey!;
+	const idempotencyKey = `ah-${payload.project}-${payload.agentId}-${Date.now()}`;
+
+	const rpcPayload = {
+		method: "chat.send",
+		id: idempotencyKey,
+		params: { sessionKey, message, idempotencyKey },
+	};
+
+	return new Promise<void>((resolve, reject) => {
+		const timeout = setTimeout(() => {
+			ws.close();
+			reject(new Error("chat.send WebSocket timeout after 15s"));
+		}, 15000);
+
+		const ws = new WebSocket(wsUrl);
+
+		ws.onopen = () => {
+			ws.send(JSON.stringify({ method: "auth", id: "auth-1", params: { token: gatewayToken } }));
+		};
+
+		ws.onmessage = (event) => {
+			try {
+				const data = JSON.parse(String(event.data));
+				if (data.id === "auth-1") {
+					if (data.error) {
+						clearTimeout(timeout);
+						ws.close();
+						reject(new Error(`gateway auth failed: ${JSON.stringify(data.error)}`));
+						return;
+					}
+					ws.send(JSON.stringify(rpcPayload));
+				} else if (data.id === idempotencyKey) {
+					clearTimeout(timeout);
+					ws.close();
+					if (data.error) {
+						reject(new Error(`chat.send failed: ${JSON.stringify(data.error)}`));
+					} else {
+						receiverLog("info", "chat.send delivered", {
+							sessionKey,
+							project: payload.project,
+							agentId: payload.agentId,
+						});
+						resolve();
+					}
+				}
+			} catch {
+				// ignore parse errors
+			}
+		};
+
+		ws.onerror = (err) => {
+			clearTimeout(timeout);
+			reject(new Error(`WebSocket error: ${String(err)}`));
+		};
+
+		ws.onclose = () => {
+			clearTimeout(timeout);
+		};
+	});
+}
 export async function runActions(config: ReceiverConfig, payload: WebhookPayload): Promise<void> {
 	if (payload.discordChannel) {
 		try {
@@ -256,9 +307,9 @@ export async function runActions(config: ReceiverConfig, payload: WebhookPayload
 			);
 		} else {
 			try {
-				await runHooksAction(config, payload);
+				await runChatSendAction(config, payload);
 			} catch (error) {
-				receiverLog("warn", "receiver hooks action failed", {
+				receiverLog("warn", "receiver chat.send action failed", {
 					error: error instanceof Error ? error.message : String(error),
 					sessionKey: payload.sessionKey,
 				});
