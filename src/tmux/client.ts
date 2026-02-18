@@ -12,6 +12,15 @@ type ExecRawResult = {
 };
 
 let bunSpawnDisabled = false;
+let lastSeenBunSpawn: typeof Bun.spawn | null = null;
+
+function shouldUseBunSpawn(): boolean {
+	if (lastSeenBunSpawn !== Bun.spawn) {
+		lastSeenBunSpawn = Bun.spawn;
+		bunSpawnDisabled = false;
+	}
+	return !bunSpawnDisabled;
+}
 
 function mergedPath(parts: readonly string[]): string {
 	const out: string[] = [];
@@ -150,7 +159,7 @@ async function exec(args: readonly string[]): Promise<Result<string, TmuxError>>
 		process.env["TERM"] ?? "xterm-256color";
 
 	let runResult: ExecRawResult | null = null;
-	if (!bunSpawnDisabled) {
+	if (shouldUseBunSpawn()) {
 		runResult = await execWithBunSpawn(args, childEnv);
 	}
 	if (runResult === null) {

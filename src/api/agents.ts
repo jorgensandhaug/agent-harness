@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
 import { z } from "zod";
+import { isProviderAllowed, unsupportedProviderMessage } from "../providers/allowed.ts";
 import type { Manager } from "../session/manager.ts";
 import { readAgentMessages } from "../session/messages.ts";
 import {
@@ -54,6 +55,14 @@ export function registerAgentRoutes(app: Hono, manager: Manager): void {
 				{
 					error: "INVALID_REQUEST",
 					message: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
+				},
+				400,
+			);
+		}
+		if (!isProviderAllowed(parsed.data.provider)) {
+			return c.json(
+				{
+					error: unsupportedProviderMessage(),
 				},
 				400,
 			);

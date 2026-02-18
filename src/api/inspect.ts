@@ -1,4 +1,9 @@
 import type { Hono } from "hono";
+import { ALLOWED_PROVIDERS } from "../providers/allowed.ts";
+
+const PROVIDER_OPTIONS_HTML = ALLOWED_PROVIDERS.map(
+	(provider) => `\t\t\t\t\t\t\t<option value="${provider}">${provider}</option>`,
+).join("\n");
 
 const INSPECT_HTML = String.raw`<!doctype html>
 <html lang="en">
@@ -261,10 +266,7 @@ const INSPECT_HTML = String.raw`<!doctype html>
 					<div>
 						<label for="provider">Provider</label>
 						<select id="provider">
-							<option value="claude-code">claude-code</option>
-							<option value="codex">codex</option>
-							<option value="pi">pi</option>
-							<option value="opencode">opencode</option>
+${PROVIDER_OPTIONS_HTML}
 						</select>
 					</div>
 					<div>

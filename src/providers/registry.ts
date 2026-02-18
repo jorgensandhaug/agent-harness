@@ -1,4 +1,5 @@
 import { type Result, err, ok } from "../types.ts";
+import { isProviderAllowed } from "./allowed.ts";
 import { claudeCodeProvider } from "./claude-code.ts";
 import { codexProvider } from "./codex.ts";
 import { opencodeProvider } from "./opencode.ts";
@@ -24,5 +25,5 @@ export function getProvider(name: string): Result<Provider, UnknownProviderError
 }
 
 export function listProviders(): readonly string[] {
-	return Array.from(providers.keys());
+	return Array.from(providers.keys()).filter((provider) => isProviderAllowed(provider));
 }

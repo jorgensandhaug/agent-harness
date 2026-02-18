@@ -358,14 +358,13 @@ async function readSseEvent(
 	throw new Error("timeout");
 }
 
-let fakeTmux: FakeTmux;
 let env: TestEnv | null = null;
 
 beforeEach(async () => {
-	fakeTmux = new FakeTmux();
+	const testTmux = new FakeTmux();
 	process.env.HARNESS_INITIAL_TASK_DELAY_MS = "0";
 	(Bun as { spawn: typeof Bun.spawn }).spawn = ((cmd: readonly string[]) =>
-		fakeTmux.spawn(cmd)) as typeof Bun.spawn;
+		testTmux.spawn(cmd)) as typeof Bun.spawn;
 	env = await setupEnv();
 });
 
@@ -469,7 +468,7 @@ describe("http/projects.crud", () => {
 		const createAgentRes = await apiJson(env.baseUrl, "/api/v1/projects/p-http-targets/agents", {
 			method: "POST",
 			body: JSON.stringify({
-				provider: "claude-code",
+				provider: "codex",
 				task: "Reply with exactly: 4",
 			}),
 		});
@@ -502,7 +501,7 @@ describe("http/agents.crud-input-output-abort", () => {
 		const createAgentRes = await apiJson(env.baseUrl, "/api/v1/projects/p-agents/agents", {
 			method: "POST",
 			body: JSON.stringify({
-				provider: "claude-code",
+				provider: "codex",
 				task: "Reply with exactly: 4",
 				model: "cheap",
 			}),
@@ -575,7 +574,7 @@ describe("http/agents.crud-input-output-abort", () => {
 			{
 				method: "POST",
 				body: JSON.stringify({
-					provider: "claude-code",
+					provider: "codex",
 					task: "Reply with exactly: 4",
 				}),
 			},
@@ -614,7 +613,7 @@ describe("http/agents.crud-input-output-abort", () => {
 			expect.arrayContaining([
 				{
 					id: agentId,
-					provider: "claude-code",
+					provider: "codex",
 					status: expect.any(String),
 					tmuxTarget: expect.stringContaining("ah-http-test-p-agents-compact:"),
 					brief: expect.any(Array),
@@ -646,6 +645,31 @@ describe("http/agents.crud-input-output-abort", () => {
 		const body = await createAgentRes.json();
 		expect(body.error).toBe("INVALID_REQUEST");
 		expect(body.message).toContain("Subscription 'does-not-exist' not found");
+	});
+
+	it("returns 400 when provider is not allowed", async () => {
+		if (!env) throw new Error("env missing");
+		await apiJson(env.baseUrl, "/api/v1/projects", {
+			method: "POST",
+			body: JSON.stringify({ name: "p-agents-provider-filter", cwd: process.cwd() }),
+		});
+
+		const createAgentRes = await apiJson(
+			env.baseUrl,
+			"/api/v1/projects/p-agents-provider-filter/agents",
+			{
+				method: "POST",
+				body: JSON.stringify({
+					provider: "claude-code",
+					task: "Reply with exactly: 4",
+				}),
+			},
+		);
+		expect(createAgentRes.status).toBe(400);
+		const body = await createAgentRes.json();
+		expect(body).toEqual({
+			error: 'Only the codex provider is currently supported. Please use provider: "codex".',
+		});
 	});
 
 	it("accepts callback routing object on agent create", async () => {
@@ -750,11 +774,11 @@ describe("http/events.sse.agent-stream", () => {
 
 		const a1Res = await apiJson(env.baseUrl, "/api/v1/projects/p-agent-events/agents", {
 			method: "POST",
-			body: JSON.stringify({ provider: "claude-code", task: "Reply with exactly: 4" }),
+			body: JSON.stringify({ provider: "codex", task: "Reply with exactly: 4" }),
 		});
 		const a2Res = await apiJson(env.baseUrl, "/api/v1/projects/p-agent-events/agents", {
 			method: "POST",
-			body: JSON.stringify({ provider: "claude-code", task: "Reply with exactly: 4" }),
+			body: JSON.stringify({ provider: "codex", task: "Reply with exactly: 4" }),
 		});
 		const a1 = (await a1Res.json()).agent.id as string;
 		const a2 = (await a2Res.json()).agent.id as string;

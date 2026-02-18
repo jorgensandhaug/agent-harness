@@ -23,15 +23,10 @@ type SpawnState = {
 };
 
 const originalSpawn = Bun.spawn;
+const originalPasteDelay = process.env.HARNESS_TMUX_PASTE_ENTER_DELAY_MS;
 let state: SpawnState;
 
-beforeEach(() => {
-	state = {
-		calls: [],
-		stdoutByCall: [],
-		exitCodeByCall: [],
-	};
-
+function installSpawnMock(): void {
 	(Bun as { spawn: typeof Bun.spawn }).spawn = ((cmd: readonly string[]) => {
 		state.calls.push([...cmd]);
 		const callIdx = state.calls.length - 1;
@@ -43,20 +38,40 @@ beforeEach(() => {
 			stderr: new Blob([""]).stream(),
 		} as ReturnType<typeof Bun.spawn>;
 	}) as typeof Bun.spawn;
+}
+
+beforeEach(() => {
+	state = {
+		calls: [],
+		stdoutByCall: [],
+		exitCodeByCall: [],
+	};
+
+	installSpawnMock();
+	process.env.HARNESS_TMUX_PASTE_ENTER_DELAY_MS = "0";
 });
 
 afterEach(() => {
 	(Bun as { spawn: typeof Bun.spawn }).spawn = originalSpawn;
+	if (originalPasteDelay === undefined) {
+		process.env.HARNESS_TMUX_PASTE_ENTER_DELAY_MS = undefined;
+	} else {
+		process.env.HARNESS_TMUX_PASTE_ENTER_DELAY_MS = originalPasteDelay;
+	}
 });
 
 describe("tmux/client.command-shape", () => {
 	it("builds expected tmux argv across exported operations", async () => {
+		// Avoid cross-file Bun.spawn contention from delayed manager test timers.
+		await Bun.sleep(750);
+		state.calls = [];
+		installSpawnMock();
 		await createSession("ah-p", "/tmp/proj");
 		await createWindow("ah-p", "codex-a1", "/tmp/proj", ["codex", "--model", "nano"], {
 			A: "1",
 		});
-		await sendInput("ah-p:1.0", "hello");
 		await sendKeys("ah-p:1.0", "C-c");
+		await sendInput("ah-p:1.0", "hello");
 		await capturePane("ah-p:1.0", 200);
 		await startPipePane("ah-p:1.0", "/tmp/agent.log");
 		await stopPipePane("ah-p:1.0");

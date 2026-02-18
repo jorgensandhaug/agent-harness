@@ -52,6 +52,10 @@ describe("api/inspect.route", () => {
 		expect(html).toContain("/messages?limit=");
 		expect(html).toContain("/messages/last");
 		expect(html).toContain("/api/v1/projects");
+		expect(html).toContain('<option value="codex">codex</option>');
+		expect(html).not.toContain('<option value="claude-code">claude-code</option>');
+		expect(html).not.toContain('<option value="pi">pi</option>');
+		expect(html).not.toContain('<option value="opencode">opencode</option>');
 		debugTracker.stop();
 	});
 });
