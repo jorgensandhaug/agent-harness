@@ -37,6 +37,7 @@ function baseConfig(overrides: Partial<ReceiverConfig> = {}): ReceiverConfig {
 		token: undefined,
 		openclawHooksUrl: undefined,
 		openclawHooksToken: undefined,
+		gatewayToken: undefined,
 		...overrides,
 	};
 }
@@ -60,15 +61,18 @@ describe("webhook-receiver/loadConfig", () => {
 		expect(config.bindAddress).toBe("127.0.0.1");
 		expect(config.openclawHooksUrl).toBeUndefined();
 		expect(config.openclawHooksToken).toBeUndefined();
+		expect(config.gatewayToken).toBeUndefined();
 	});
 
 	it("accepts hooks config from env vars", () => {
 		const config = loadConfig({
 			AH_WEBHOOK_RECEIVER_HOOKS_URL: "http://127.0.0.1:18789/hooks/agent",
 			AH_WEBHOOK_RECEIVER_HOOKS_TOKEN: "tok-123",
+			AH_WEBHOOK_RECEIVER_GATEWAY_TOKEN: "gateway-123",
 		});
 		expect(config.openclawHooksUrl).toBe("http://127.0.0.1:18789/hooks/agent");
 		expect(config.openclawHooksToken).toBe("tok-123");
+		expect(config.gatewayToken).toBe("gateway-123");
 	});
 
 	it("loads config from explicit AH_WEBHOOK_RECEIVER_CONFIG file", async () => {
@@ -114,6 +118,7 @@ describe("webhook-receiver/loadConfig", () => {
 			JSON.stringify({
 				port: 7373,
 				openclawHooksToken: "from-file-token",
+				gatewayToken: "from-file-gateway-token",
 			}),
 		);
 
@@ -121,9 +126,11 @@ describe("webhook-receiver/loadConfig", () => {
 			AH_WEBHOOK_RECEIVER_CONFIG: path,
 			AH_WEBHOOK_RECEIVER_PORT: "7474",
 			AH_WEBHOOK_RECEIVER_HOOKS_TOKEN: "from-env-token",
+			AH_WEBHOOK_RECEIVER_GATEWAY_TOKEN: "from-env-gateway-token",
 		});
 		expect(config.port).toBe(7474);
 		expect(config.openclawHooksToken).toBe("from-env-token");
+		expect(config.gatewayToken).toBe("from-env-gateway-token");
 	});
 });
 
@@ -156,7 +163,8 @@ describe("webhook-receiver/actions", () => {
 		await runActions(
 			baseConfig({
 				openclawHooksUrl: "http://127.0.0.1:18789/hooks/agent",
-				openclawHooksToken: "tok-456",
+				openclawHooksToken: "hooks-token-ignored-for-discord",
+				gatewayToken: "gateway-token-456",
 			}),
 			{
 				...basePayload(),
@@ -166,9 +174,14 @@ describe("webhook-receiver/actions", () => {
 
 		expect(calls.length).toBe(1);
 		expect(calls[0]?.url).toBe("http://127.0.0.1:18789/tools/invoke");
-		expect(calls[0]?.authHeader).toBe("Bearer tok-456");
-		const body = calls[0]?.body as { tool: string; args: { target: string; message: string } };
+		expect(calls[0]?.authHeader).toBe("Bearer gateway-token-456");
+		const body = calls[0]?.body as {
+			tool: string;
+			args: { action: string; channel: string; target: string; message: string };
+		};
 		expect(body.tool).toBe("message");
+		expect(body.args.action).toBe("send");
+		expect(body.args.channel).toBe("discord");
 		expect(body.args.target).toBe("channel:alerts");
 		expect(body.args.message).toContain("discordChannel=alerts");
 	});

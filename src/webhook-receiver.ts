@@ -27,6 +27,7 @@ const ReceiverConfigSchema = z
 		token: z.string().min(1).optional(),
 		openclawHooksUrl: z.string().url().optional(),
 		openclawHooksToken: z.string().min(1).optional(),
+		gatewayToken: z.string().min(1).optional(),
 	})
 	.strict();
 
@@ -41,6 +42,7 @@ type EnvSource = Readonly<{
 	AH_WEBHOOK_RECEIVER_TOKEN?: string;
 	AH_WEBHOOK_RECEIVER_HOOKS_URL?: string;
 	AH_WEBHOOK_RECEIVER_HOOKS_TOKEN?: string;
+	AH_WEBHOOK_RECEIVER_GATEWAY_TOKEN?: string;
 	XDG_CONFIG_HOME?: string;
 	HOME?: string;
 }>;
@@ -129,6 +131,8 @@ export function loadConfig(env: EnvSource = process.env as EnvSource): ReceiverC
 		typeof fileConfig.openclawHooksUrl === "string" ? fileConfig.openclawHooksUrl : undefined;
 	const fileHooksToken =
 		typeof fileConfig.openclawHooksToken === "string" ? fileConfig.openclawHooksToken : undefined;
+	const fileGatewayToken =
+		typeof fileConfig.gatewayToken === "string" ? fileConfig.gatewayToken : undefined;
 
 	const parsed = ReceiverConfigSchema.safeParse({
 		...fileConfig,
@@ -137,6 +141,7 @@ export function loadConfig(env: EnvSource = process.env as EnvSource): ReceiverC
 		token: env.AH_WEBHOOK_RECEIVER_TOKEN?.trim() || fileToken,
 		openclawHooksUrl: env.AH_WEBHOOK_RECEIVER_HOOKS_URL?.trim() || fileHooksUrl,
 		openclawHooksToken: env.AH_WEBHOOK_RECEIVER_HOOKS_TOKEN?.trim() || fileHooksToken,
+		gatewayToken: env.AH_WEBHOOK_RECEIVER_GATEWAY_TOKEN?.trim() || fileGatewayToken,
 	});
 
 	if (parsed.success) return parsed.data;
@@ -175,12 +180,14 @@ async function runDiscordAction(config: ReceiverConfig, payload: WebhookPayload)
 		throw new Error("hooks/tools endpoint is not configured");
 	}
 	// Derive gateway base URL from hooks URL (e.g. http://host:port/hooks/agent -> http://host:port)
-	const baseUrl = hooksUrl.replace(/\/hooks\/.*$/, "");
+	const parsedHooksUrl = new URL(hooksUrl);
+	const pathWithoutHooks = parsedHooksUrl.pathname.replace(/\/hooks\/.*$/, "");
+	const baseUrl = `${parsedHooksUrl.origin}${pathWithoutHooks}`;
 	const toolsUrl = `${baseUrl}/tools/invoke`;
 	const message = formatEventMessage(payload);
 	const headers = new Headers({ "Content-Type": "application/json" });
-	if (config.openclawHooksToken) {
-		headers.set("Authorization", `Bearer ${config.openclawHooksToken}`);
+	if (config.gatewayToken) {
+		headers.set("Authorization", `Bearer ${config.gatewayToken}`);
 	}
 	const response = await fetch(toolsUrl, {
 		method: "POST",
