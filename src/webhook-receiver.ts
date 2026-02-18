@@ -23,10 +23,10 @@ const ReceiverConfigSchema = z
 		port: z.number().int().min(1).max(65535),
 		bindAddress: z.string().min(1).default("127.0.0.1"),
 		token: z.string().min(1).optional(),
-		discordWebhookUrl: z.string().url().optional(),
 		openclawCommand: z.string().min(1).default("openclaw"),
-		openclawArgs: z.array(z.string().min(1)).default(["system", "event"]),
 		openclawTimeoutMs: z.number().int().min(100).max(120000).default(5000),
+		openclawHooksUrl: z.string().url().optional(),
+		openclawHooksToken: z.string().min(1).optional(),
 	})
 	.strict();
 
@@ -37,11 +37,10 @@ type EnvSource = Readonly<{
 	AH_WEBHOOK_RECEIVER_PORT?: string;
 	AH_WEBHOOK_RECEIVER_BIND_ADDRESS?: string;
 	AH_WEBHOOK_RECEIVER_TOKEN?: string;
-	AH_DISCORD_WEBHOOK_URL?: string;
-	AH_WEBHOOK_RECEIVER_DISCORD_WEBHOOK_URL?: string;
 	AH_WEBHOOK_RECEIVER_OPENCLAW_BIN?: string;
-	AH_WEBHOOK_RECEIVER_OPENCLAW_ARGS?: string;
 	AH_WEBHOOK_RECEIVER_OPENCLAW_TIMEOUT_MS?: string;
+	AH_WEBHOOK_RECEIVER_HOOKS_URL?: string;
+	AH_WEBHOOK_RECEIVER_HOOKS_TOKEN?: string;
 }>;
 
 function receiverLog(
@@ -59,15 +58,6 @@ function receiverLog(
 	);
 }
 
-function parseCsv(value: string | undefined): string[] | undefined {
-	if (!value) return undefined;
-	const items = value
-		.split(",")
-		.map((item) => item.trim())
-		.filter((item) => item.length > 0);
-	return items.length > 0 ? items : undefined;
-}
-
 function parseIntWithDefault(value: string | undefined, fallback: number): number {
 	if (!value) return fallback;
 	const parsed = Number.parseInt(value, 10);
@@ -79,13 +69,10 @@ export function loadConfig(env: EnvSource = process.env as EnvSource): ReceiverC
 		port: parseIntWithDefault(env.AH_WEBHOOK_RECEIVER_PORT, 7071),
 		bindAddress: env.AH_WEBHOOK_RECEIVER_BIND_ADDRESS?.trim() || "127.0.0.1",
 		token: env.AH_WEBHOOK_RECEIVER_TOKEN?.trim() || undefined,
-		discordWebhookUrl:
-			env.AH_DISCORD_WEBHOOK_URL?.trim() ||
-			env.AH_WEBHOOK_RECEIVER_DISCORD_WEBHOOK_URL?.trim() ||
-			undefined,
 		openclawCommand: env.AH_WEBHOOK_RECEIVER_OPENCLAW_BIN?.trim() || "openclaw",
-		openclawArgs: parseCsv(env.AH_WEBHOOK_RECEIVER_OPENCLAW_ARGS) ?? ["system", "event"],
 		openclawTimeoutMs: parseIntWithDefault(env.AH_WEBHOOK_RECEIVER_OPENCLAW_TIMEOUT_MS, 5000),
+		openclawHooksUrl: env.AH_WEBHOOK_RECEIVER_HOOKS_URL?.trim() || undefined,
+		openclawHooksToken: env.AH_WEBHOOK_RECEIVER_HOOKS_TOKEN?.trim() || undefined,
 	});
 
 	if (parsed.success) return parsed.data;
@@ -118,29 +105,27 @@ export function formatEventMessage(payload: WebhookPayload): string {
 	return `${header}\n${extraLine}\n${tail.slice(0, 1200)}`;
 }
 
-async function runDiscordWebhookAction(url: string, payload: WebhookPayload): Promise<void> {
-	const body = {
-		content: formatEventMessage(payload),
-	};
-	const response = await fetch(url, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify(body),
-		signal: AbortSignal.timeout(10000),
-	});
-	if (!response.ok) {
-		throw new Error(`discord webhook http ${response.status}`);
-	}
-}
-
 async function readStreamText(stream: ReadableStream<Uint8Array> | number | null): Promise<string> {
 	if (!stream || typeof stream === "number") return "";
 	return new Response(stream).text();
 }
 
-async function runOpenClawAction(config: ReceiverConfig, payload: WebhookPayload): Promise<void> {
+async function runDiscordAction(
+	config: ReceiverConfig,
+	payload: WebhookPayload,
+): Promise<void> {
 	const message = formatEventMessage(payload);
-	const cmd = [config.openclawCommand, ...config.openclawArgs, message];
+	const cmd = [
+		config.openclawCommand,
+		"message",
+		"send",
+		"--channel",
+		"discord",
+		"--target",
+		`channel:${payload.discordChannel}`,
+		"--message",
+		message,
+	];
 	const proc = Bun.spawn(cmd, {
 		stdout: "pipe",
 		stderr: "pipe",
@@ -153,39 +138,62 @@ async function runOpenClawAction(config: ReceiverConfig, payload: WebhookPayload
 	const exitOrTimeout = await Promise.race([proc.exited, timeout]);
 	if (exitOrTimeout === "timeout") {
 		proc.kill();
-		throw new Error(`openclaw command timed out after ${config.openclawTimeoutMs}ms`);
+		throw new Error(`openclaw discord command timed out after ${config.openclawTimeoutMs}ms`);
 	}
 	if (exitOrTimeout !== 0) {
 		const stderr = (await readStreamText(proc.stderr)).trim();
-		throw new Error(`openclaw command failed (${exitOrTimeout})${stderr ? `: ${stderr}` : ""}`);
+		throw new Error(
+			`openclaw discord command failed (${exitOrTimeout})${stderr ? `: ${stderr}` : ""}`,
+		);
+	}
+}
+
+async function runHooksAction(
+	config: ReceiverConfig,
+	payload: WebhookPayload,
+): Promise<void> {
+	const message = formatEventMessage(payload);
+	const body = { message, sessionKey: payload.sessionKey };
+	const headers: Record<string, string> = { "Content-Type": "application/json" };
+	if (config.openclawHooksToken) {
+		headers.Authorization = `Bearer ${config.openclawHooksToken}`;
+	}
+	const response = await fetch(config.openclawHooksUrl!, {
+		method: "POST",
+		headers,
+		body: JSON.stringify(body),
+		signal: AbortSignal.timeout(10000),
+	});
+	if (response.status !== 202) {
+		throw new Error(`hooks endpoint http ${response.status}`);
 	}
 }
 
 export async function runActions(config: ReceiverConfig, payload: WebhookPayload): Promise<void> {
 	if (payload.discordChannel) {
-		if (!config.discordWebhookUrl) {
-			receiverLog("warn", "discord routing requested but AH_DISCORD_WEBHOOK_URL not configured", {
-				discordChannel: payload.discordChannel,
+		try {
+			await runDiscordAction(config, payload);
+		} catch (error) {
+			receiverLog("warn", "receiver discord action failed", {
+				error: error instanceof Error ? error.message : String(error),
 			});
-		} else {
-			try {
-				await runDiscordWebhookAction(config.discordWebhookUrl, payload);
-			} catch (error) {
-				receiverLog("warn", "receiver discord action failed", {
-					error: error instanceof Error ? error.message : String(error),
-				});
-			}
 		}
 	}
 
 	if (payload.sessionKey) {
-		try {
-			await runOpenClawAction(config, payload);
-		} catch (error) {
-			receiverLog("warn", "receiver openclaw action failed", {
-				error: error instanceof Error ? error.message : String(error),
+		if (!config.openclawHooksUrl) {
+			receiverLog("warn", "session bump requested but AH_WEBHOOK_RECEIVER_HOOKS_URL not configured", {
 				sessionKey: payload.sessionKey,
 			});
+		} else {
+			try {
+				await runHooksAction(config, payload);
+			} catch (error) {
+				receiverLog("warn", "receiver hooks action failed", {
+					error: error instanceof Error ? error.message : String(error),
+					sessionKey: payload.sessionKey,
+				});
+			}
 		}
 	}
 
@@ -241,8 +249,8 @@ export function startWebhookReceiver(config: ReceiverConfig): ReturnType<typeof 
 		port: server.port,
 		bindAddress: config.bindAddress,
 		tokenRequired: Boolean(config.token),
-		discordWebhookConfigured: Boolean(config.discordWebhookUrl),
 		openclawCommand: config.openclawCommand,
+		hooksConfigured: Boolean(config.openclawHooksUrl),
 	});
 	return server;
 }

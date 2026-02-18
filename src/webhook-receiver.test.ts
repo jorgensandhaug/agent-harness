@@ -21,10 +21,10 @@ function baseConfig(overrides: Partial<ReceiverConfig> = {}): ReceiverConfig {
 		port: 7071,
 		bindAddress: "127.0.0.1",
 		token: undefined,
-		discordWebhookUrl: undefined,
 		openclawCommand: "openclaw",
-		openclawArgs: ["system", "event"],
 		openclawTimeoutMs: 5000,
+		openclawHooksUrl: undefined,
+		openclawHooksToken: undefined,
 		...overrides,
 	};
 }
@@ -47,15 +47,17 @@ describe("webhook-receiver/loadConfig", () => {
 		expect(config.port).toBe(7071);
 		expect(config.bindAddress).toBe("127.0.0.1");
 		expect(config.openclawCommand).toBe("openclaw");
-		expect(config.openclawArgs).toEqual(["system", "event"]);
-		expect(config.discordWebhookUrl).toBeUndefined();
+		expect(config.openclawHooksUrl).toBeUndefined();
+		expect(config.openclawHooksToken).toBeUndefined();
 	});
 
-	it("accepts discord webhook from AH_DISCORD_WEBHOOK_URL", () => {
+	it("accepts hooks config from env vars", () => {
 		const config = loadConfig({
-			AH_DISCORD_WEBHOOK_URL: "https://discord.example/webhook",
+			AH_WEBHOOK_RECEIVER_HOOKS_URL: "http://127.0.0.1:18789/hooks/agent",
+			AH_WEBHOOK_RECEIVER_HOOKS_TOKEN: "tok-123",
 		});
-		expect(config.discordWebhookUrl).toBe("https://discord.example/webhook");
+		expect(config.openclawHooksUrl).toBe("http://127.0.0.1:18789/hooks/agent");
+		expect(config.openclawHooksToken).toBe("tok-123");
 	});
 });
 
@@ -69,37 +71,7 @@ describe("webhook-receiver/auth", () => {
 });
 
 describe("webhook-receiver/actions", () => {
-	it("posts to discord when payload requests discordChannel", async () => {
-		const calls: Array<{ url: string; content: string }> = [];
-		(globalThis as { fetch: typeof fetch }).fetch = (async (
-			input: RequestInfo | URL,
-			init?: RequestInit,
-		) => {
-			const request = new Request(input, init);
-			const body = (await request.json()) as { content?: string };
-			calls.push({
-				url: request.url,
-				content: String(body.content ?? ""),
-			});
-			return new Response(null, { status: 200 });
-		}) as typeof fetch;
-
-		await runActions(
-			baseConfig({
-				discordWebhookUrl: "https://discord.example/webhook",
-			}),
-			{
-				...basePayload(),
-				discordChannel: "alerts",
-			},
-		);
-
-		expect(calls.length).toBe(1);
-		expect(calls[0]?.url).toBe("https://discord.example/webhook");
-		expect(calls[0]?.content).toContain("discordChannel=alerts");
-	});
-
-	it("runs openclaw command when payload has sessionKey", async () => {
+	it("spawns openclaw message send when payload has discordChannel", async () => {
 		let seen: string[] | null = null;
 		(Bun as { spawn: typeof Bun.spawn }).spawn = ((cmd: readonly string[]) => {
 			seen = [...cmd];
@@ -113,14 +85,54 @@ describe("webhook-receiver/actions", () => {
 
 		await runActions(baseConfig(), {
 			...basePayload(),
-			sessionKey: "main-session",
+			discordChannel: "alerts",
 		});
 
 		expect(seen).not.toBeNull();
 		expect(seen?.[0]).toBe("openclaw");
-		expect(seen?.[1]).toBe("system");
-		expect(seen?.[2]).toBe("event");
-		expect(seen?.[seen.length - 1] ?? "").toContain("sessionKey=main-session");
+		expect(seen?.[1]).toBe("message");
+		expect(seen?.[2]).toBe("send");
+		expect(seen?.[3]).toBe("--channel");
+		expect(seen?.[4]).toBe("discord");
+		expect(seen?.[5]).toBe("--target");
+		expect(seen?.[6]).toBe("channel:alerts");
+		expect(seen?.[7]).toBe("--message");
+		expect(seen?.[8] ?? "").toContain("discordChannel=alerts");
+	});
+
+	it("posts to hooks endpoint when payload has sessionKey", async () => {
+		const calls: Array<{ url: string; body: unknown; authHeader: string | null }> = [];
+		(globalThis as { fetch: typeof fetch }).fetch = (async (
+			input: RequestInfo | URL,
+			init?: RequestInit,
+		) => {
+			const request = new Request(input, init);
+			const body = await request.json();
+			calls.push({
+				url: request.url,
+				body,
+				authHeader: request.headers.get("authorization"),
+			});
+			return new Response(null, { status: 202 });
+		}) as typeof fetch;
+
+		await runActions(
+			baseConfig({
+				openclawHooksUrl: "http://127.0.0.1:18789/hooks/agent",
+				openclawHooksToken: "tok-123",
+			}),
+			{
+				...basePayload(),
+				sessionKey: "main-session",
+			},
+		);
+
+		expect(calls.length).toBe(1);
+		expect(calls[0]?.url).toBe("http://127.0.0.1:18789/hooks/agent");
+		expect(calls[0]?.authHeader).toBe("Bearer tok-123");
+		const body = calls[0]?.body as { message: string; sessionKey: string };
+		expect(body.sessionKey).toBe("main-session");
+		expect(body.message).toContain("sessionKey=main-session");
 	});
 });
 
