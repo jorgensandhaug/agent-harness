@@ -6,6 +6,13 @@ export function createStore() {
 	const projects = new Map<ProjectName, Project>();
 	const agents = new Map<AgentId, Agent>();
 
+	function normalizeBriefLines(lines: readonly string[]): string[] {
+		return lines
+			.map((line) => line.trim())
+			.filter((line) => line.length > 0)
+			.slice(-4);
+	}
+
 	// --- Projects ---
 
 	function getProject(name: ProjectName): Project | undefined {
@@ -72,16 +79,14 @@ export function createStore() {
 		const agent = agents.get(id);
 		if (agent) {
 			agent.status = status;
-			agent.brief = status;
 			agent.lastActivity = new Date().toISOString();
 		}
 	}
 
-	function updateAgentBrief(id: AgentId, brief: string): void {
+	function updateAgentBrief(id: AgentId, brief: string[]): void {
 		const agent = agents.get(id);
 		if (agent) {
-			const trimmed = brief.trim();
-			agent.brief = trimmed.length > 0 ? trimmed : agent.status;
+			agent.brief = normalizeBriefLines(brief);
 			agent.lastActivity = new Date().toISOString();
 		}
 	}

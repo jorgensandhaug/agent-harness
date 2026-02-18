@@ -27,7 +27,7 @@ function baseAgent(runtimeDir?: string): Agent {
 		project: projectName("proj-1"),
 		provider: "codex",
 		status: "idle",
-		brief: "idle",
+		brief: [],
 		task: "test webhook",
 		windowName: "codex-a1",
 		tmuxTarget: "ah:codex-a1",

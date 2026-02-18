@@ -104,7 +104,7 @@ describe("api/messages.routes", () => {
 			project: project.name,
 			provider: "codex",
 			status: "idle",
-			brief: "idle",
+			brief: [],
 			task: "test",
 			windowName: "codex-a1",
 			tmuxTarget: `${project.tmuxSession}:codex-a1`,

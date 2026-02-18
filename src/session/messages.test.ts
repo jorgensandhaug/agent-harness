@@ -21,7 +21,7 @@ function baseAgent(): Agent {
 		project: projectName("p1"),
 		provider: "codex",
 		status: "idle",
-		brief: "idle",
+		brief: ["idle"],
 		task: "test",
 		windowName: "w1",
 		tmuxTarget: "s:w1",

@@ -18,25 +18,42 @@ function clampBrief(text: string): string {
 	return trimmed.slice(0, 140);
 }
 
-export function fallbackAgentBrief(agent: Agent): string {
-	const fromAgent = clampBrief(agent.brief);
-	if (fromAgent.length > 0) return fromAgent;
-	return agent.status;
+function toBriefLine(text: string): string {
+	return clampBrief(text.split(/\r?\n/, 1)[0] ?? "");
 }
 
-export async function resolveAgentBrief(agent: Agent): Promise<string> {
+function normalizeBriefLines(lines: readonly string[]): string[] {
+	return lines
+		.map(toBriefLine)
+		.filter((line) => line.length > 0)
+		.slice(-4);
+}
+
+export function fallbackAgentBrief(agent: Agent): string[] {
+	const normalized = normalizeBriefLines(agent.brief);
+	if (agent.status === "processing") return normalized.slice(-4);
+	const last = normalized[normalized.length - 1];
+	return last ? [last] : [];
+}
+
+export async function resolveAgentBrief(agent: Agent): Promise<string[]> {
+	const isProcessing = agent.status === "processing";
+	const limit = isProcessing ? 4 : 1;
 	try {
 		const result = await readAgentMessages(agent, {
-			role: "all",
-			limit: 1,
+			role: "assistant",
+			limit,
 		});
-		const lastText = result.lastAssistantMessage?.text;
-		if (typeof lastText === "string") {
-			const firstLine = clampBrief(lastText.split(/\r?\n/, 1)[0] ?? "");
-			if (firstLine.length > 0) return firstLine;
+
+		const fromMessages = normalizeBriefLines(result.messages.map((message) => message.text));
+		if (isProcessing) {
+			if (fromMessages.length > 0) return fromMessages.slice(-4);
+		} else {
+			const last = fromMessages[fromMessages.length - 1];
+			if (last) return [last];
 		}
 	} catch {
-		// best effort only; fall back to cached status brief
+		// best effort only; fall back to cached message-derived brief
 	}
 	return fallbackAgentBrief(agent);
 }
@@ -73,36 +90,38 @@ export function toCompactCreateAgent(agent: Agent): {
 
 export function toCompactAgentStatus(
 	agent: Agent,
-	brief: string,
+	brief: string[],
 ): {
 	id: string;
 	status: Agent["status"];
 	tmuxTarget: string;
-	brief: string;
+	brief: string[];
 } {
+	const normalized = normalizeBriefLines(brief);
 	return {
 		id: agent.id,
 		status: agent.status,
 		tmuxTarget: agent.tmuxTarget,
-		brief: clampBrief(brief) || agent.status,
+		brief: normalized,
 	};
 }
 
 export function toCompactAgentListItem(
 	agent: Agent,
-	brief: string,
+	brief: string[],
 ): {
 	id: string;
 	provider: string;
 	status: Agent["status"];
 	tmuxTarget: string;
-	brief: string;
+	brief: string[];
 } {
+	const normalized = normalizeBriefLines(brief);
 	return {
 		id: agent.id,
 		provider: agent.provider,
 		status: agent.status,
 		tmuxTarget: agent.tmuxTarget,
-		brief: clampBrief(brief) || agent.status,
+		brief: normalized,
 	};
 }

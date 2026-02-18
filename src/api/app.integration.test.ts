@@ -601,7 +601,7 @@ describe("http/agents.crud-input-output-abort", () => {
 			id: agentId,
 			status: expect.any(String),
 			tmuxTarget: expect.stringContaining("ah-http-test-p-agents-compact:"),
-			brief: expect.any(String),
+			brief: expect.any(Array),
 		});
 
 		const listRes = await fetch(
@@ -617,7 +617,7 @@ describe("http/agents.crud-input-output-abort", () => {
 					provider: "claude-code",
 					status: expect.any(String),
 					tmuxTarget: expect.stringContaining("ah-http-test-p-agents-compact:"),
-					brief: expect.any(String),
+					brief: expect.any(Array),
 				},
 			]),
 		);
