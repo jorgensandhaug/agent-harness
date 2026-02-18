@@ -14,6 +14,11 @@ describe("providers/codex.parseStatus.smoke", () => {
 		expect(codexProvider.parseStatus("line\nError: request failed")).toBe("error");
 		expect(codexProvider.parseStatus("allow command? y/n:")).toBe("waiting_input");
 	});
+
+	it("does not stay starting on live capture", async () => {
+		const live = await readFixture("live-capture.txt");
+		expect(codexProvider.parseStatus(live)).not.toBe("starting");
+	});
 });
 
 describe("providers/codex.parseOutputDiff.events", () => {
@@ -27,5 +32,30 @@ describe("providers/codex.parseOutputDiff.events", () => {
 			{ kind: "text", content: "answer is 4" },
 			{ kind: "unknown", raw: "***" },
 		]);
+	});
+});
+
+describe("providers/codex.buildCommand.safety", () => {
+	it("does not emit conflicting dangerous flags when --yolo is present", () => {
+		const cmd = codexProvider.buildCommand({
+			command: "codex",
+			extraArgs: ["--yolo", "--dangerously-bypass-approvals-and-sandbox"],
+			env: {},
+			enabled: true,
+		});
+
+		expect(cmd).toContain("--yolo");
+		expect(cmd).not.toContain("--dangerously-bypass-approvals-and-sandbox");
+	});
+
+	it("keeps bypass flag when --yolo is not present", () => {
+		const cmd = codexProvider.buildCommand({
+			command: "codex",
+			extraArgs: ["--dangerously-bypass-approvals-and-sandbox"],
+			env: {},
+			enabled: true,
+		});
+
+		expect(cmd).toContain("--dangerously-bypass-approvals-and-sandbox");
 	});
 });

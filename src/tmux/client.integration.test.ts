@@ -11,7 +11,7 @@ import {
 	sendKeys,
 } from "./client.ts";
 
-const live = process.env["LIVE_TESTS"] === "1";
+const live = process.env.LIVE_TESTS === "1";
 const describeLive = live ? describe : describe.skip;
 const sessionPrefix = `ah-test-${Date.now()}`;
 const createdSessions = new Set<string>();

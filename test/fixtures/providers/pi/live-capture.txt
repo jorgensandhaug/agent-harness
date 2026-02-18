@@ -1,0 +1,73 @@
+
+ pi v0.52.12
+ escape to interrupt
+ ctrl+c to clear
+ ctrl+c twice to exit
+ ctrl+d to exit (empty)
+ ctrl+z to suspend
+ ctrl+k to delete to end
+ shift+tab to cycle thinking level
+ ctrl+p/shift+ctrl+p to cycle models
+ ctrl+l to select model
+ ctrl+o to expand tools
+ ctrl+t to expand thinking
+ ctrl+g for external editor
+ / for commands
+ ! to run bash
+ !! to run bash (no context)
+ alt+enter to queue follow-up
+ alt+up to edit all queued messages
+ ctrl+v to paste image
+ drop files to attach
+
+
+[Context]
+  ~/.pi/agent/AGENTS.md
+
+[Prompts]
+  user
+    /implement-and-review
+    /implement
+    /scout-and-plan
+
+[Extensions]
+  user
+    ~/.pi/agent/extensions/agent-mail.ts
+    ~/.pi/agent/extensions/compact-read.ts
+    ~/.pi/agent/extensions/modal-editor.ts
+    ~/.pi/agent/extensions/subagent/index.ts
+
+
+
+ Reply with exactly: 4
+
+
+ 4
+
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── INSERT
+~/repos/agent-harness (main)
+↑3.8k ↓5 $0.000 (sub) 3.0%/128k (auto)                                                                                                                                                                                                                                                  (github-copilot) claude-opus-4.6 • high
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

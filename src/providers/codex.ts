@@ -1,3 +1,4 @@
+import { normalizedLines } from "./text.ts";
 import type { AgentStatus, Provider, ProviderConfig, ProviderEvent } from "./types.ts";
 
 /**
@@ -6,11 +7,29 @@ import type { AgentStatus, Provider, ProviderConfig, ProviderEvent } from "./typ
  * typical readline-style CLI prompts.
  */
 
-const IDLE_PATTERN = /^[>❯]\s*$/m;
-const PROCESSING_PATTERN = /⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏|thinking|working/i;
+const IDLE_PATTERN = /^[>❯›]\s*(?:$|.+)$/m;
+const PROCESSING_PATTERN =
+	/⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏|thinking[.:]|working[.:]|running[.:]|\bgenerating\b/i;
 const PERMISSION_PATTERN = /\b(allow|approve|deny|y\/n|yes\/no)\b.*[?:]\s*$/im;
 const ERROR_PATTERN = /\bError\b|\bERROR\b|\bfailed\b|\bFailed\b/;
 const EXITED_PATTERN = /\$\s*$/m;
+const YOLO_FLAG = "--yolo";
+const BYPASS_FLAG = "--dangerously-bypass-approvals-and-sandbox";
+
+function normalizeExtraArgs(extraArgs: readonly string[]): string[] {
+	const hasYolo = extraArgs.includes(YOLO_FLAG);
+	const seen = new Set<string>();
+	const normalized: string[] = [];
+
+	for (const arg of extraArgs) {
+		if (arg === BYPASS_FLAG && hasYolo) continue;
+		if (seen.has(arg)) continue;
+		seen.add(arg);
+		normalized.push(arg);
+	}
+
+	return normalized;
+}
 
 export const codexProvider: Provider = {
 	name: "codex",
@@ -20,7 +39,7 @@ export const codexProvider: Provider = {
 		if (config.model) {
 			cmd.push("--model", config.model);
 		}
-		cmd.push(...config.extraArgs);
+		cmd.push(...normalizeExtraArgs(config.extraArgs));
 		return cmd;
 	},
 
@@ -29,8 +48,9 @@ export const codexProvider: Provider = {
 	},
 
 	parseStatus(capturedOutput: string): AgentStatus {
-		const lines = capturedOutput.split("\n");
-		const tail = lines.slice(-20).join("\n");
+		const lines = normalizedLines(capturedOutput);
+		if (lines.length === 0) return "starting";
+		const tail = lines.slice(-60).join("\n");
 
 		if (EXITED_PATTERN.test(tail) && !IDLE_PATTERN.test(tail) && !PROCESSING_PATTERN.test(tail)) {
 			return "exited";
@@ -38,7 +58,7 @@ export const codexProvider: Provider = {
 		if (PERMISSION_PATTERN.test(tail)) {
 			return "waiting_input";
 		}
-		const lastFew = lines.slice(-5).join("\n");
+		const lastFew = lines.slice(-10).join("\n");
 		if (ERROR_PATTERN.test(lastFew) && !PROCESSING_PATTERN.test(tail)) {
 			return "error";
 		}

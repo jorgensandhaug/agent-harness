@@ -68,7 +68,11 @@ describe("events/bus.since-replay", () => {
 		bus.emit(evt("evt-3", "p1", "a2", "output"));
 		bus.emit(evt("evt-4", "p1", "a1", "output"));
 
-		const replay = bus.since("evt-1" as EventId, { project: "p1", agentId: "a1", types: ["output"] });
+		const replay = bus.since("evt-1" as EventId, {
+			project: "p1",
+			agentId: "a1",
+			types: ["output"],
+		});
 		expect(replay.map((e) => e.id)).toEqual(["evt-4"]);
 	});
 });

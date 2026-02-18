@@ -21,6 +21,11 @@ describe("providers/claude.parseStatus.idle-processing-error-exited", () => {
 	it("handles ansi prompt content", () => {
 		expect(claudeCodeProvider.parseStatus("\u001b[32m>\u001b[0m")).toBe("idle");
 	});
+
+	it("does not stay starting on live capture", async () => {
+		const live = await readFixture("live-capture.txt");
+		expect(claudeCodeProvider.parseStatus(live)).not.toBe("starting");
+	});
 });
 
 describe("providers/claude.parseOutputDiff.events", () => {

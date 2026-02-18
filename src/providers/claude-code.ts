@@ -1,3 +1,4 @@
+import { normalizedLines } from "./text.ts";
 import type { AgentStatus, Provider, ProviderConfig, ProviderEvent } from "./types.ts";
 
 /**
@@ -23,8 +24,8 @@ function stripAnsi(text: string): string {
 }
 
 /** Patterns observed from Claude Code interactive mode (CAO research) */
-const IDLE_PATTERN = /^[> ]*>\s*$/m;
-const PROCESSING_PATTERN = /✻/;
+const IDLE_PATTERN = /(?:^[>❯›]\s*(?:$|.+)$)|(?:--\s*INSERT\s*--)/m;
+const PROCESSING_PATTERN = /✻|thinking|running|analyzing/i;
 const PERMISSION_PATTERN =
 	/\b(Allow|Approve|Deny|allow|approve|deny|y\/n|Y\/n|yes\/no)\b.*[?:]\s*$/m;
 const PERMISSION_DESC_PATTERN = /(?:Allow|Approve|Do you want to)\s+(.+?)\s*[?:]\s*$/m;
@@ -54,9 +55,9 @@ export const claudeCodeProvider: Provider = {
 
 	parseStatus(capturedOutput: string): AgentStatus {
 		const clean = stripAnsi(capturedOutput);
-		// Check the last ~20 lines for status indicators
-		const lines = clean.split("\n");
-		const tail = lines.slice(-20).join("\n");
+		const lines = normalizedLines(clean);
+		if (lines.length === 0) return "starting";
+		const tail = lines.slice(-60).join("\n");
 
 		// Check for exit (shell prompt returned)
 		if (EXITED_PATTERN.test(tail) && !IDLE_PATTERN.test(tail) && !PROCESSING_PATTERN.test(tail)) {
@@ -69,7 +70,7 @@ export const claudeCodeProvider: Provider = {
 		}
 
 		// Check for error state
-		const lastFewLines = lines.slice(-5).join("\n");
+		const lastFewLines = lines.slice(-10).join("\n");
 		if (ERROR_PATTERN.test(lastFewLines) && !PROCESSING_PATTERN.test(tail)) {
 			return "error";
 		}

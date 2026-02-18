@@ -17,6 +17,9 @@ export interface Agent {
 	task: string;
 	windowName: string;
 	tmuxTarget: string;
+	attachCommand: string;
+	providerRuntimeDir?: string;
+	providerSessionFile?: string;
 	createdAt: string;
 	lastActivity: string;
 	lastCapturedOutput: string;

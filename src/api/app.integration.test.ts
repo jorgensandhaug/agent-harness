@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
+import { createDebugTracker } from "../debug/tracker.ts";
 import { createEventBus } from "../events/bus.ts";
 import type { NormalizedEvent } from "../events/types.ts";
 import { createManager } from "../session/manager.ts";
@@ -7,10 +8,8 @@ import { createStore } from "../session/store.ts";
 import { newEventId } from "../types.ts";
 import { createApp } from "./app.ts";
 
-const live = process.env["LIVE_TESTS"] === "1";
-const describeLive = live ? describe : describe.skip;
-
 const originalSpawn = Bun.spawn;
+const originalInitialTaskDelay = process.env.HARNESS_INITIAL_TASK_DELAY_MS;
 
 type PaneState = {
 	id: string;
@@ -202,7 +201,8 @@ class FakeTmux {
 		if (!target) return this.fail("can't find window");
 		const pane = this.resolvePane(target);
 		if (!pane) return this.fail("can't find window");
-		return this.ok(pane.buffer);
+		// Simulate interactive prompt once pane is alive so manager readiness probe can proceed.
+		return this.ok(`${pane.buffer}\n> `);
 	}
 
 	private killWindow(args: readonly string[]): ReturnType<typeof Bun.spawn> {
@@ -242,8 +242,8 @@ class FakeTmux {
 		if (!sessionName) return this.fail("can't find session");
 		const session = this.sessions.get(sessionName);
 		if (!session) return this.fail("can't find session");
-		const lines = Array.from(session.windows.values()).map((pane, idx) =>
-			`${idx}\t${pane.window}\t${idx === 0 ? "1" : "0"}\t${pane.id}`,
+		const lines = Array.from(session.windows.values()).map(
+			(pane, idx) => `${idx}\t${pane.window}\t${idx === 0 ? "1" : "0"}\t${pane.id}`,
 		);
 		return this.ok(lines.join("\n"));
 	}
@@ -264,6 +264,7 @@ type TestEnv = {
 	baseUrl: string;
 	server: Bun.Server;
 	eventBus: ReturnType<typeof createEventBus>;
+	debugTracker: ReturnType<typeof createDebugTracker>;
 };
 
 function makeConfig() {
@@ -285,12 +286,14 @@ function makeConfig() {
 }
 
 async function setupEnv(): Promise<TestEnv> {
+	const config = makeConfig();
 	const store = createStore();
 	const eventBus = createEventBus(1000);
-	const manager = createManager(makeConfig(), store, eventBus);
-	const app = createApp(manager, store, eventBus, Date.now());
+	const debugTracker = createDebugTracker(config, eventBus);
+	const manager = createManager(config, store, eventBus, debugTracker);
+	const app = createApp(manager, store, eventBus, debugTracker, Date.now());
 	const server = Bun.serve({ port: 0, fetch: app.fetch, idleTimeout: 60 });
-	return { baseUrl: `http://127.0.0.1:${server.port}`, server, eventBus };
+	return { baseUrl: `http://127.0.0.1:${server.port}`, server, eventBus, debugTracker };
 }
 
 async function apiJson(baseUrl: string, path: string, init?: RequestInit): Promise<Response> {
@@ -359,19 +362,27 @@ let env: TestEnv | null = null;
 
 beforeEach(async () => {
 	fakeTmux = new FakeTmux();
-	(Bun as { spawn: typeof Bun.spawn }).spawn = ((cmd: readonly string[]) => fakeTmux.spawn(cmd)) as typeof Bun.spawn;
+	process.env.HARNESS_INITIAL_TASK_DELAY_MS = "0";
+	(Bun as { spawn: typeof Bun.spawn }).spawn = ((cmd: readonly string[]) =>
+		fakeTmux.spawn(cmd)) as typeof Bun.spawn;
 	env = await setupEnv();
 });
 
 afterEach(async () => {
 	if (env) {
+		env.debugTracker.stop();
 		env.server.stop(true);
 		env = null;
 	}
 	(Bun as { spawn: typeof Bun.spawn }).spawn = originalSpawn;
+	if (originalInitialTaskDelay === undefined) {
+		process.env.HARNESS_INITIAL_TASK_DELAY_MS = undefined;
+	} else {
+		process.env.HARNESS_INITIAL_TASK_DELAY_MS = originalInitialTaskDelay;
+	}
 });
 
-describeLive("http/health", () => {
+describe("http/health", () => {
 	it("returns health contract", async () => {
 		if (!env) throw new Error("env missing");
 		const response = await fetch(`${env.baseUrl}/api/v1/health`);
@@ -385,7 +396,7 @@ describeLive("http/health", () => {
 	});
 });
 
-describeLive("http/projects.crud", () => {
+describe("http/projects.crud", () => {
 	it("supports create/list/get/delete project endpoints", async () => {
 		if (!env) throw new Error("env missing");
 		const created = await apiJson(env.baseUrl, "/api/v1/projects", {
@@ -411,7 +422,7 @@ describeLive("http/projects.crud", () => {
 	});
 });
 
-describeLive("http/agents.crud-input-output-abort", () => {
+describe("http/agents.crud-input-output-abort", () => {
 	it("supports agent create/input/output/abort/delete", async () => {
 		if (!env) throw new Error("env missing");
 		await apiJson(env.baseUrl, "/api/v1/projects", {
@@ -421,37 +432,68 @@ describeLive("http/agents.crud-input-output-abort", () => {
 
 		const createAgentRes = await apiJson(env.baseUrl, "/api/v1/projects/p-agents/agents", {
 			method: "POST",
-			body: JSON.stringify({ provider: "claude-code", task: "Reply with exactly: 4", model: "cheap" }),
+			body: JSON.stringify({
+				provider: "claude-code",
+				task: "Reply with exactly: 4",
+				model: "cheap",
+			}),
 		});
 		expect(createAgentRes.status).toBe(201);
 		const createAgentJson = await createAgentRes.json();
 		const agentId = createAgentJson.agent.id as string;
+		expect(createAgentJson.agent.attachCommand).toBe("tmux attach -t ah-http-test-p-agents");
 
-		const inputRes = await apiJson(env.baseUrl, `/api/v1/projects/p-agents/agents/${agentId}/input`, {
-			method: "POST",
-			body: JSON.stringify({ text: "hello" }),
-		});
+		const debugRes = await fetch(`${env.baseUrl}/api/v1/projects/p-agents/agents/${agentId}/debug`);
+		expect(debugRes.status).toBe(200);
+		const debugJson = await debugRes.json();
+		expect(debugJson.debug.poll.pollIntervalMs).toBe(200);
+		expect(debugJson.debug.poll.captureLines).toBe(200);
+		expect(debugJson.debug.stream.emittedCounts.agent_started).toBe(1);
+
+		const inputRes = await apiJson(
+			env.baseUrl,
+			`/api/v1/projects/p-agents/agents/${agentId}/input`,
+			{
+				method: "POST",
+				body: JSON.stringify({ text: "hello" }),
+			},
+		);
 		expect(inputRes.status).toBe(202);
+		const debugAfterInputRes = await fetch(
+			`${env.baseUrl}/api/v1/projects/p-agents/agents/${agentId}/debug`,
+		);
+		expect(debugAfterInputRes.status).toBe(200);
+		const debugAfterInputJson = await debugAfterInputRes.json();
+		expect(debugAfterInputJson.debug.stream.emittedCounts.input_sent).toBeGreaterThanOrEqual(1);
 
-		const outputRes = await fetch(`${env.baseUrl}/api/v1/projects/p-agents/agents/${agentId}/output`);
+		const outputRes = await fetch(
+			`${env.baseUrl}/api/v1/projects/p-agents/agents/${agentId}/output`,
+		);
 		expect(outputRes.status).toBe(200);
 		const outputJson = await outputRes.json();
 		expect(outputJson.output).toContain("hello");
 
-		const abortRes = await apiJson(env.baseUrl, `/api/v1/projects/p-agents/agents/${agentId}/abort`, {
-			method: "POST",
-			body: "{}",
-		});
+		const abortRes = await apiJson(
+			env.baseUrl,
+			`/api/v1/projects/p-agents/agents/${agentId}/abort`,
+			{
+				method: "POST",
+				body: "{}",
+			},
+		);
 		expect(abortRes.status).toBe(202);
 
-		const deleteAgentRes = await fetch(`${env.baseUrl}/api/v1/projects/p-agents/agents/${agentId}`, {
-			method: "DELETE",
-		});
+		const deleteAgentRes = await fetch(
+			`${env.baseUrl}/api/v1/projects/p-agents/agents/${agentId}`,
+			{
+				method: "DELETE",
+			},
+		);
 		expect(deleteAgentRes.status).toBe(204);
 	});
 });
 
-describeLive("http/events.sse.project-stream", () => {
+describe("http/events.sse.project-stream", () => {
 	it("streams project events and replays with since", async () => {
 		if (!env) throw new Error("env missing");
 		await apiJson(env.baseUrl, "/api/v1/projects", {
@@ -507,7 +549,7 @@ describeLive("http/events.sse.project-stream", () => {
 	}, 15000);
 });
 
-describeLive("http/events.sse.agent-stream", () => {
+describe("http/events.sse.agent-stream", () => {
 	it("filters events to selected agent", async () => {
 		if (!env) throw new Error("env missing");
 		await apiJson(env.baseUrl, "/api/v1/projects", {
@@ -526,7 +568,9 @@ describeLive("http/events.sse.agent-stream", () => {
 		const a1 = (await a1Res.json()).agent.id as string;
 		const a2 = (await a2Res.json()).agent.id as string;
 
-		const stream = await openSse(`${env.baseUrl}/api/v1/projects/p-agent-events/agents/${a1}/events`);
+		const stream = await openSse(
+			`${env.baseUrl}/api/v1/projects/p-agent-events/agents/${a1}/events`,
+		);
 
 		env.eventBus.emit({
 			id: newEventId(),

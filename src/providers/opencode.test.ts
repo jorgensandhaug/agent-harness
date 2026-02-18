@@ -2,7 +2,9 @@ import { describe, expect, it } from "bun:test";
 import { opencodeProvider } from "./opencode.ts";
 
 function readFixture(name: string): Promise<string> {
-	return Bun.file(new URL(`../../test/fixtures/providers/opencode/${name}`, import.meta.url)).text();
+	return Bun.file(
+		new URL(`../../test/fixtures/providers/opencode/${name}`, import.meta.url),
+	).text();
 }
 
 describe("providers/opencode.parseStatus.smoke", () => {
@@ -13,6 +15,11 @@ describe("providers/opencode.parseStatus.smoke", () => {
 		expect(opencodeProvider.parseStatus(captured)).toBe("processing");
 		expect(opencodeProvider.parseStatus("line\nFailed: timeout")).toBe("error");
 		expect(opencodeProvider.parseStatus("allow deploy? y/n:")).toBe("waiting_input");
+	});
+
+	it("does not stay starting on live capture", async () => {
+		const live = await readFixture("live-capture.txt");
+		expect(opencodeProvider.parseStatus(live)).not.toBe("starting");
 	});
 });
 

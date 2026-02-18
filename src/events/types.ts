@@ -1,6 +1,17 @@
 import type { AgentStatus } from "../providers/types.ts";
 import type { EventId } from "../types.ts";
 
+export type StatusChangeSource =
+	| "manager_initial_input"
+	| "manager_followup_input"
+	| "poller_pane_dead"
+	| "ui_parser"
+	| "internals_codex_jsonl"
+	| "internals_claude_jsonl"
+	| "internals_pi_jsonl"
+	| "internals_opencode_storage"
+	| "fallback_heuristic";
+
 export type NormalizedEvent =
 	| {
 			id: EventId;
@@ -18,6 +29,7 @@ export type NormalizedEvent =
 			type: "status_changed";
 			from: AgentStatus;
 			to: AgentStatus;
+			source?: StatusChangeSource;
 	  }
 	| {
 			id: EventId;

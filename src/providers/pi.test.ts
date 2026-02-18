@@ -14,6 +14,11 @@ describe("providers/pi.parseStatus.smoke", () => {
 		expect(piProvider.parseStatus("line\nERROR: bad")).toBe("error");
 		expect(piProvider.parseStatus("approve action? yes/no:")).toBe("waiting_input");
 	});
+
+	it("does not stay starting on live capture", async () => {
+		const live = await readFixture("live-capture.txt");
+		expect(piProvider.parseStatus(live)).not.toBe("starting");
+	});
 });
 
 describe("providers/pi.parseOutputDiff.events", () => {

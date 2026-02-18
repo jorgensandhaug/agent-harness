@@ -1,5 +1,11 @@
+import { randomUUID } from "node:crypto";
+import { access, lstat, mkdir, symlink } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import type { HarnessConfig } from "../config.ts";
+import type { DebugTracker } from "../debug/tracker.ts";
 import type { EventBus } from "../events/bus.ts";
+import type { StatusChangeSource } from "../events/types.ts";
 import { log } from "../log.ts";
 import { getProvider } from "../providers/registry.ts";
 import type { AgentStatus } from "../providers/types.ts";
@@ -15,6 +21,7 @@ import {
 	ok,
 	projectName,
 } from "../types.ts";
+import { formatAttachCommand } from "./attach.ts";
 import type { Store } from "./store.ts";
 import type { Agent, Project } from "./types.ts";
 
@@ -26,10 +33,149 @@ export type ManagerError =
 	| { code: "PROVIDER_DISABLED"; name: string }
 	| { code: "TMUX_ERROR"; message: string };
 
-export function createManager(config: HarnessConfig, store: Store, eventBus: EventBus) {
+export function createManager(
+	config: HarnessConfig,
+	store: Store,
+	eventBus: EventBus,
+	debugTracker?: DebugTracker,
+) {
+	const TRUST_PROMPT_CONFIRM_PATTERN = /Enter to confirm/i;
+	const TRUST_PROMPT_CONTEXT_PATTERN = /Quick safety check|trust this folder|Accessing workspace/i;
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
 	const envInitialDelayRaw = process.env["HARNESS_INITIAL_TASK_DELAY_MS"];
 	const envInitialDelay =
 		envInitialDelayRaw !== undefined ? Number.parseInt(envInitialDelayRaw, 10) : null;
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+	const envReadyTimeoutRaw = process.env["HARNESS_INITIAL_TASK_READY_TIMEOUT_MS"];
+	const envReadyTimeout =
+		envReadyTimeoutRaw !== undefined ? Number.parseInt(envReadyTimeoutRaw, 10) : null;
+	const READY_POLL_INTERVAL_MS = 200;
+	const DEFAULT_CODEX_HOME = resolve(join(homedir(), ".codex"));
+	const DEFAULT_PI_HOME = resolve(join(homedir(), ".pi", "agent"));
+
+	async function symlinkIfPresent(sourcePath: string, linkPath: string): Promise<void> {
+		try {
+			await access(sourcePath);
+		} catch {
+			return;
+		}
+
+		try {
+			await lstat(linkPath);
+			return;
+		} catch {
+			// continue
+		}
+
+		try {
+			await symlink(sourcePath, linkPath);
+		} catch (error) {
+			log.warn("failed to create codex runtime symlink", {
+				sourcePath,
+				linkPath,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+	}
+
+	async function prepareCodexRuntimeDir(
+		id: AgentId,
+		env: Record<string, string>,
+	): Promise<{ runtimeDir: string; env: Record<string, string> }> {
+		// biome-ignore lint/complexity/useLiteralKeys: index signature + noPropertyAccessFromIndexSignature
+		const existing = env["CODEX_HOME"];
+		if (existing && existing.trim().length > 0) {
+			return { runtimeDir: existing, env };
+		}
+
+		const runtimeDir = resolve(config.logDir, "codex", id);
+		await mkdir(runtimeDir, { recursive: true });
+		await symlinkIfPresent(join(DEFAULT_CODEX_HOME, "auth.json"), join(runtimeDir, "auth.json"));
+		await symlinkIfPresent(
+			join(DEFAULT_CODEX_HOME, "config.toml"),
+			join(runtimeDir, "config.toml"),
+		);
+
+		return {
+			runtimeDir,
+			env: { ...env, CODEX_HOME: runtimeDir },
+		};
+	}
+
+	async function preparePiRuntimeDir(
+		id: AgentId,
+		env: Record<string, string>,
+	): Promise<{ runtimeDir: string; env: Record<string, string> }> {
+		// biome-ignore lint/complexity/useLiteralKeys: index signature + noPropertyAccessFromIndexSignature
+		const existing = env["PI_CODING_AGENT_DIR"];
+		if (existing && existing.trim().length > 0) {
+			return { runtimeDir: existing, env };
+		}
+
+		const runtimeDir = resolve(config.logDir, "pi", id);
+		await mkdir(runtimeDir, { recursive: true });
+		await symlinkIfPresent(join(DEFAULT_PI_HOME, "auth.json"), join(runtimeDir, "auth.json"));
+
+		return {
+			runtimeDir,
+			env: { ...env, PI_CODING_AGENT_DIR: runtimeDir },
+		};
+	}
+
+	async function prepareOpenCodeRuntime(
+		id: AgentId,
+		env: Record<string, string>,
+	): Promise<{ dataHome: string; env: Record<string, string> }> {
+		// biome-ignore lint/complexity/useLiteralKeys: index signature + noPropertyAccessFromIndexSignature
+		const existing = env["XDG_DATA_HOME"];
+		if (existing && existing.trim().length > 0) {
+			return { dataHome: existing, env };
+		}
+
+		const runtimeRoot = resolve(config.logDir, "opencode", id);
+		const dataHome = join(runtimeRoot, "xdg-data");
+		const stateHome = join(runtimeRoot, "xdg-state");
+		const cacheHome = join(runtimeRoot, "xdg-cache");
+		await mkdir(dataHome, { recursive: true });
+		await mkdir(stateHome, { recursive: true });
+		await mkdir(cacheHome, { recursive: true });
+
+		return {
+			dataHome,
+			env: {
+				...env,
+				XDG_DATA_HOME: dataHome,
+				XDG_STATE_HOME: stateHome,
+				XDG_CACHE_HOME: cacheHome,
+			},
+		};
+	}
+
+	function claudeProjectStorageDir(cwd: string): string {
+		const normalized = resolve(cwd).replaceAll("/", "-");
+		return join(homedir(), ".claude", "projects", normalized);
+	}
+
+	function transitionAgentStatus(
+		projectNameStr: string,
+		agent: Agent,
+		nextStatus: AgentStatus,
+		source: StatusChangeSource,
+	): void {
+		if (agent.status === nextStatus) return;
+		const from = agent.status;
+		store.updateAgentStatus(agent.id, nextStatus);
+		eventBus.emit({
+			id: newEventId(),
+			ts: new Date().toISOString(),
+			project: projectNameStr,
+			agentId: agent.id,
+			type: "status_changed",
+			from,
+			to: nextStatus,
+			source,
+		});
+	}
 
 	function initialTaskDelayMs(providerName: string): number {
 		if (envInitialDelay !== null && Number.isFinite(envInitialDelay) && envInitialDelay >= 0) {
@@ -37,6 +183,58 @@ export function createManager(config: HarnessConfig, store: Store, eventBus: Eve
 		}
 		// Claude Code startup can take multiple seconds before input is accepted.
 		return providerName === "claude-code" ? 7000 : 2000;
+	}
+
+	function initialTaskReadyTimeoutMs(providerName: string): number {
+		if (envReadyTimeout !== null && Number.isFinite(envReadyTimeout) && envReadyTimeout >= 0) {
+			return envReadyTimeout;
+		}
+		if (providerName === "claude-code") return 10000;
+		if (providerName === "codex") return 1500;
+		return 0;
+	}
+
+	function shouldProbeStartupReadiness(providerName: string): boolean {
+		return providerName === "claude-code" || providerName === "codex";
+	}
+
+	function looksLikeStartupTrustPrompt(capturedOutput: string): boolean {
+		const lines = capturedOutput
+			.split("\n")
+			.map((line) => line.replace(/\r$/, ""))
+			.filter((line) => line.trim().length > 0);
+		if (lines.length === 0) return false;
+
+		const bottom = lines.slice(-8).join("\n");
+		const nearBottom = lines.slice(-2).join("\n");
+		return (
+			TRUST_PROMPT_CONFIRM_PATTERN.test(nearBottom) && TRUST_PROMPT_CONTEXT_PATTERN.test(bottom)
+		);
+	}
+
+	async function dismissStartupTrustPrompt(
+		target: string,
+		agentIdForLog: string,
+		providerNameForLog: string,
+	): Promise<void> {
+		const deadline = Date.now() + 2500;
+		let attempts = 0;
+		while (Date.now() < deadline && attempts < 8) {
+			const captureResult = await tmux.capturePane(target, 120);
+			if (!captureResult.ok) return;
+			if (!looksLikeStartupTrustPrompt(captureResult.value)) return;
+			const confirmResult = await tmux.sendKeys(target, "Enter");
+			if (!confirmResult.ok) {
+				log.warn("failed to auto-confirm startup trust prompt", {
+					agentId: agentIdForLog,
+					provider: providerNameForLog,
+					error: JSON.stringify(confirmResult.error),
+				});
+				return;
+			}
+			attempts++;
+			await Bun.sleep(120);
+		}
 	}
 
 	function tmuxSessionName(name: ProjectName): string {
@@ -107,6 +305,10 @@ export function createManager(config: HarnessConfig, store: Store, eventBus: Eve
 			});
 		}
 
+		for (const agent of store.listAgents(pName)) {
+			debugTracker?.removeAgent(agent.id);
+		}
+
 		store.removeProject(pName);
 		log.info("project deleted", { name });
 		return ok(undefined);
@@ -146,8 +348,51 @@ export function createManager(config: HarnessConfig, store: Store, eventBus: Eve
 
 		const id = newAgentId();
 		const wName = windowName(providerName);
-		const cmd = provider.buildCommand(effectiveConfig);
-		const env = provider.buildEnv(effectiveConfig);
+		let cmd = [...provider.buildCommand(effectiveConfig)];
+		let env = provider.buildEnv(effectiveConfig);
+		let providerRuntimeDir: string | undefined;
+		let providerSessionFile: string | undefined;
+		if (providerName === "codex") {
+			try {
+				const prepared = await prepareCodexRuntimeDir(id, env);
+				env = prepared.env;
+				providerRuntimeDir = prepared.runtimeDir;
+			} catch (error) {
+				log.warn("failed to initialize codex runtime dir; using default codex home", {
+					agentId: id,
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
+		}
+		if (providerName === "claude-code") {
+			const sessionId = randomUUID();
+			cmd = [...cmd, "--session-id", sessionId];
+			providerSessionFile = join(claudeProjectStorageDir(project.cwd), `${sessionId}.jsonl`);
+		}
+		if (providerName === "pi") {
+			try {
+				const prepared = await preparePiRuntimeDir(id, env);
+				env = prepared.env;
+				providerRuntimeDir = prepared.runtimeDir;
+			} catch (error) {
+				log.warn("failed to initialize pi runtime dir; using default pi home", {
+					agentId: id,
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
+		}
+		if (providerName === "opencode") {
+			try {
+				const prepared = await prepareOpenCodeRuntime(id, env);
+				env = prepared.env;
+				providerRuntimeDir = prepared.dataHome;
+			} catch (error) {
+				log.warn("failed to initialize opencode runtime dir; using default xdg data home", {
+					agentId: id,
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
+		}
 		const target = `${project.tmuxSession}:${wName}`;
 
 		// Create tmux window with the agent command
@@ -168,12 +413,16 @@ export function createManager(config: HarnessConfig, store: Store, eventBus: Eve
 			task,
 			windowName: wName,
 			tmuxTarget: target,
+			attachCommand: formatAttachCommand(target),
+			...(providerRuntimeDir ? { providerRuntimeDir } : {}),
+			...(providerSessionFile ? { providerSessionFile } : {}),
 			createdAt: now,
 			lastActivity: now,
 			lastCapturedOutput: "",
 		};
 
 		store.addAgent(agent);
+		debugTracker?.ensureAgent(id);
 
 		// Emit agent_started event
 		eventBus.emit({
@@ -190,15 +439,81 @@ export function createManager(config: HarnessConfig, store: Store, eventBus: Eve
 		// Send initial task after provider startup delay so the TUI is ready to accept input.
 		const delayMs = initialTaskDelayMs(providerName);
 		setTimeout(async () => {
+			const stillExists = (): boolean => Boolean(store.getAgent(id));
+			if (!stillExists()) return;
+
+			let lastStatus: AgentStatus = "starting";
+			let captureFailed = false;
+			let trustConfirmAttempts = 0;
+			let lastTrustConfirmTs = 0;
+			const waitTimeoutMs = initialTaskReadyTimeoutMs(providerName);
+			const readyCheckStart = Date.now();
+			if (shouldProbeStartupReadiness(providerName) && waitTimeoutMs > 0) {
+				while (Date.now() - readyCheckStart < waitTimeoutMs) {
+					if (!stillExists()) return;
+					const captureResult = await tmux.capturePane(target, 120);
+					if (!captureResult.ok) {
+						if (!stillExists()) return;
+						captureFailed = true;
+						break;
+					}
+					if (
+						providerName === "claude-code" &&
+						looksLikeStartupTrustPrompt(captureResult.value) &&
+						trustConfirmAttempts < 5
+					) {
+						const nowMs = Date.now();
+						if (nowMs - lastTrustConfirmTs >= 250) {
+							const confirmResult = await tmux.sendKeys(target, "Enter");
+							if (confirmResult.ok) {
+								trustConfirmAttempts++;
+								lastTrustConfirmTs = nowMs;
+								await Bun.sleep(120);
+								continue;
+							}
+							if (!stillExists()) return;
+							log.warn("failed to auto-confirm startup trust prompt", {
+								agentId: id,
+								provider: providerName,
+								error: JSON.stringify(confirmResult.error),
+							});
+						}
+					}
+					lastStatus = provider.parseStatus(captureResult.value);
+					if (lastStatus === "idle" || lastStatus === "waiting_input") break;
+					if (lastStatus === "error" || lastStatus === "exited") break;
+					await Bun.sleep(READY_POLL_INTERVAL_MS);
+				}
+				const waitedMs = Date.now() - readyCheckStart;
+				if (lastStatus !== "idle" && lastStatus !== "waiting_input") {
+					log.warn("sending initial task before provider idle prompt", {
+						agentId: id,
+						provider: providerName,
+						delayMs,
+						waitedMs,
+						waitTimeoutMs,
+						lastStatus,
+						captureFailed,
+					});
+				}
+			}
+
+			if (!stillExists()) return;
+			if (providerName === "claude-code") {
+				await dismissStartupTrustPrompt(target, id, providerName);
+			}
+			if (!stillExists()) return;
 			const formattedInput = provider.formatInput(task);
 			const inputResult = await tmux.sendInput(target, formattedInput);
 			if (!inputResult.ok) {
+				if (!stillExists()) return;
 				log.error("failed to send initial task", {
 					agentId: id,
 					delayMs,
 					error: JSON.stringify(inputResult.error),
 				});
 			} else {
+				transitionAgentStatus(projectNameStr, agent, "processing", "manager_initial_input");
 				eventBus.emit({
 					id: newEventId(),
 					ts: new Date().toISOString(),
@@ -243,6 +558,9 @@ export function createManager(config: HarnessConfig, store: Store, eventBus: Eve
 			return err({ code: "UNKNOWN_PROVIDER", name: agent.provider });
 		}
 
+		if (agent.provider === "claude-code") {
+			await dismissStartupTrustPrompt(agent.tmuxTarget, agent.id, agent.provider);
+		}
 		const formatted = providerResult.value.formatInput(text);
 		const result = await tmux.sendInput(agent.tmuxTarget, formatted);
 		if (!result.ok) {
@@ -260,6 +578,7 @@ export function createManager(config: HarnessConfig, store: Store, eventBus: Eve
 			type: "input_sent",
 			text,
 		});
+		transitionAgentStatus(projectNameStr, agent, "processing", "manager_followup_input");
 
 		return ok(undefined);
 	}
@@ -357,6 +676,7 @@ export function createManager(config: HarnessConfig, store: Store, eventBus: Eve
 		});
 
 		store.removeAgent(agent.id);
+		debugTracker?.removeAgent(agent.id);
 		log.info("agent deleted", { id, project: projectNameStr });
 		return ok(undefined);
 	}

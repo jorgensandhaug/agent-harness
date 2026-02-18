@@ -1,3 +1,4 @@
+import { normalizedLines } from "./text.ts";
 import type { AgentStatus, Provider, ProviderConfig, ProviderEvent } from "./types.ts";
 
 /**
@@ -6,8 +7,9 @@ import type { AgentStatus, Provider, ProviderConfig, ProviderEvent } from "./typ
  * hang issue (#6573) may affect reliability.
  */
 
-const IDLE_PATTERN = /^[>❯]\s*$/m;
-const PROCESSING_PATTERN = /⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏|thinking|working/i;
+const IDLE_PATTERN = /(?:^[>❯›]\s*(?:$|.+)$)|(?:ctrl\+t variants|tab agents|ctrl\+p commands)/im;
+const PROCESSING_PATTERN =
+	/⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏|thinking[.:]|working[.:]|running[.:]|\bgenerating\b/i;
 const PERMISSION_PATTERN = /\b(allow|approve|deny|y\/n|yes\/no)\b.*[?:]\s*$/im;
 const ERROR_PATTERN = /\bError\b|\bERROR\b|\bfailed\b|\bFailed\b/;
 const EXITED_PATTERN = /\$\s*$/m;
@@ -29,8 +31,9 @@ export const opencodeProvider: Provider = {
 	},
 
 	parseStatus(capturedOutput: string): AgentStatus {
-		const lines = capturedOutput.split("\n");
-		const tail = lines.slice(-20).join("\n");
+		const lines = normalizedLines(capturedOutput);
+		if (lines.length === 0) return "starting";
+		const tail = lines.slice(-60).join("\n");
 
 		if (EXITED_PATTERN.test(tail) && !IDLE_PATTERN.test(tail) && !PROCESSING_PATTERN.test(tail)) {
 			return "exited";
@@ -38,7 +41,7 @@ export const opencodeProvider: Provider = {
 		if (PERMISSION_PATTERN.test(tail)) {
 			return "waiting_input";
 		}
-		const lastFew = lines.slice(-5).join("\n");
+		const lastFew = lines.slice(-10).join("\n");
 		if (ERROR_PATTERN.test(lastFew) && !PROCESSING_PATTERN.test(tail)) {
 			return "error";
 		}

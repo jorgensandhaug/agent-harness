@@ -11,6 +11,16 @@ const ProviderConfigSchema = z
 	})
 	.strict();
 
+const WebhookEventSchema = z.enum(["agent_completed", "agent_error", "agent_exited"]);
+
+const WebhookConfigSchema = z
+	.object({
+		url: z.string().url(),
+		token: z.string().min(1).optional(),
+		events: z.array(WebhookEventSchema).min(1),
+	})
+	.strict();
+
 const AuthConfigSchema = z
 	.object({
 		token: z.string().min(1).optional(),
@@ -27,6 +37,7 @@ const HarnessConfigSchema = z
 		captureLines: z.number().int().min(10).max(10000).default(500),
 		maxEventHistory: z.number().int().min(100).max(100000).default(10000),
 		auth: AuthConfigSchema.optional(),
+		webhook: WebhookConfigSchema.optional(),
 		providers: z.record(ProviderConfigSchema).default({
 			"claude-code": {
 				command: "claude",
@@ -58,6 +69,8 @@ const HarnessConfigSchema = z
 
 export type HarnessConfig = z.infer<typeof HarnessConfigSchema>;
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
+export type WebhookConfig = z.infer<typeof WebhookConfigSchema>;
+export type WebhookEvent = z.infer<typeof WebhookEventSchema>;
 
 export async function loadConfig(path?: string): Promise<HarnessConfig> {
 	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation

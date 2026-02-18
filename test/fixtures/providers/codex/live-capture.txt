@@ -1,0 +1,86 @@
+
+╭───────────────────────────────────────╮
+│ >_ OpenAI Codex (v0.101.0)            │
+│                                       │
+│ model:     loading   /model to change │
+│ directory: ~/repos/agent-harness      │
+╰───────────────────────────────────────╯
+
+
+› Write tests for @filename
+
+  ? for shortcuts                                                                                                                                                                                                                                                                                           100% context left
+
+╭───────────────────────────────────────────────────╮
+│ >_ OpenAI Codex (v0.101.0)                        │
+│                                                   │
+│ model:     gpt-5.3-codex xhigh   /model to change │
+│ directory: ~/repos/agent-harness                  │
+╰───────────────────────────────────────────────────╯
+
+  Tip: New 2x rate limits until April 2nd.
+
+
+› Reply with exactly: 4
+
+
+• 4
+
+
+› Write tests for @filename
+
+  ? for shortcuts                                                                                                                                                                                                                                                                                           100% context left
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

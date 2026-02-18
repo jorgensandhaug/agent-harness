@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 import { z } from "zod";
 import type { Manager } from "../session/manager.ts";
+import { readAgentMessages } from "../session/messages.ts";
 import { mapManagerError } from "./errors.ts";
 
 const CreateAgentBody = z.object({
@@ -15,6 +16,11 @@ const SendInputBody = z.object({
 
 const OutputQuery = z.object({
 	lines: z.coerce.number().int().min(1).max(10000).optional(),
+});
+
+const MessagesQuery = z.object({
+	limit: z.coerce.number().int().min(1).max(500).optional(),
+	role: z.enum(["all", "user", "assistant", "system", "developer"]).optional(),
 });
 
 const P = "/api/v1/projects/:name/agents";
@@ -116,6 +122,61 @@ export function registerAgentRoutes(app: Hono, manager: Manager): void {
 		}
 
 		return c.json(result.value);
+	});
+
+	// Get structured messages from provider internals (no tmux pane parsing)
+	app.get(`${P}/:id/messages`, async (c) => {
+		const projectName = c.req.param("name");
+		const agentId = c.req.param("id");
+		const query = MessagesQuery.safeParse({
+			limit: c.req.query("limit"),
+			role: c.req.query("role"),
+		});
+		if (!query.success) {
+			return c.json(
+				{
+					error: "INVALID_REQUEST",
+					message: query.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
+				},
+				400,
+			);
+		}
+
+		const agentResult = manager.getAgent(projectName, agentId);
+		if (!agentResult.ok) {
+			const mapped = mapManagerError(agentResult.error);
+			return c.json(mapped.body, mapped.status);
+		}
+
+		const result = await readAgentMessages(agentResult.value, {
+			...(query.data.limit !== undefined ? { limit: query.data.limit } : {}),
+			...(query.data.role !== undefined ? { role: query.data.role } : {}),
+		});
+		return c.json(result);
+	});
+
+	// Get the latest assistant message from provider internals
+	app.get(`${P}/:id/messages/last`, async (c) => {
+		const projectName = c.req.param("name");
+		const agentId = c.req.param("id");
+
+		const agentResult = manager.getAgent(projectName, agentId);
+		if (!agentResult.ok) {
+			const mapped = mapManagerError(agentResult.error);
+			return c.json(mapped.body, mapped.status);
+		}
+
+		const result = await readAgentMessages(agentResult.value, {
+			role: "all",
+			limit: 1,
+		});
+		return c.json({
+			provider: result.provider,
+			source: result.source,
+			lastAssistantMessage: result.lastAssistantMessage,
+			parseErrorCount: result.parseErrorCount,
+			warnings: result.warnings,
+		});
 	});
 
 	// Abort agent

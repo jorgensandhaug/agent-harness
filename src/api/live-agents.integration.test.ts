@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import type { HarnessConfig } from "../config.ts";
+import { createDebugTracker } from "../debug/tracker.ts";
 import { createEventBus } from "../events/bus.ts";
 import type { NormalizedEvent } from "../events/types.ts";
 import { createPoller } from "../poller/poller.ts";
@@ -8,10 +9,10 @@ import { createStore } from "../session/store.ts";
 import * as tmux from "../tmux/client.ts";
 import { createApp } from "./app.ts";
 
-const LIVE_MODE = process.env["LIVE_TESTS"];
+const LIVE_MODE = process.env.LIVE_TESTS;
 const live = LIVE_MODE === "1";
 const describeLive = live ? describe : describe.skip;
-const MAX_LIVE_PROVIDER_TESTS = Number.parseInt(process.env["MAX_LIVE_PROVIDER_TESTS"] ?? "4", 10);
+const MAX_LIVE_PROVIDER_TESTS = Number.parseInt(process.env.MAX_LIVE_PROVIDER_TESTS ?? "4", 10);
 const PROMPT = "Reply with exactly: 4";
 
 type LiveEnv = {
@@ -19,6 +20,7 @@ type LiveEnv = {
 	server: Bun.Server;
 	poller: ReturnType<typeof createPoller>;
 	eventBus: ReturnType<typeof createEventBus>;
+	debugTracker: ReturnType<typeof createDebugTracker>;
 	tmuxPrefix: string;
 };
 
@@ -74,7 +76,7 @@ function makeConfig(tmuxPrefix: string): HarnessConfig {
 			},
 			codex: {
 				command: "codex",
-				extraArgs: ["--yolo", "--dangerously-bypass-approvals-and-sandbox"],
+				extraArgs: ["--yolo"],
 				env: {},
 				enabled: true,
 			},
@@ -88,16 +90,26 @@ async function setupLiveEnv(): Promise<LiveEnv> {
 	const tmuxPrefix = `ah-live-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
 	const store = createStore();
 	const eventBus = createEventBus(5000);
-	const manager = createManager(makeConfig(tmuxPrefix), store, eventBus);
-	const poller = createPoller(makeConfig(tmuxPrefix), store, manager, eventBus);
+	const config = makeConfig(tmuxPrefix);
+	const debugTracker = createDebugTracker(config, eventBus);
+	const manager = createManager(config, store, eventBus, debugTracker);
+	const poller = createPoller(config, store, manager, eventBus, debugTracker);
 	poller.start();
-	const app = createApp(manager, store, eventBus, Date.now());
+	const app = createApp(manager, store, eventBus, debugTracker, Date.now());
 	const server = Bun.serve({ port: 0, fetch: app.fetch, idleTimeout: 90 });
-	return { baseUrl: `http://127.0.0.1:${server.port}`, server, poller, eventBus, tmuxPrefix };
+	return {
+		baseUrl: `http://127.0.0.1:${server.port}`,
+		server,
+		poller,
+		eventBus,
+		debugTracker,
+		tmuxPrefix,
+	};
 }
 
 async function cleanupLiveEnv(current: LiveEnv): Promise<void> {
 	current.poller.stop();
+	current.debugTracker.stop();
 	current.server.stop(true);
 
 	const sessions = await tmux.listSessions(current.tmuxPrefix);
@@ -128,74 +140,85 @@ describeLive("agents/live-provider.smoke", () => {
 		const runnable = commandExists(pc.command) && Boolean(model);
 		const runner = runnable ? it : it.skip;
 
-		runner(`agents/live-${pc.provider}.smoke`, async () => {
-			env = await setupLiveEnv();
-			if (!env) throw new Error("env missing");
-			const project = `live-${pc.provider.replace(/[^a-z0-9]+/gi, "-")}-${Date.now()}`;
-			let agentId: string | null = null;
-			const seenEvents: NormalizedEvent[] = [];
-			const unsubscribe = env.eventBus.subscribe({ project }, (event) => {
-				if (agentId && event.agentId === agentId) {
-					seenEvents.push(event);
-				}
-			});
-
-			try {
-				const createProjectRes = await api(env.baseUrl, "/api/v1/projects", {
-					method: "POST",
-					body: JSON.stringify({ name: project, cwd: process.cwd() }),
+		runner(
+			`agents/live-${pc.provider}.smoke`,
+			async () => {
+				env = await setupLiveEnv();
+				if (!env) throw new Error("env missing");
+				const project = `live-${pc.provider.replace(/[^a-z0-9]+/gi, "-")}-${Date.now()}`;
+				let agentId: string | null = null;
+				const seenEvents: NormalizedEvent[] = [];
+				const unsubscribe = env.eventBus.subscribe({ project }, (event) => {
+					if (agentId && event.agentId === agentId) {
+						seenEvents.push(event);
+					}
 				});
-				expect(createProjectRes.status).toBe(201);
 
-				const createAgentRes = await api(env.baseUrl, `/api/v1/projects/${project}/agents`, {
-					method: "POST",
-					body: JSON.stringify({
-						provider: pc.provider,
-						task: PROMPT,
-						model,
-					}),
-				});
-				expect(createAgentRes.status).toBe(201);
-				const createAgentJson = await createAgentRes.json();
-				agentId = createAgentJson.agent.id as string;
-				expect(createAgentJson.agent.status).toBe("starting");
+				try {
+					const createProjectRes = await api(env.baseUrl, "/api/v1/projects", {
+						method: "POST",
+						body: JSON.stringify({ name: project, cwd: process.cwd() }),
+					});
+					expect(createProjectRes.status).toBe(201);
 
-				await waitFor(() => {
-					return seenEvents.some(
-						(e) => e.type === "status_changed" && e.from === "starting",
+					const createAgentRes = await api(env.baseUrl, `/api/v1/projects/${project}/agents`, {
+						method: "POST",
+						body: JSON.stringify({
+							provider: pc.provider,
+							task: PROMPT,
+							model,
+						}),
+					});
+					expect(createAgentRes.status).toBe(201);
+					const createAgentJson = await createAgentRes.json();
+					agentId = createAgentJson.agent.id as string;
+					expect(createAgentJson.agent.status).toBe("starting");
+					expect(createAgentJson.agent.attachCommand).toBe(
+						`tmux attach -t ${env.tmuxPrefix}-${project}`,
 					);
-				}, 20000);
-
-				await waitFor(() => {
-					return seenEvents.some(
-						(e) =>
-							e.type === "status_changed" && (e.to === "processing" || e.to === "idle"),
+					const debugRes = await fetch(
+						`${env.baseUrl}/api/v1/projects/${project}/agents/${agentId}/debug`,
 					);
-				}, 60000);
+					expect(debugRes.status).toBe(200);
 
-				await waitFor(() => {
-					return seenEvents.some((e) => e.type === "output");
-				}, 60000);
+					await waitFor(() => {
+						return seenEvents.some((e) => e.type === "status_changed" && e.from === "starting");
+					}, 20000);
 
-				const deleteAgent = await fetch(`${env.baseUrl}/api/v1/projects/${project}/agents/${agentId}`, {
-					method: "DELETE",
-				});
-				expect(deleteAgent.status).toBe(204);
-				agentId = null;
+					await waitFor(() => {
+						return seenEvents.some(
+							(e) => e.type === "status_changed" && (e.to === "processing" || e.to === "idle"),
+						);
+					}, 60000);
 
-				const deleteProject = await fetch(`${env.baseUrl}/api/v1/projects/${project}`, {
-					method: "DELETE",
-				});
-				expect(deleteProject.status).toBe(204);
-			} finally {
-				unsubscribe();
-				if (agentId) {
-					await fetch(`${env.baseUrl}/api/v1/projects/${project}/agents/${agentId}`, {
+					await waitFor(() => {
+						return seenEvents.some((e) => e.type === "output");
+					}, 60000);
+
+					const deleteAgent = await fetch(
+						`${env.baseUrl}/api/v1/projects/${project}/agents/${agentId}`,
+						{
+							method: "DELETE",
+						},
+					);
+					expect(deleteAgent.status).toBe(204);
+					agentId = null;
+
+					const deleteProject = await fetch(`${env.baseUrl}/api/v1/projects/${project}`, {
 						method: "DELETE",
 					});
+					expect(deleteProject.status).toBe(204);
+				} finally {
+					unsubscribe();
+					if (agentId) {
+						await fetch(`${env.baseUrl}/api/v1/projects/${project}/agents/${agentId}`, {
+							method: "DELETE",
+						});
+					}
+					await fetch(`${env.baseUrl}/api/v1/projects/${project}`, { method: "DELETE" });
 				}
-				await fetch(`${env.baseUrl}/api/v1/projects/${project}`, { method: "DELETE" });
-			}
-		}, 90000);
+			},
+			90000,
+		);
 	}
 });

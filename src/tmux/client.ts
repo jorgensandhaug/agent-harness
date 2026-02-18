@@ -45,12 +45,28 @@ async function exec(args: readonly string[]): Promise<Result<string, TmuxError>>
 	return ok(stdout);
 }
 
+function pasteSettleDelayMs(): number {
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+	const raw = process.env["HARNESS_TMUX_PASTE_ENTER_DELAY_MS"];
+	if (raw !== undefined) {
+		const parsed = Number.parseInt(raw, 10);
+		if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+	}
+	// Codex CLI can ignore Enter if sent in the same tick as paste-buffer.
+	return 120;
+}
+
 export async function createSession(name: string, cwd: string): Promise<Result<void, TmuxError>> {
 	const result = await exec(["new-session", "-d", "-s", name, "-c", cwd, "-x", "220", "-y", "50"]);
 	if (!result.ok) return result;
-	// Set remain-on-exit for this session's windows
-	const optResult = await exec(["set-option", "-t", name, "remain-on-exit", "on"]);
+	// Set defaults for future windows in this session.
+	const optResult = await exec(["set-option", "-g", "-t", name, "remain-on-exit", "on"]);
 	if (!optResult.ok) return optResult;
+	// Disable auto window renaming so session:window targets remain stable.
+	const allowRenameResult = await exec(["set-option", "-g", "-t", name, "allow-rename", "off"]);
+	if (!allowRenameResult.ok) return allowRenameResult;
+	const autoRenameResult = await exec(["set-option", "-g", "-t", name, "automatic-rename", "off"]);
+	if (!autoRenameResult.ok) return autoRenameResult;
 	return ok(undefined);
 }
 
@@ -93,6 +109,11 @@ export async function sendInput(target: string, text: string): Promise<Result<vo
 		// instead of submitting on Enter when bracketed paste is enabled.
 		const pasteResult = await exec(["paste-buffer", "-t", target, "-d"]);
 		if (!pasteResult.ok) return pasteResult;
+
+		const settleMs = pasteSettleDelayMs();
+		if (settleMs > 0) {
+			await Bun.sleep(settleMs);
+		}
 
 		const enterResult = await exec(["send-keys", "-t", target, "Enter"]);
 		if (!enterResult.ok) return enterResult;
