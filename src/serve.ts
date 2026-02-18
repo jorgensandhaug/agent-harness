@@ -38,6 +38,7 @@ export async function serveCommand(): Promise<void> {
 
 	// 5. Initialize session manager
 	const manager = createManager(config, store, eventBus, debugTracker);
+	await manager.rehydrateProjectsFromTmux();
 
 	// 6. Start poller
 	const poller = createPoller(config, store, manager, eventBus, debugTracker);

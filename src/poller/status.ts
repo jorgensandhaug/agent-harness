@@ -29,7 +29,6 @@ export function deriveStatusFromSignals(input: DeriveStatusInput): AgentStatus {
 
 	const hasDiff = input.diff.trim().length > 0;
 	const commandAlive = isLikelyAgentProcessAlive(input.paneCurrentCommand);
-	const hasOutput = input.currentOutput.trim().length > 0;
 
 	if (input.providerEvents.some((event) => event.kind === "error")) {
 		return "error";
@@ -66,10 +65,6 @@ export function deriveStatusFromSignals(input: DeriveStatusInput): AgentStatus {
 	}
 
 	if (input.currentStatus === "idle") return "idle";
-
-	if (input.currentStatus === "starting" && commandAlive && hasOutput) {
-		return "idle";
-	}
 
 	return input.currentStatus;
 }

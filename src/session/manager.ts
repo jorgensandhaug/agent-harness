@@ -77,6 +77,33 @@ export function createManager(
 		"CLAUDE_CODE_OAUTH_TOKEN",
 	];
 	const CODEX_AUTH_ENV_KEYS = ["OPENAI_API_KEY", "CODEX_API_KEY"];
+
+	function mergedPath(parts: readonly string[]): string {
+		const out: string[] = [];
+		const seen = new Set<string>();
+		for (const raw of parts) {
+			const value = raw.trim();
+			if (value.length === 0) continue;
+			if (seen.has(value)) continue;
+			seen.add(value);
+			out.push(value);
+		}
+		return out.join(":");
+	}
+
+	function defaultAgentPath(): string {
+		const home = homedir();
+		const inherited =
+			// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+			process.env["PATH"]?.split(":") ?? [];
+		const userBins = [
+			`${home}/.local/bin`,
+			`${home}/.bun/bin`,
+			`${home}/.npm-global/bin`,
+			`${home}/.cargo/bin`,
+		];
+		return mergedPath([...userBins, ...inherited, "/run/current-system/sw/bin", "/usr/bin", "/bin"]);
+	}
 	type ResolvedSubscription = {
 		id: string;
 		subscription: SubscriptionConfig;
@@ -490,6 +517,59 @@ export function createManager(
 		return `${providerName}-${hex}`;
 	}
 
+	function projectNameFromSession(sessionName: string): ProjectName | null {
+		const prefix = `${config.tmuxPrefix}-`;
+		if (!sessionName.startsWith(prefix)) return null;
+		const rawName = sessionName.slice(prefix.length).trim();
+		if (rawName.length === 0) return null;
+		return projectName(rawName);
+	}
+
+	function createdAtFromEpochSeconds(epochSeconds: number): string {
+		if (!Number.isFinite(epochSeconds) || epochSeconds <= 0) {
+			return new Date().toISOString();
+		}
+		return new Date(epochSeconds * 1000).toISOString();
+	}
+
+	async function rehydrateProjectsFromTmux(): Promise<void> {
+		let sessionsResult = await tmux.listSessions(config.tmuxPrefix);
+		for (let attempt = 1; !sessionsResult.ok && attempt <= 4; attempt += 1) {
+			await Bun.sleep(150 * attempt);
+			sessionsResult = await tmux.listSessions(config.tmuxPrefix);
+		}
+		if (!sessionsResult.ok) {
+			log.warn("failed to list tmux sessions for project rehydrate", {
+				error: JSON.stringify(sessionsResult.error),
+			});
+			return;
+		}
+
+		const existingBySession = new Set(store.listProjects().map((project) => project.tmuxSession));
+		let recovered = 0;
+
+		for (const session of sessionsResult.value) {
+			if (existingBySession.has(session.name)) continue;
+			const name = projectNameFromSession(session.name);
+			if (!name) continue;
+
+			const project: Project = {
+				name,
+				cwd: session.path || ".",
+				tmuxSession: session.name,
+				agentCount: 0,
+				createdAt: createdAtFromEpochSeconds(session.createdAt),
+			};
+			store.addProject(project);
+			existingBySession.add(session.name);
+			recovered += 1;
+		}
+
+		if (recovered > 0) {
+			log.info("projects rehydrated from tmux sessions", { recovered });
+		}
+	}
+
 	// --- Projects ---
 
 	async function createProject(name: string, cwd: string): Promise<Result<Project, ManagerError>> {
@@ -710,6 +790,16 @@ export function createManager(
 				});
 			}
 		}
+		const pathForAgent = defaultAgentPath();
+		// Ensure provider binaries (claude/codex/etc) are resolvable in tmux panes even under systemd.
+		env = {
+			...env,
+			PATH: mergedPath([
+				pathForAgent,
+				// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+				env["PATH"] ?? "",
+			]),
+		};
 		const target = `${project.tmuxSession}:${wName}`;
 
 		// Create tmux window with the agent command
@@ -1021,6 +1111,7 @@ export function createManager(
 	}
 
 	return {
+		rehydrateProjectsFromTmux,
 		createProject,
 		getProject,
 		listProjects,

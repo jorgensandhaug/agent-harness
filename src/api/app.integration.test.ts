@@ -232,7 +232,7 @@ class FakeTmux {
 	private listSessions(): ReturnType<typeof Bun.spawn> {
 		const lines: string[] = [];
 		for (const [name, session] of this.sessions.entries()) {
-			lines.push(`${name}\t${session.windows.size}\t${session.createdAt}\t0`);
+			lines.push(`${name}\t.\t${session.windows.size}\t${session.createdAt}\t0`);
 		}
 		return this.ok(lines.join("\n"));
 	}

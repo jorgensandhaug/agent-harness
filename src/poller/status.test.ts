@@ -71,6 +71,21 @@ describe("poller/status.deriveStatusFromSignals", () => {
 		expect(status).toBe("idle");
 	});
 
+	it("does not jump starting to idle from stale prompt output alone", () => {
+		const status = deriveStatusFromSignals({
+			currentStatus: "starting",
+			parsedStatus: "starting",
+			paneDead: false,
+			paneCurrentCommand: "codex",
+			currentOutput: "› Reply with exactly: 4\n? for shortcuts",
+			diff: "",
+			providerEvents: [],
+			lastDiffAtMs: null,
+			nowMs: 1100,
+		});
+		expect(status).toBe("starting");
+	});
+
 	it("marks exited when pane is dead regardless of parser output", () => {
 		const status = deriveStatusFromSignals({
 			currentStatus: "processing",

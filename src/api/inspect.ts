@@ -419,6 +419,7 @@ const INSPECT_HTML = String.raw`<!doctype html>
 						projectName: "",
 						agentId: "",
 						subscriptionId: "",
+						projects: [],
 						subscriptions: [],
 						status: "idle",
 						lastStatusSource: "",
@@ -997,6 +998,26 @@ const INSPECT_HTML = String.raw`<!doctype html>
 					}
 				}
 
+				function selectedProjectRecord() {
+					const name = String(el.existingProject.value || "").trim();
+					if (!name) return null;
+					const projects = Array.isArray(state.projects) ? state.projects : [];
+					return (
+						projects.find(
+							(project) => project && typeof project.name === "string" && project.name === name,
+						) || null
+					);
+				}
+
+				function syncProjectInputsFromSelection() {
+					const selected = selectedProjectRecord();
+					if (!selected) return;
+					el.projectName.value = String(selected.name || "");
+					if (typeof selected.cwd === "string" && selected.cwd.length > 0) {
+						el.projectCwd.value = selected.cwd;
+					}
+				}
+
 				async function refreshProjectsList() {
 					const response = await api("/api/v1/projects");
 					if (!response.ok) {
@@ -1009,15 +1030,27 @@ const INSPECT_HTML = String.raw`<!doctype html>
 
 					const json = await response.json();
 					const projects = Array.isArray(json.projects) ? json.projects : [];
+					state.projects = projects;
+					const preferredProject =
+						state.projectName ||
+						String(el.projectName.value || "").trim() ||
+						String(el.existingProject.value || "").trim();
 					const options = projects.map((project) => ({
 						value: String(project.name || ""),
-						label: String(project.name || ""),
+						label:
+							String(project.name || "") +
+							" (" +
+							String(Number.isFinite(project.agentCount) ? project.agentCount : 0) +
+							" agents)",
 					}));
 					setSelectOptions(el.existingProject, options, "(no projects)");
 
-					if (state.projectName && options.some((option) => option.value === state.projectName)) {
-						el.existingProject.value = state.projectName;
+					if (preferredProject && options.some((option) => option.value === preferredProject)) {
+						el.existingProject.value = preferredProject;
+					} else if (options.length > 0) {
+						el.existingProject.value = options[0].value;
 					}
+					syncProjectInputsFromSelection();
 					await refreshAgentsList();
 				}
 
@@ -1509,6 +1542,7 @@ const INSPECT_HTML = String.raw`<!doctype html>
 					renderSubscriptionDetails();
 				});
 				el.existingProject.addEventListener("change", () => {
+					syncProjectInputsFromSelection();
 					void refreshAgentsList();
 				});
 				el.connectExisting.addEventListener("click", () => {
@@ -1539,7 +1573,7 @@ const INSPECT_HTML = String.raw`<!doctype html>
 					void probeWebhookReceiver();
 				});
 
-				el.projectName.value = "inspect-" + Date.now();
+				el.projectName.value = "";
 				el.projectCwd.value = ".";
 				void refreshSubscriptionsList();
 				void refreshWebhookStatus();

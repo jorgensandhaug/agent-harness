@@ -1,20 +1,114 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { spawn as nodeSpawn } from "node:child_process";
 import { log } from "../log.ts";
 import { type Result, err, ok } from "../types.ts";
 import type { TmuxError, TmuxSessionInfo, TmuxWindowInfo } from "./types.ts";
 
-async function exec(args: readonly string[]): Promise<Result<string, TmuxError>> {
-	log.debug("tmux exec", { args });
+type ExecRawResult = {
+	exitCode: number;
+	stdout: string;
+	stderr: string;
+};
 
+let bunSpawnDisabled = false;
+
+function mergedPath(parts: readonly string[]): string {
+	const out: string[] = [];
+	const seen = new Set<string>();
+	for (const raw of parts) {
+		const value = raw.trim();
+		if (value.length === 0) continue;
+		if (seen.has(value)) continue;
+		seen.add(value);
+		out.push(value);
+	}
+	return out.join(":");
+}
+
+function tmuxCommandPath(): string {
+	const inherited =
+		// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+		process.env["PATH"]?.split(":") ?? [];
+	const home =
+		// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+		process.env["HOME"] ?? "";
+	const userBins = home
+		? [`${home}/.local/bin`, `${home}/.bun/bin`, `${home}/.npm-global/bin`, `${home}/.cargo/bin`]
+		: [];
+	return mergedPath([...userBins, ...inherited, "/run/current-system/sw/bin", "/usr/bin", "/bin"]);
+}
+
+function tmuxFallbackBinaries(): string[] {
+	const fromEnv =
+		// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+		process.env["HARNESS_TMUX_BIN"]?.trim() ?? "";
+	const candidates = [fromEnv, "/run/current-system/sw/bin/tmux", "tmux"];
+	return Array.from(new Set(candidates.filter((value) => value.length > 0)));
+}
+
+async function execWithNodeSpawnBinary(
+	binary: string,
+	args: readonly string[],
+	childEnv: Record<string, string>,
+): Promise<ExecRawResult | null> {
+	return await new Promise((resolve) => {
+		let proc: ReturnType<typeof nodeSpawn>;
+		try {
+			proc = nodeSpawn(binary, args, {
+				env: childEnv,
+				stdio: ["ignore", "pipe", "pipe"],
+			});
+		} catch {
+			resolve(null);
+			return;
+		}
+
+		let stdout = "";
+		let stderr = "";
+		proc.stdout?.on("data", (chunk: string | Buffer) => {
+			stdout += chunk.toString();
+		});
+		proc.stderr?.on("data", (chunk: string | Buffer) => {
+			stderr += chunk.toString();
+		});
+		proc.on("error", () => resolve(null));
+		proc.on("close", (code) =>
+			resolve({
+				exitCode: code ?? 1,
+				stdout,
+				stderr,
+			}),
+		);
+	});
+}
+
+async function execWithNodeSpawn(
+	args: readonly string[],
+	childEnv: Record<string, string>,
+): Promise<ExecRawResult | null> {
+	for (const binary of tmuxFallbackBinaries()) {
+		const result = await execWithNodeSpawnBinary(binary, args, childEnv);
+		if (result !== null) {
+			return result;
+		}
+	}
+	return null;
+}
+
+async function execWithBunSpawn(
+	args: readonly string[],
+	childEnv: Record<string, string>,
+): Promise<ExecRawResult | null> {
 	let proc: ReturnType<typeof Bun.spawn>;
 	try {
 		proc = Bun.spawn(["tmux", ...args], {
 			stdout: "pipe",
 			stderr: "pipe",
+			env: childEnv,
 		});
 	} catch {
-		return err({ code: "TMUX_NOT_INSTALLED" });
+		return null;
 	}
 
 	const exitCode = await proc.exited;
@@ -24,6 +118,68 @@ async function exec(args: readonly string[]): Promise<Result<string, TmuxError>>
 		stdoutStream && typeof stdoutStream !== "number" ? await new Response(stdoutStream).text() : "";
 	const stderr =
 		stderrStream && typeof stderrStream !== "number" ? await new Response(stderrStream).text() : "";
+
+	return { exitCode, stdout, stderr };
+}
+
+async function exec(args: readonly string[]): Promise<Result<string, TmuxError>> {
+	log.debug("tmux exec", { args });
+	const childEnv: Record<string, string> = {};
+	const passThroughKeys = [
+		"HOME",
+		"TMUX_TMPDIR",
+		"LANG",
+		"LC_ALL",
+		"LOCALE_ARCHIVE",
+		"TZDIR",
+		"USER",
+		"LOGNAME",
+		"SHELL",
+	] as const;
+	for (const key of passThroughKeys) {
+		// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+		const value = process.env[key];
+		if (typeof value === "string" && value.length > 0) {
+			childEnv[key] = value;
+		}
+	}
+	// Preserve user binary locations so tmux-launched panes can run CLI providers.
+	childEnv["PATH"] = tmuxCommandPath();
+	childEnv["TERM"] =
+		// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+		process.env["TERM"] ?? "xterm-256color";
+
+	let runResult: ExecRawResult | null = null;
+	if (!bunSpawnDisabled) {
+		runResult = await execWithBunSpawn(args, childEnv);
+	}
+	if (runResult === null) {
+		runResult = await execWithNodeSpawn(args, childEnv);
+	}
+	if (runResult === null) {
+		return err({ code: "TMUX_NOT_INSTALLED" });
+	}
+
+	// Bun.spawn can intermittently fail under systemd service env with tmux "server exited unexpectedly".
+	// Retry with node child_process in that case.
+	if (
+		runResult.exitCode !== 0 &&
+		runResult.stderr.includes("server exited unexpectedly")
+	) {
+		const fallback = await execWithNodeSpawn(args, childEnv);
+		if (fallback !== null) {
+			if (!bunSpawnDisabled) {
+				bunSpawnDisabled = true;
+			}
+			log.warn("tmux bun spawn failed; switching to node spawn", {
+				args,
+				stderr: runResult.stderr.trim(),
+			});
+			runResult = fallback;
+		}
+	}
+
+	const { exitCode, stdout, stderr } = runResult;
 
 	if (exitCode !== 0) {
 		const cmd = `tmux ${args.join(" ")}`;
@@ -219,7 +375,7 @@ export async function listSessions(
 	const result = await exec([
 		"list-sessions",
 		"-F",
-		"#{session_name}\t#{session_windows}\t#{session_created}\t#{session_attached}",
+		"#{session_name}\t#{session_path}\t#{session_windows}\t#{session_created}\t#{session_attached}",
 	]);
 
 	if (!result.ok) {
@@ -244,9 +400,10 @@ export async function listSessions(
 		if (!name || !name.startsWith(`${prefix}-`)) continue;
 		sessions.push({
 			name,
-			windowCount: Number.parseInt(parts[1] ?? "0", 10),
-			createdAt: Number.parseInt(parts[2] ?? "0", 10),
-			attached: parts[3] === "1",
+			path: parts[1] ?? ".",
+			windowCount: Number.parseInt(parts[2] ?? "0", 10),
+			createdAt: Number.parseInt(parts[3] ?? "0", 10),
+			attached: parts[4] === "1",
 		});
 	}
 

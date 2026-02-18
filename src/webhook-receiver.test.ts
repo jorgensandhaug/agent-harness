@@ -83,7 +83,7 @@ describe("webhook-receiver/loadConfig", () => {
 			JSON.stringify({
 				port: 7171,
 				bindAddress: "0.0.0.0",
-				}),
+			}),
 		);
 
 		const config = loadConfig({

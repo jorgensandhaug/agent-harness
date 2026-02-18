@@ -14,6 +14,7 @@ import { newCodexInternalsCursor, readCodexInternalsStatus } from "./codex-inter
 import { diffCaptures } from "./differ.ts";
 import { newOpenCodeInternalsCursor, readOpenCodeInternalsStatus } from "./opencode-internals.ts";
 import { newPiInternalsCursor, readPiInternalsStatus } from "./pi-internals.ts";
+import { shouldUseUiParserForStatus } from "./status-source.ts";
 import { deriveStatusFromSignals } from "./status.ts";
 
 export function createPoller(
@@ -207,15 +208,17 @@ export function createPoller(
 			lastProviderEventsCount: providerEvents.length,
 		});
 
-		let parsedStatus = agent.status;
+		let parsedStatus: AgentStatus = "starting";
 		let parsedStatusSource: StatusChangeSource = "fallback_heuristic";
-		try {
-			parsedStatus = provider.parseStatus(currentOutput);
-			parsedStatusSource = "ui_parser";
-			debugTracker?.noteParser(agent.id, { lastParsedStatus: parsedStatus });
-		} catch (error) {
-			const msg = error instanceof Error ? error.message : String(error);
-			debugTracker?.noteError(agent.id, "parse", `parseStatus failed: ${msg}`);
+		if (shouldUseUiParserForStatus(agent)) {
+			try {
+				parsedStatus = provider.parseStatus(currentOutput);
+				parsedStatusSource = "ui_parser";
+				debugTracker?.noteParser(agent.id, { lastParsedStatus: parsedStatus });
+			} catch (error) {
+				const msg = error instanceof Error ? error.message : String(error);
+				debugTracker?.noteError(agent.id, "parse", `parseStatus failed: ${msg}`);
+			}
 		}
 		if (agent.provider === "codex" && agent.providerRuntimeDir) {
 			try {

@@ -1,5 +1,6 @@
 export interface TmuxSessionInfo {
 	name: string;
+	path: string;
 	windowCount: number;
 	createdAt: number;
 	attached: boolean;

@@ -149,7 +149,7 @@ describe("tmux/client.command-shape", () => {
 			"tmux",
 			"list-sessions",
 			"-F",
-			"#{session_name}\t#{session_windows}\t#{session_created}\t#{session_attached}",
+			"#{session_name}\t#{session_path}\t#{session_windows}\t#{session_created}\t#{session_attached}",
 		]);
 		expect(state.calls).toContainEqual([
 			"tmux",
