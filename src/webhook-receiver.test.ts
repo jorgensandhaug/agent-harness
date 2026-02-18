@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
 	type ReceiverConfig,
 	createReceiverApp,
@@ -10,11 +13,24 @@ import {
 
 const originalFetch = globalThis.fetch;
 const originalSpawn = Bun.spawn;
+const cleanupPaths: string[] = [];
 
 afterEach(() => {
 	(globalThis as { fetch: typeof fetch }).fetch = originalFetch;
 	(Bun as { spawn: typeof Bun.spawn }).spawn = originalSpawn;
 });
+
+afterEach(async () => {
+	for (const path of cleanupPaths.splice(0)) {
+		await rm(path, { recursive: true, force: true });
+	}
+});
+
+async function makeTempDir(): Promise<string> {
+	const dir = await mkdtemp(join(tmpdir(), "ah-webhook-config-test-"));
+	cleanupPaths.push(dir);
+	return dir;
+}
 
 function baseConfig(overrides: Partial<ReceiverConfig> = {}): ReceiverConfig {
 	return {
@@ -58,6 +74,65 @@ describe("webhook-receiver/loadConfig", () => {
 		});
 		expect(config.openclawHooksUrl).toBe("http://127.0.0.1:18789/hooks/agent");
 		expect(config.openclawHooksToken).toBe("tok-123");
+	});
+
+	it("loads config from explicit AH_WEBHOOK_RECEIVER_CONFIG file", async () => {
+		const dir = await makeTempDir();
+		const path = join(dir, "receiver.json");
+		await writeFile(
+			path,
+			JSON.stringify({
+				port: 7171,
+				bindAddress: "0.0.0.0",
+				openclawCommand: "oc",
+				openclawTimeoutMs: 9000,
+			}),
+		);
+
+		const config = loadConfig({
+			AH_WEBHOOK_RECEIVER_CONFIG: path,
+		});
+		expect(config.port).toBe(7171);
+		expect(config.bindAddress).toBe("0.0.0.0");
+		expect(config.openclawCommand).toBe("oc");
+		expect(config.openclawTimeoutMs).toBe(9000);
+	});
+
+	it("loads config from XDG default path", async () => {
+		const xdgDir = await makeTempDir();
+		const configDir = join(xdgDir, "agent-harness");
+		await mkdir(configDir, { recursive: true });
+		await writeFile(
+			join(configDir, "webhook-receiver.json"),
+			JSON.stringify({
+				port: 7272,
+			}),
+		);
+
+		const config = loadConfig({
+			XDG_CONFIG_HOME: xdgDir,
+		});
+		expect(config.port).toBe(7272);
+	});
+
+	it("applies env overrides on top of file config", async () => {
+		const dir = await makeTempDir();
+		const path = join(dir, "receiver.json");
+		await writeFile(
+			path,
+			JSON.stringify({
+				port: 7373,
+				openclawHooksToken: "from-file-token",
+			}),
+		);
+
+		const config = loadConfig({
+			AH_WEBHOOK_RECEIVER_CONFIG: path,
+			AH_WEBHOOK_RECEIVER_PORT: "7474",
+			AH_WEBHOOK_RECEIVER_HOOKS_TOKEN: "from-env-token",
+		});
+		expect(config.port).toBe(7474);
+		expect(config.openclawHooksToken).toBe("from-env-token");
 	});
 });
 

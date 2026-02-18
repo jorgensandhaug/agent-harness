@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { z } from "zod";
 import { log } from "./log.ts";
 
@@ -169,9 +170,44 @@ export type WebhookSafetyNetConfig = z.infer<typeof WebhookSafetyNetConfigSchema
 export type SubscriptionConfig = z.infer<typeof SubscriptionConfigSchema>;
 export type SubscriptionDiscoveryConfig = z.infer<typeof SubscriptionDiscoveryConfigSchema>;
 
-export async function loadConfig(path?: string): Promise<HarnessConfig> {
+function nonEmpty(value: string | undefined): string | undefined {
+	if (typeof value !== "string") return undefined;
+	const trimmed = value.trim();
+	return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function defaultHarnessConfigCandidates(): string[] {
 	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
-	const configPath = path ?? process.env["HARNESS_CONFIG"] ?? "harness.json";
+	const xdgConfigHome = nonEmpty(process.env["XDG_CONFIG_HOME"]);
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+	const homeDir = nonEmpty(process.env["HOME"]);
+	if (xdgConfigHome) {
+		return [join(xdgConfigHome, "agent-harness", "harness.json"), "harness.json"];
+	}
+	if (homeDir) {
+		return [join(homeDir, ".config", "agent-harness", "harness.json"), "harness.json"];
+	}
+	return ["harness.json"];
+}
+
+async function resolveHarnessConfigPath(path?: string): Promise<string> {
+	if (path) return path;
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+	const envPath = nonEmpty(process.env["HARNESS_CONFIG"]);
+	if (envPath) return envPath;
+
+	const candidates = defaultHarnessConfigCandidates();
+	for (const candidate of candidates) {
+		const file = Bun.file(candidate);
+		if (await file.exists()) {
+			return candidate;
+		}
+	}
+	return candidates[0] ?? "harness.json";
+}
+
+export async function loadConfig(path?: string): Promise<HarnessConfig> {
+	const configPath = await resolveHarnessConfigPath(path);
 
 	let raw: unknown = {};
 	try {

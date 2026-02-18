@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Hono } from "hono";
 import { z } from "zod";
 
@@ -34,6 +36,7 @@ type WebhookPayload = z.infer<typeof WebhookPayloadSchema>;
 export type ReceiverConfig = z.infer<typeof ReceiverConfigSchema>;
 
 type EnvSource = Readonly<{
+	AH_WEBHOOK_RECEIVER_CONFIG?: string;
 	AH_WEBHOOK_RECEIVER_PORT?: string;
 	AH_WEBHOOK_RECEIVER_BIND_ADDRESS?: string;
 	AH_WEBHOOK_RECEIVER_TOKEN?: string;
@@ -41,6 +44,8 @@ type EnvSource = Readonly<{
 	AH_WEBHOOK_RECEIVER_OPENCLAW_TIMEOUT_MS?: string;
 	AH_WEBHOOK_RECEIVER_HOOKS_URL?: string;
 	AH_WEBHOOK_RECEIVER_HOOKS_TOKEN?: string;
+	XDG_CONFIG_HOME?: string;
+	HOME?: string;
 }>;
 
 function receiverLog(
@@ -64,15 +69,86 @@ function parseIntWithDefault(value: string | undefined, fallback: number): numbe
 	return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function nonEmpty(value: string | undefined): string | undefined {
+	if (typeof value !== "string") return undefined;
+	const trimmed = value.trim();
+	return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function defaultReceiverConfigCandidates(env: EnvSource): string[] {
+	const xdgConfigHome = nonEmpty(env.XDG_CONFIG_HOME);
+	const homeDir = nonEmpty(env.HOME);
+	if (xdgConfigHome) {
+		return [join(xdgConfigHome, "agent-harness", "webhook-receiver.json"), "webhook-receiver.json"];
+	}
+	if (homeDir) {
+		return [
+			join(homeDir, ".config", "agent-harness", "webhook-receiver.json"),
+			"webhook-receiver.json",
+		];
+	}
+	return ["webhook-receiver.json"];
+}
+
+function resolveReceiverConfigPath(env: EnvSource): string {
+	const explicitPath = nonEmpty(env.AH_WEBHOOK_RECEIVER_CONFIG);
+	if (explicitPath) return explicitPath;
+
+	const candidates = defaultReceiverConfigCandidates(env);
+	for (const candidate of candidates) {
+		if (existsSync(candidate)) return candidate;
+	}
+	return candidates[0] ?? "webhook-receiver.json";
+}
+
+function readReceiverFileConfig(path: string): Record<string, unknown> {
+	if (!existsSync(path)) return {};
+	try {
+		const raw = JSON.parse(readFileSync(path, "utf8"));
+		if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+			receiverLog("info", "receiver config loaded", { path });
+			return raw as Record<string, unknown>;
+		}
+		receiverLog("warn", "receiver config must be a JSON object, ignoring file", { path });
+		return {};
+	} catch (error) {
+		receiverLog("warn", "failed to read receiver config file, ignoring file", {
+			path,
+			error: error instanceof Error ? error.message : String(error),
+		});
+		return {};
+	}
+}
+
 export function loadConfig(env: EnvSource = process.env as EnvSource): ReceiverConfig {
+	const configPath = resolveReceiverConfigPath(env);
+	const fileConfig = readReceiverFileConfig(configPath);
+
+	const filePort = typeof fileConfig.port === "number" ? fileConfig.port : 7071;
+	const fileBindAddress =
+		typeof fileConfig.bindAddress === "string" ? fileConfig.bindAddress : "127.0.0.1";
+	const fileOpenclawCommand =
+		typeof fileConfig.openclawCommand === "string" ? fileConfig.openclawCommand : "openclaw";
+	const fileOpenclawTimeoutMs =
+		typeof fileConfig.openclawTimeoutMs === "number" ? fileConfig.openclawTimeoutMs : 5000;
+	const fileToken = typeof fileConfig.token === "string" ? fileConfig.token : undefined;
+	const fileHooksUrl =
+		typeof fileConfig.openclawHooksUrl === "string" ? fileConfig.openclawHooksUrl : undefined;
+	const fileHooksToken =
+		typeof fileConfig.openclawHooksToken === "string" ? fileConfig.openclawHooksToken : undefined;
+
 	const parsed = ReceiverConfigSchema.safeParse({
-		port: parseIntWithDefault(env.AH_WEBHOOK_RECEIVER_PORT, 7071),
-		bindAddress: env.AH_WEBHOOK_RECEIVER_BIND_ADDRESS?.trim() || "127.0.0.1",
-		token: env.AH_WEBHOOK_RECEIVER_TOKEN?.trim() || undefined,
-		openclawCommand: env.AH_WEBHOOK_RECEIVER_OPENCLAW_BIN?.trim() || "openclaw",
-		openclawTimeoutMs: parseIntWithDefault(env.AH_WEBHOOK_RECEIVER_OPENCLAW_TIMEOUT_MS, 5000),
-		openclawHooksUrl: env.AH_WEBHOOK_RECEIVER_HOOKS_URL?.trim() || undefined,
-		openclawHooksToken: env.AH_WEBHOOK_RECEIVER_HOOKS_TOKEN?.trim() || undefined,
+		...fileConfig,
+		port: parseIntWithDefault(env.AH_WEBHOOK_RECEIVER_PORT, filePort),
+		bindAddress: env.AH_WEBHOOK_RECEIVER_BIND_ADDRESS?.trim() || fileBindAddress,
+		token: env.AH_WEBHOOK_RECEIVER_TOKEN?.trim() || fileToken,
+		openclawCommand: env.AH_WEBHOOK_RECEIVER_OPENCLAW_BIN?.trim() || fileOpenclawCommand,
+		openclawTimeoutMs: parseIntWithDefault(
+			env.AH_WEBHOOK_RECEIVER_OPENCLAW_TIMEOUT_MS,
+			fileOpenclawTimeoutMs,
+		),
+		openclawHooksUrl: env.AH_WEBHOOK_RECEIVER_HOOKS_URL?.trim() || fileHooksUrl,
+		openclawHooksToken: env.AH_WEBHOOK_RECEIVER_HOOKS_TOKEN?.trim() || fileHooksToken,
 	});
 
 	if (parsed.success) return parsed.data;
@@ -110,10 +186,7 @@ async function readStreamText(stream: ReadableStream<Uint8Array> | number | null
 	return new Response(stream).text();
 }
 
-async function runDiscordAction(
-	config: ReceiverConfig,
-	payload: WebhookPayload,
-): Promise<void> {
+async function runDiscordAction(config: ReceiverConfig, payload: WebhookPayload): Promise<void> {
 	const message = formatEventMessage(payload);
 	const cmd = [
 		config.openclawCommand,
@@ -148,10 +221,7 @@ async function runDiscordAction(
 	}
 }
 
-async function runHooksAction(
-	config: ReceiverConfig,
-	payload: WebhookPayload,
-): Promise<void> {
+async function runHooksAction(config: ReceiverConfig, payload: WebhookPayload): Promise<void> {
 	const message = formatEventMessage(payload);
 	const body = { message, sessionKey: payload.sessionKey };
 	const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -182,9 +252,13 @@ export async function runActions(config: ReceiverConfig, payload: WebhookPayload
 
 	if (payload.sessionKey) {
 		if (!config.openclawHooksUrl) {
-			receiverLog("warn", "session bump requested but AH_WEBHOOK_RECEIVER_HOOKS_URL not configured", {
-				sessionKey: payload.sessionKey,
-			});
+			receiverLog(
+				"warn",
+				"session bump requested but AH_WEBHOOK_RECEIVER_HOOKS_URL not configured",
+				{
+					sessionKey: payload.sessionKey,
+				},
+			);
 		} else {
 			try {
 				await runHooksAction(config, payload);

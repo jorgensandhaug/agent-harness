@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig } from "./config.ts";
@@ -7,6 +7,8 @@ import { loadConfig } from "./config.ts";
 const cleanupPaths: string[] = [];
 const originalAuthToken = process.env.AH_AUTH_TOKEN;
 const originalWebhookToken = process.env.AH_WEBHOOK_TOKEN;
+const originalHarnessConfig = process.env.HARNESS_CONFIG;
+const originalXdgConfigHome = process.env.XDG_CONFIG_HOME;
 
 afterEach(async () => {
 	for (const path of cleanupPaths.splice(0)) {
@@ -21,6 +23,16 @@ afterEach(async () => {
 		process.env.AH_WEBHOOK_TOKEN = undefined;
 	} else {
 		process.env.AH_WEBHOOK_TOKEN = originalWebhookToken;
+	}
+	if (originalHarnessConfig === undefined) {
+		process.env.HARNESS_CONFIG = undefined;
+	} else {
+		process.env.HARNESS_CONFIG = originalHarnessConfig;
+	}
+	if (originalXdgConfigHome === undefined) {
+		process.env.XDG_CONFIG_HOME = undefined;
+	} else {
+		process.env.XDG_CONFIG_HOME = originalXdgConfigHome;
 	}
 });
 
@@ -59,6 +71,42 @@ describe("config/load.defaults", () => {
 			claudeTokenFiles: [],
 			codexDirs: [],
 		});
+	});
+
+	it("loads default config from XDG path", async () => {
+		const xdgDir = await makeTempDir();
+		const configDir = join(xdgDir, "agent-harness");
+		const path = join(configDir, "harness.json");
+		await mkdir(configDir, { recursive: true });
+		await writeFile(
+			path,
+			JSON.stringify({
+				port: 6060,
+			}),
+		);
+
+		process.env.HARNESS_CONFIG = undefined;
+		process.env.XDG_CONFIG_HOME = xdgDir;
+		const config = await loadConfig();
+
+		expect(config.port).toBe(6060);
+	});
+
+	it("prefers HARNESS_CONFIG over XDG default path", async () => {
+		const dir = await makeTempDir();
+		const envPath = join(dir, "env-harness.json");
+		await writeFile(envPath, JSON.stringify({ port: 6161 }));
+
+		const xdgDir = await makeTempDir();
+		const xdgConfigDir = join(xdgDir, "agent-harness");
+		await mkdir(xdgConfigDir, { recursive: true });
+		await writeFile(join(xdgConfigDir, "harness.json"), JSON.stringify({ port: 6262 }));
+
+		process.env.HARNESS_CONFIG = envPath;
+		process.env.XDG_CONFIG_HOME = xdgDir;
+		const config = await loadConfig();
+
+		expect(config.port).toBe(6161);
 	});
 });
 
