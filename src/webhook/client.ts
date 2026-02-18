@@ -144,6 +144,12 @@ function isTerminalStatus(status: AgentStatus): boolean {
 	return status === "idle" || status === "error" || status === "exited";
 }
 
+function isTerminalTransition(from: AgentStatus, to: AgentStatus): boolean {
+	if (!isTerminalStatus(to)) return false;
+	if (isTerminalStatus(from)) return false;
+	return from !== to;
+}
+
 function isStuckCandidateStatus(status: AgentStatus): boolean {
 	return status === "starting" || status === "processing";
 }
@@ -229,6 +235,10 @@ function resolveTargetForEvent(
 	};
 }
 
+function hasValidCallback(agent: Agent): boolean {
+	return agent.callback ? normalizeCallback(agent.callback) !== null : false;
+}
+
 export function createWebhookClient(
 	globalWebhookConfig: WebhookConfig | null | undefined,
 	eventBus: EventBus,
@@ -274,6 +284,11 @@ export function createWebhookClient(
 		if (!isStuckCandidateStatus(status)) {
 			lastStuckWarnAtMsByAgent.delete(agentId);
 		}
+	}
+
+	function shouldRunSafetyNet(): boolean {
+		if (safetyNetConfig.enabled) return true;
+		return store.listAgents().some((agent) => hasValidCallback(agent));
 	}
 
 	async function postWebhookAttempt(
@@ -431,8 +446,7 @@ export function createWebhookClient(
 			const sinceMs = parseIsoMs(event.ts) ?? Date.now();
 			updateLifecycle(event.agentId, event.to, sinceMs);
 
-			if (event.from !== "processing") return;
-			if (!isTerminalStatus(event.to)) return;
+			if (!isTerminalTransition(event.from, event.to)) return;
 
 			void (async () => {
 				const agent = store.getAgent(event.agentId as AgentId);
@@ -452,7 +466,7 @@ export function createWebhookClient(
 	);
 
 	async function runSafetyNetCycle(): Promise<void> {
-		if (!safetyNetConfig.enabled) return;
+		if (!shouldRunSafetyNet()) return;
 
 		runtime.counters.safetyNetCycles += 1;
 		const nowMs = Date.now();
@@ -604,22 +618,21 @@ export function createWebhookClient(
 		return { ok, payload };
 	}
 
-	if (safetyNetConfig.enabled) {
-		void runSafetyNetCycle();
-		safetyNetTimer = setInterval(() => {
-			runSafetyNetCycle().catch((error) => {
-				log.error("webhook safety-net cycle failed", {
-					error: error instanceof Error ? error.message : String(error),
-				});
+	void runSafetyNetCycle();
+	safetyNetTimer = setInterval(() => {
+		runSafetyNetCycle().catch((error) => {
+			log.error("webhook safety-net cycle failed", {
+				error: error instanceof Error ? error.message : String(error),
 			});
-		}, safetyNetConfig.intervalMs);
-	}
+		});
+	}, safetyNetConfig.intervalMs);
 
 	log.info("webhook client started", {
 		globalFallbackConfigured: fallbackWebhookConfig !== null,
 		url: fallbackWebhookConfig?.url,
 		events: fallbackWebhookConfig?.events ?? [],
 		safetyNetEnabled: safetyNetConfig.enabled,
+		safetyNetAutoForCallbacks: !safetyNetConfig.enabled,
 		safetyNetIntervalMs: safetyNetConfig.intervalMs,
 	});
 

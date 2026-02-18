@@ -23,6 +23,7 @@ export function createPoller(
 	eventBus: EventBus,
 	debugTracker?: DebugTracker,
 ) {
+	const ERROR_LOG_THROTTLE_MS = 30_000;
 	let timer: ReturnType<typeof setInterval> | null = null;
 	let polling = false;
 	const statusRuntime = new Map<
@@ -33,6 +34,9 @@ export function createPoller(
 			claudeCursor: ReturnType<typeof newClaudeInternalsCursor>;
 			piCursor: ReturnType<typeof newPiInternalsCursor>;
 			opencodeCursor: ReturnType<typeof newOpenCodeInternalsCursor>;
+			lastPaneDeadErrorWarnAtMs: number | null;
+			lastPaneCommandErrorWarnAtMs: number | null;
+			lastCaptureErrorWarnAtMs: number | null;
 		}
 	>();
 
@@ -42,6 +46,9 @@ export function createPoller(
 		claudeCursor: ReturnType<typeof newClaudeInternalsCursor>;
 		piCursor: ReturnType<typeof newPiInternalsCursor>;
 		opencodeCursor: ReturnType<typeof newOpenCodeInternalsCursor>;
+		lastPaneDeadErrorWarnAtMs: number | null;
+		lastPaneCommandErrorWarnAtMs: number | null;
+		lastCaptureErrorWarnAtMs: number | null;
 	} {
 		let found = statusRuntime.get(agentId);
 		if (!found) {
@@ -51,10 +58,18 @@ export function createPoller(
 				claudeCursor: newClaudeInternalsCursor(),
 				piCursor: newPiInternalsCursor(),
 				opencodeCursor: newOpenCodeInternalsCursor(),
+				lastPaneDeadErrorWarnAtMs: null,
+				lastPaneCommandErrorWarnAtMs: null,
+				lastCaptureErrorWarnAtMs: null,
 			};
 			statusRuntime.set(agentId, found);
 		}
 		return found;
+	}
+
+	function shouldWarn(lastWarnAtMs: number | null, nowMs: number): boolean {
+		if (lastWarnAtMs === null) return true;
+		return nowMs - lastWarnAtMs >= ERROR_LOG_THROTTLE_MS;
 	}
 
 	async function pollAgent(agent: {
@@ -73,6 +88,8 @@ export function createPoller(
 		const providerResult = getProvider(agent.provider);
 		if (!providerResult.ok) return;
 		const provider = providerResult.value;
+		const runtime = runtimeFor(agent.id);
+		const nowMs = Date.now();
 
 		// Check if pane is dead (process exited)
 		const paneDeadResult = await tmux.getPaneVar(agent.tmuxTarget, "pane_dead");
@@ -82,8 +99,17 @@ export function createPoller(
 				"tmux",
 				`pane_dead query failed: ${JSON.stringify(paneDeadResult.error)}`,
 			);
+			if (shouldWarn(runtime.lastPaneDeadErrorWarnAtMs, nowMs)) {
+				runtime.lastPaneDeadErrorWarnAtMs = nowMs;
+				log.warn("poller pane_dead query failed", {
+					agentId: agent.id,
+					tmuxTarget: agent.tmuxTarget,
+					error: JSON.stringify(paneDeadResult.error),
+				});
+			}
 		} else {
 			debugTracker?.noteTmux(agent.id, { paneDead: paneDeadResult.value === "1" });
+			runtime.lastPaneDeadErrorWarnAtMs = null;
 		}
 
 		const paneCommandResult = await tmux.getPaneVar(agent.tmuxTarget, "pane_current_command");
@@ -93,8 +119,17 @@ export function createPoller(
 				"tmux",
 				`pane_current_command query failed: ${JSON.stringify(paneCommandResult.error)}`,
 			);
+			if (shouldWarn(runtime.lastPaneCommandErrorWarnAtMs, nowMs)) {
+				runtime.lastPaneCommandErrorWarnAtMs = nowMs;
+				log.warn("poller pane_current_command query failed", {
+					agentId: agent.id,
+					tmuxTarget: agent.tmuxTarget,
+					error: JSON.stringify(paneCommandResult.error),
+				});
+			}
 		} else {
 			debugTracker?.noteTmux(agent.id, { paneCurrentCommand: paneCommandResult.value });
+			runtime.lastPaneCommandErrorWarnAtMs = null;
 		}
 
 		if (paneDeadResult.ok && paneDeadResult.value === "1") {
@@ -127,17 +162,22 @@ export function createPoller(
 		// Capture pane content
 		const captureResult = await tmux.capturePane(agent.tmuxTarget, config.captureLines);
 		if (!captureResult.ok) {
-			log.debug("failed to capture pane", {
-				agentId: agent.id,
-				error: JSON.stringify(captureResult.error),
-			});
 			debugTracker?.noteError(
 				agent.id,
 				"capture",
 				`capture-pane failed: ${JSON.stringify(captureResult.error)}`,
 			);
+			if (shouldWarn(runtime.lastCaptureErrorWarnAtMs, nowMs)) {
+				runtime.lastCaptureErrorWarnAtMs = nowMs;
+				log.warn("poller capture-pane failed", {
+					agentId: agent.id,
+					tmuxTarget: agent.tmuxTarget,
+					error: JSON.stringify(captureResult.error),
+				});
+			}
 			return;
 		}
+		runtime.lastCaptureErrorWarnAtMs = null;
 
 		const currentOutput = captureResult.value;
 		debugTracker?.notePoll(agent.id, { lastCaptureBytes: currentOutput.length });
@@ -146,10 +186,9 @@ export function createPoller(
 		const diff = diffCaptures(agent.lastCapturedOutput, currentOutput);
 		debugTracker?.notePoll(agent.id, { lastDiffBytes: diff.length });
 		const diffHasContent = diff.trim().length > 0;
-		const nowMs = Date.now();
-		const runtime = runtimeFor(agent.id);
+		const statusNowMs = Date.now();
 		if (diffHasContent) {
-			runtime.lastDiffAtMs = nowMs;
+			runtime.lastDiffAtMs = statusNowMs;
 		}
 
 		// Update stored output
@@ -280,10 +319,10 @@ export function createPoller(
 			diff,
 			providerEvents,
 			lastDiffAtMs: runtime.lastDiffAtMs,
-			nowMs,
+			nowMs: statusNowMs,
 		});
 		if (newStatus === "processing" && runtime.lastDiffAtMs === null) {
-			runtime.lastDiffAtMs = nowMs;
+			runtime.lastDiffAtMs = statusNowMs;
 		}
 		const statusSource: StatusChangeSource =
 			newStatus === parsedStatus ? parsedStatusSource : "fallback_heuristic";

@@ -149,6 +149,7 @@ describe("webhook/client", () => {
 		const store = createStore();
 		store.addAgent({
 			...baseAgent(),
+			status: "processing",
 			callback: {
 				url: "https://callback.test/hook",
 				token: "callback-secret",
@@ -217,6 +218,7 @@ describe("webhook/client", () => {
 		const store = createStore();
 		store.addAgent({
 			...baseAgent(),
+			status: "processing",
 			callback: {
 				url: "https://callback-only.test/hook",
 			},
@@ -245,7 +247,38 @@ describe("webhook/client", () => {
 		unsubscribe();
 	});
 
-	it("does not post when status change does not start from processing", async () => {
+	it("posts when terminal status transition starts from non-terminal state", async () => {
+		const store = createStore();
+		store.addAgent(baseAgent());
+		const bus = createEventBus(100);
+
+		let callCount = 0;
+		(globalThis as { fetch: typeof fetch }).fetch = (async () => {
+			callCount++;
+			return new Response(null, { status: 200 });
+		}) as typeof fetch;
+
+		const config = webhookConfig({
+			url: "https://example.test/hook",
+			events: ["agent_completed"],
+		});
+		const unsubscribe = createWebhookClient(config, bus, store);
+
+		bus.emit({
+			id: "evt-2a" as EventId,
+			ts: "2026-02-18T10:00:00.000Z",
+			project: "proj-1",
+			agentId: "abcd1234",
+			type: "status_changed",
+			from: "starting",
+			to: "idle",
+		});
+
+		await waitFor(() => callCount === 1);
+		unsubscribe();
+	});
+
+	it("does not post when status change starts from terminal state", async () => {
 		const store = createStore();
 		store.addAgent(baseAgent());
 		const bus = createEventBus(100);
@@ -263,7 +296,7 @@ describe("webhook/client", () => {
 		const unsubscribe = createWebhookClient(config, bus, store);
 
 		bus.emit({
-			id: "evt-2" as EventId,
+			id: "evt-2b" as EventId,
 			ts: "2026-02-18T10:00:00.000Z",
 			project: "proj-1",
 			agentId: "abcd1234",
@@ -274,6 +307,28 @@ describe("webhook/client", () => {
 
 		await Bun.sleep(25);
 		expect(callCount).toBe(0);
+		unsubscribe();
+	});
+
+	it("auto-runs safety-net for per-agent callbacks even without global webhook config", async () => {
+		const store = createStore();
+		store.addAgent({
+			...baseAgent(),
+			callback: {
+				url: "https://callback-only.test/hook",
+			},
+		});
+		const bus = createEventBus(100);
+
+		const urls: string[] = [];
+		(globalThis as { fetch: typeof fetch }).fetch = (async (input: RequestInfo | URL) => {
+			urls.push(new Request(input).url);
+			return new Response(null, { status: 200 });
+		}) as typeof fetch;
+
+		const unsubscribe = createWebhookClient(null, bus, store);
+		await waitFor(() => urls.length === 1);
+		expect(urls[0]).toBe("https://callback-only.test/hook");
 		unsubscribe();
 	});
 
