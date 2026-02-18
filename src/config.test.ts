@@ -1,14 +1,20 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { loadConfig } from "./config.ts";
 
 const cleanupPaths: string[] = [];
+const originalAuthToken = process.env.AH_AUTH_TOKEN;
 
 afterEach(async () => {
 	for (const path of cleanupPaths.splice(0)) {
 		await rm(path, { recursive: true, force: true });
+	}
+	if (originalAuthToken === undefined) {
+		process.env.AH_AUTH_TOKEN = undefined;
+	} else {
+		process.env.AH_AUTH_TOKEN = originalAuthToken;
 	}
 });
 
@@ -37,10 +43,7 @@ describe("config/load.defaults", () => {
 			"--permission-mode",
 			"bypassPermissions",
 		]);
-		expect(config.providers.codex?.extraArgs).toEqual([
-			"--yolo",
-			"--dangerously-bypass-approvals-and-sandbox",
-		]);
+		expect(config.providers.codex?.extraArgs).toEqual(["--yolo"]);
 	});
 });
 
@@ -72,6 +75,37 @@ describe("config/load.valid-file", () => {
 			model: "nano",
 			enabled: true,
 		});
+	});
+});
+
+describe("config/load.auth", () => {
+	it("parses auth token from config file", async () => {
+		const dir = await makeTempDir();
+		const path = join(dir, "harness.json");
+		await writeFile(
+			path,
+			JSON.stringify({
+				auth: { token: "from-file-token" },
+			}),
+		);
+
+		const config = await loadConfig(path);
+		expect(config.auth?.token).toBe("from-file-token");
+	});
+
+	it("overrides auth token from AH_AUTH_TOKEN env", async () => {
+		const dir = await makeTempDir();
+		const path = join(dir, "harness.json");
+		await writeFile(
+			path,
+			JSON.stringify({
+				auth: { token: "from-file-token" },
+			}),
+		);
+		process.env.AH_AUTH_TOKEN = "from-env-token";
+
+		const config = await loadConfig(path);
+		expect(config.auth?.token).toBe("from-env-token");
 	});
 });
 

@@ -42,7 +42,7 @@ export async function serveCommand(): Promise<void> {
 	poller.start();
 
 	// 7. Create and start HTTP server
-	const app = createApp(manager, store, eventBus, debugTracker, startTime);
+	const app = createApp(manager, store, eventBus, debugTracker, startTime, config.auth?.token);
 
 	const server = Bun.serve({
 		port: config.port,

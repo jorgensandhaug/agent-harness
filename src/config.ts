@@ -11,6 +11,12 @@ const ProviderConfigSchema = z
 	})
 	.strict();
 
+const AuthConfigSchema = z
+	.object({
+		token: z.string().min(1).optional(),
+	})
+	.strict();
+
 const HarnessConfigSchema = z
 	.object({
 		port: z.number().int().min(1).max(65535).default(7070),
@@ -20,6 +26,7 @@ const HarnessConfigSchema = z
 		pollIntervalMs: z.number().int().min(100).max(30000).default(1000),
 		captureLines: z.number().int().min(10).max(10000).default(500),
 		maxEventHistory: z.number().int().min(100).max(100000).default(10000),
+		auth: AuthConfigSchema.optional(),
 		providers: z.record(ProviderConfigSchema).default({
 			"claude-code": {
 				command: "claude",
@@ -29,7 +36,7 @@ const HarnessConfigSchema = z
 			},
 			codex: {
 				command: "codex",
-				extraArgs: ["--yolo", "--dangerously-bypass-approvals-and-sandbox"],
+				extraArgs: ["--yolo"],
 				env: {},
 				enabled: true,
 			},
@@ -80,5 +87,18 @@ export async function loadConfig(path?: string): Promise<HarnessConfig> {
 		throw new Error(`Invalid config: ${issues.join("; ")}`);
 	}
 
-	return result.data;
+	const config = result.data;
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+	const authTokenFromEnv = process.env["AH_AUTH_TOKEN"];
+	if (typeof authTokenFromEnv === "string" && authTokenFromEnv.trim().length > 0) {
+		return {
+			...config,
+			auth: {
+				...(config.auth ?? {}),
+				token: authTokenFromEnv.trim(),
+			},
+		};
+	}
+
+	return config;
 }
