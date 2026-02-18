@@ -22,6 +22,7 @@ export interface Agent {
 	project: ProjectName;
 	provider: string;
 	status: AgentStatus;
+	brief: string;
 	task: string;
 	windowName: string;
 	tmuxTarget: string;

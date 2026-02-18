@@ -50,7 +50,12 @@ export function registerProjectRoutes(app: Hono, manager: Manager): void {
 
 		const agentsResult = manager.listAgents(name);
 		const agents = agentsResult.ok
-			? agentsResult.value.map((a) => ({ id: a.id, provider: a.provider, status: a.status }))
+			? agentsResult.value.map((a) => ({
+					id: a.id,
+					provider: a.provider,
+					status: a.status,
+					tmuxTarget: a.tmuxTarget,
+				}))
 			: [];
 
 		return c.json({ project: projectResult.value, agents });

@@ -104,6 +104,7 @@ describe("api/messages.routes", () => {
 			project: project.name,
 			provider: "codex",
 			status: "idle",
+			brief: "idle",
 			task: "test",
 			windowName: "codex-a1",
 			tmuxTarget: `${project.tmuxSession}:codex-a1`,
@@ -162,9 +163,22 @@ describe("api/messages.routes", () => {
 			new Request("http://localhost/api/v1/projects/p-msg/agents/abcd1234/messages/last"),
 		);
 		expect(lastRes.status).toBe(200);
+		expect(lastRes.headers.get("X-Agent-Harness-Mode")).toBe("full");
 		const lastJson = await lastRes.json();
 		expect(lastJson.source).toBe("internals_codex_jsonl");
 		expect(lastJson.lastAssistantMessage?.text).toBe("second answer");
+
+		const compactLastRes = await app.fetch(
+			new Request(
+				"http://localhost/api/v1/projects/p-msg/agents/abcd1234/messages/last?compact=true",
+			),
+		);
+		expect(compactLastRes.status).toBe(200);
+		expect(compactLastRes.headers.get("X-Agent-Harness-Mode")).toBe("compact");
+		const compactLastJson = await compactLastRes.json();
+		expect(compactLastJson).toEqual({
+			text: "second answer",
+		});
 		debugTracker.stop();
 	});
 });

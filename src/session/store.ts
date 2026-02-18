@@ -72,6 +72,16 @@ export function createStore() {
 		const agent = agents.get(id);
 		if (agent) {
 			agent.status = status;
+			agent.brief = status;
+			agent.lastActivity = new Date().toISOString();
+		}
+	}
+
+	function updateAgentBrief(id: AgentId, brief: string): void {
+		const agent = agents.get(id);
+		if (agent) {
+			const trimmed = brief.trim();
+			agent.brief = trimmed.length > 0 ? trimmed : agent.status;
 			agent.lastActivity = new Date().toISOString();
 		}
 	}
@@ -100,6 +110,7 @@ export function createStore() {
 		addAgent,
 		removeAgent,
 		updateAgentStatus,
+		updateAgentBrief,
 		updateAgentOutput,
 		stats,
 	};

@@ -458,6 +458,37 @@ describe("http/projects.crud", () => {
 		const deleted = await fetch(`${env.baseUrl}/api/v1/projects/p-http`, { method: "DELETE" });
 		expect(deleted.status).toBe(204);
 	});
+
+	it("includes tmuxTarget in project agent summaries", async () => {
+		if (!env) throw new Error("env missing");
+		await apiJson(env.baseUrl, "/api/v1/projects", {
+			method: "POST",
+			body: JSON.stringify({ name: "p-http-targets", cwd: process.cwd() }),
+		});
+
+		const createAgentRes = await apiJson(env.baseUrl, "/api/v1/projects/p-http-targets/agents", {
+			method: "POST",
+			body: JSON.stringify({
+				provider: "claude-code",
+				task: "Reply with exactly: 4",
+			}),
+		});
+		expect(createAgentRes.status).toBe(201);
+		const createAgentJson = await createAgentRes.json();
+		const agentId = createAgentJson.agent.id as string;
+
+		const got = await fetch(`${env.baseUrl}/api/v1/projects/p-http-targets`);
+		expect(got.status).toBe(200);
+		const gotJson = await got.json();
+		expect(gotJson.agents).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					id: agentId,
+					tmuxTarget: expect.stringContaining("ah-http-test-p-http-targets:"),
+				}),
+			]),
+		);
+	});
 });
 
 describe("http/agents.crud-input-output-abort", () => {
@@ -477,6 +508,7 @@ describe("http/agents.crud-input-output-abort", () => {
 			}),
 		});
 		expect(createAgentRes.status).toBe(201);
+		expect(createAgentRes.headers.get("X-Agent-Harness-Mode")).toBe("full");
 		const createAgentJson = await createAgentRes.json();
 		const agentId = createAgentJson.agent.id as string;
 		expect(createAgentJson.agent.attachCommand).toBe("tmux attach -t ah-http-test-p-agents");
@@ -528,6 +560,67 @@ describe("http/agents.crud-input-output-abort", () => {
 			},
 		);
 		expect(deleteAgentRes.status).toBe(204);
+	});
+
+	it("supports compact mode for create/get/list agent endpoints", async () => {
+		if (!env) throw new Error("env missing");
+		await apiJson(env.baseUrl, "/api/v1/projects", {
+			method: "POST",
+			body: JSON.stringify({ name: "p-agents-compact", cwd: process.cwd() }),
+		});
+
+		const createAgentRes = await apiJson(
+			env.baseUrl,
+			"/api/v1/projects/p-agents-compact/agents?compact=true",
+			{
+				method: "POST",
+				body: JSON.stringify({
+					provider: "claude-code",
+					task: "Reply with exactly: 4",
+				}),
+			},
+		);
+		expect(createAgentRes.status).toBe(201);
+		expect(createAgentRes.headers.get("X-Agent-Harness-Mode")).toBe("compact");
+		const createAgentJson = await createAgentRes.json();
+		expect(createAgentJson.agent).toEqual({
+			id: expect.any(String),
+			status: expect.any(String),
+			tmuxTarget: expect.stringContaining("ah-http-test-p-agents-compact:"),
+			attachCommand: "tmux attach -t ah-http-test-p-agents-compact",
+		});
+		const agentId = createAgentJson.agent.id as string;
+
+		const getAgentRes = await fetch(
+			`${env.baseUrl}/api/v1/projects/p-agents-compact/agents/${agentId}?compact=true`,
+		);
+		expect(getAgentRes.status).toBe(200);
+		expect(getAgentRes.headers.get("X-Agent-Harness-Mode")).toBe("compact");
+		const getAgentJson = await getAgentRes.json();
+		expect(getAgentJson.agent).toEqual({
+			id: agentId,
+			status: expect.any(String),
+			tmuxTarget: expect.stringContaining("ah-http-test-p-agents-compact:"),
+			brief: expect.any(String),
+		});
+
+		const listRes = await fetch(
+			`${env.baseUrl}/api/v1/projects/p-agents-compact/agents?compact=true`,
+		);
+		expect(listRes.status).toBe(200);
+		expect(listRes.headers.get("X-Agent-Harness-Mode")).toBe("compact");
+		const listJson = await listRes.json();
+		expect(listJson.agents).toEqual(
+			expect.arrayContaining([
+				{
+					id: agentId,
+					provider: "claude-code",
+					status: expect.any(String),
+					tmuxTarget: expect.stringContaining("ah-http-test-p-agents-compact:"),
+					brief: expect.any(String),
+				},
+			]),
+		);
 	});
 
 	it("returns 400 when requested subscription does not exist", async () => {
@@ -582,7 +675,6 @@ describe("http/agents.crud-input-output-abort", () => {
 		const createAgentJson = await createAgentRes.json();
 		expect(createAgentJson.agent.callback).toEqual({
 			url: "https://receiver.test/harness-webhook",
-			token: "cb-token",
 			discordChannel: "alerts",
 			sessionKey: "session-main",
 			extra: {

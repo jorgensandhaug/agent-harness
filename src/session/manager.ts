@@ -734,6 +734,7 @@ export function createManager(
 			project: pName,
 			provider: providerName,
 			status: "starting",
+			brief: "starting",
 			task,
 			windowName: wName,
 			tmuxTarget: target,
@@ -1011,6 +1012,10 @@ export function createManager(
 		store.updateAgentStatus(id, status);
 	}
 
+	function updateAgentBrief(id: AgentId, brief: string): void {
+		store.updateAgentBrief(id, brief);
+	}
+
 	function updateAgentOutput(id: AgentId, output: string): void {
 		store.updateAgentOutput(id, output);
 	}
@@ -1029,6 +1034,7 @@ export function createManager(
 		abortAgent,
 		deleteAgent,
 		updateAgentStatus,
+		updateAgentBrief,
 		updateAgentOutput,
 	};
 }

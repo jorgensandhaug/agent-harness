@@ -7,6 +7,7 @@ import type { Store } from "../session/store.ts";
 import * as tmux from "../tmux/client.ts";
 import type { WebhookClient } from "../webhook/client.ts";
 import { registerAgentRoutes } from "./agents.ts";
+import { responseMode } from "./compact.ts";
 import { registerDebugRoutes } from "./debug.ts";
 import { registerEventRoutes } from "./events.ts";
 import { registerHealthRoutes } from "./health.ts";
@@ -28,6 +29,11 @@ export function createApp(
 
 	// CORS for local development
 	app.use("/*", cors());
+
+	app.use("/api/v1/*", async (c, next) => {
+		c.header("X-Agent-Harness-Mode", responseMode(c));
+		return next();
+	});
 
 	// Health is always available (it reports tmux status)
 	registerHealthRoutes(app, store, startTime);

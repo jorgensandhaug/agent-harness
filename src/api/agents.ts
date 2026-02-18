@@ -2,6 +2,14 @@ import type { Hono } from "hono";
 import { z } from "zod";
 import type { Manager } from "../session/manager.ts";
 import { readAgentMessages } from "../session/messages.ts";
+import {
+	redactAgentForApi,
+	resolveAgentBrief,
+	toCompactAgentListItem,
+	toCompactAgentStatus,
+	toCompactCreateAgent,
+} from "./agent-response.ts";
+import { isCompact } from "./compact.ts";
 import { mapManagerError } from "./errors.ts";
 
 const CreateAgentBody = z.object({
@@ -64,22 +72,37 @@ export function registerAgentRoutes(app: Hono, manager: Manager): void {
 			return c.json(mapped.body, mapped.status);
 		}
 
-		return c.json({ agent: result.value }, 201);
+		if (isCompact(c)) {
+			return c.json({ agent: toCompactCreateAgent(result.value) }, 201);
+		}
+		return c.json({ agent: redactAgentForApi(result.value) }, 201);
 	});
 
 	// List agents
-	app.get(P, (c) => {
+	app.get(P, async (c) => {
 		const projectName = c.req.param("name");
 		const result = manager.listAgents(projectName);
 		if (!result.ok) {
 			const mapped = mapManagerError(result.error);
 			return c.json(mapped.body, mapped.status);
 		}
-		return c.json({ agents: result.value });
+
+		if (!isCompact(c)) {
+			return c.json({ agents: result.value.map((agent) => redactAgentForApi(agent)) });
+		}
+
+		const compactAgents = await Promise.all(
+			result.value.map(async (agent) => {
+				const brief = await resolveAgentBrief(agent);
+				manager.updateAgentBrief(agent.id, brief);
+				return toCompactAgentListItem(agent, brief);
+			}),
+		);
+		return c.json({ agents: compactAgents });
 	});
 
 	// Get agent — returns full recent output (not truncated)
-	app.get(`${P}/:id`, (c) => {
+	app.get(`${P}/:id`, async (c) => {
 		const projectName = c.req.param("name");
 		const agentId = c.req.param("id");
 		const result = manager.getAgent(projectName, agentId);
@@ -88,8 +111,15 @@ export function registerAgentRoutes(app: Hono, manager: Manager): void {
 			return c.json(mapped.body, mapped.status);
 		}
 		const agent = result.value;
+		if (isCompact(c)) {
+			const brief = await resolveAgentBrief(agent);
+			manager.updateAgentBrief(agent.id, brief);
+			return c.json({
+				agent: toCompactAgentStatus(agent, brief),
+			});
+		}
 		return c.json({
-			agent,
+			agent: redactAgentForApi(agent),
 			status: agent.status,
 			lastOutput: agent.lastCapturedOutput,
 		});
@@ -182,6 +212,11 @@ export function registerAgentRoutes(app: Hono, manager: Manager): void {
 			role: "all",
 			limit: 1,
 		});
+		if (isCompact(c)) {
+			return c.json({
+				text: result.lastAssistantMessage?.text ?? null,
+			});
+		}
 		return c.json({
 			provider: result.provider,
 			source: result.source,
