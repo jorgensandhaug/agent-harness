@@ -554,6 +554,42 @@ describe("http/agents.crud-input-output-abort", () => {
 		expect(body.error).toBe("INVALID_REQUEST");
 		expect(body.message).toContain("Subscription 'does-not-exist' not found");
 	});
+
+	it("accepts callback routing object on agent create", async () => {
+		if (!env) throw new Error("env missing");
+		await apiJson(env.baseUrl, "/api/v1/projects", {
+			method: "POST",
+			body: JSON.stringify({ name: "p-agents-callback", cwd: process.cwd() }),
+		});
+
+		const createAgentRes = await apiJson(env.baseUrl, "/api/v1/projects/p-agents-callback/agents", {
+			method: "POST",
+			body: JSON.stringify({
+				provider: "codex",
+				task: "Reply with exactly: 4",
+				callback: {
+					url: "https://receiver.test/harness-webhook",
+					token: "cb-token",
+					discordChannel: "alerts",
+					sessionKey: "session-main",
+					extra: {
+						requestId: "req-1",
+					},
+				},
+			}),
+		});
+		expect(createAgentRes.status).toBe(201);
+		const createAgentJson = await createAgentRes.json();
+		expect(createAgentJson.agent.callback).toEqual({
+			url: "https://receiver.test/harness-webhook",
+			token: "cb-token",
+			discordChannel: "alerts",
+			sessionKey: "session-main",
+			extra: {
+				requestId: "req-1",
+			},
+		});
+	});
 });
 
 describe("http/events.sse.project-stream", () => {

@@ -5,7 +5,7 @@ import {
 	formatEventMessage,
 	loadConfig,
 	matchesBearerToken,
-	runAction,
+	runActions,
 } from "./webhook-receiver.ts";
 
 const originalFetch = globalThis.fetch;
@@ -21,7 +21,6 @@ function baseConfig(overrides: Partial<ReceiverConfig> = {}): ReceiverConfig {
 		port: 7071,
 		bindAddress: "127.0.0.1",
 		token: undefined,
-		actions: ["stdout_log"],
 		discordWebhookUrl: undefined,
 		openclawCommand: "openclaw",
 		openclawArgs: ["system", "event"],
@@ -47,17 +46,16 @@ describe("webhook-receiver/loadConfig", () => {
 		const config = loadConfig({});
 		expect(config.port).toBe(7071);
 		expect(config.bindAddress).toBe("127.0.0.1");
-		expect(config.actions).toEqual(["stdout_log"]);
 		expect(config.openclawCommand).toBe("openclaw");
 		expect(config.openclawArgs).toEqual(["system", "event"]);
+		expect(config.discordWebhookUrl).toBeUndefined();
 	});
 
-	it("requires discord webhook url when discord action enabled", () => {
-		expect(() =>
-			loadConfig({
-				AH_WEBHOOK_RECEIVER_ACTIONS: "discord_webhook",
-			}),
-		).toThrow(/discordWebhookUrl required/);
+	it("accepts discord webhook from AH_DISCORD_WEBHOOK_URL", () => {
+		const config = loadConfig({
+			AH_DISCORD_WEBHOOK_URL: "https://discord.example/webhook",
+		});
+		expect(config.discordWebhookUrl).toBe("https://discord.example/webhook");
 	});
 });
 
@@ -71,7 +69,7 @@ describe("webhook-receiver/auth", () => {
 });
 
 describe("webhook-receiver/actions", () => {
-	it("posts to discord webhook action", async () => {
+	it("posts to discord when payload requests discordChannel", async () => {
 		const calls: Array<{ url: string; content: string }> = [];
 		(globalThis as { fetch: typeof fetch }).fetch = (async (
 			input: RequestInfo | URL,
@@ -86,22 +84,22 @@ describe("webhook-receiver/actions", () => {
 			return new Response(null, { status: 200 });
 		}) as typeof fetch;
 
-		await runAction(
-			"discord_webhook",
-			basePayload(),
+		await runActions(
 			baseConfig({
-				actions: ["discord_webhook"],
 				discordWebhookUrl: "https://discord.example/webhook",
 			}),
+			{
+				...basePayload(),
+				discordChannel: "alerts",
+			},
 		);
 
 		expect(calls.length).toBe(1);
 		expect(calls[0]?.url).toBe("https://discord.example/webhook");
-		expect(calls[0]?.content).toContain("[agent_completed]");
-		expect(calls[0]?.content).toContain("project=proj-1");
+		expect(calls[0]?.content).toContain("discordChannel=alerts");
 	});
 
-	it("runs openclaw command action", async () => {
+	it("runs openclaw command when payload has sessionKey", async () => {
 		let seen: string[] | null = null;
 		(Bun as { spawn: typeof Bun.spawn }).spawn = ((cmd: readonly string[]) => {
 			seen = [...cmd];
@@ -113,21 +111,16 @@ describe("webhook-receiver/actions", () => {
 			} as ReturnType<typeof Bun.spawn>;
 		}) as typeof Bun.spawn;
 
-		await runAction(
-			"openclaw_event",
-			basePayload(),
-			baseConfig({
-				actions: ["openclaw_event"],
-				openclawCommand: "openclaw",
-				openclawArgs: ["system", "event"],
-			}),
-		);
+		await runActions(baseConfig(), {
+			...basePayload(),
+			sessionKey: "main-session",
+		});
 
 		expect(seen).not.toBeNull();
 		expect(seen?.[0]).toBe("openclaw");
 		expect(seen?.[1]).toBe("system");
 		expect(seen?.[2]).toBe("event");
-		expect(seen?.[seen.length - 1] ?? "").toContain("project=proj-1");
+		expect(seen?.[seen.length - 1] ?? "").toContain("sessionKey=main-session");
 	});
 });
 
@@ -159,9 +152,19 @@ describe("webhook-receiver/http", () => {
 });
 
 describe("webhook-receiver/format", () => {
-	it("formats event message with and without last message", () => {
-		const withText = formatEventMessage(basePayload());
+	it("formats event message with routing fields and extra metadata", () => {
+		const withText = formatEventMessage({
+			...basePayload(),
+			discordChannel: "alerts",
+			sessionKey: "ops-room",
+			extra: {
+				requestId: "req-1",
+			},
+		});
 		expect(withText).toContain("[agent_completed]");
+		expect(withText).toContain("discordChannel=alerts");
+		expect(withText).toContain("sessionKey=ops-room");
+		expect(withText).toContain("extra=requestId=req-1");
 		expect(withText).toContain("\nDone");
 
 		const withoutText = formatEventMessage({ ...basePayload(), lastMessage: null });

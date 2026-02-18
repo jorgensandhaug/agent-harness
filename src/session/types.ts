@@ -9,6 +9,14 @@ export interface Project {
 	createdAt: string; // ISO 8601
 }
 
+export interface AgentCallback {
+	url: string;
+	token?: string | undefined;
+	discordChannel?: string | undefined;
+	sessionKey?: string | undefined;
+	extra?: Record<string, string> | undefined;
+}
+
 export interface Agent {
 	id: AgentId;
 	project: ProjectName;
@@ -19,6 +27,7 @@ export interface Agent {
 	tmuxTarget: string;
 	attachCommand: string;
 	subscriptionId?: string;
+	callback?: AgentCallback;
 	providerRuntimeDir?: string;
 	providerSessionFile?: string;
 	createdAt: string;

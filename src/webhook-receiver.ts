@@ -12,42 +12,32 @@ const WebhookPayloadSchema = z
 		status: z.string().min(1),
 		lastMessage: z.string().nullable(),
 		timestamp: z.string().datetime(),
+		discordChannel: z.string().min(1).optional(),
+		sessionKey: z.string().min(1).optional(),
+		extra: z.record(z.string()).optional(),
 	})
 	.strict();
-
-const ReceiverActionSchema = z.enum(["stdout_log", "discord_webhook", "openclaw_event"]);
 
 const ReceiverConfigSchema = z
 	.object({
 		port: z.number().int().min(1).max(65535),
 		bindAddress: z.string().min(1).default("127.0.0.1"),
 		token: z.string().min(1).optional(),
-		actions: z.array(ReceiverActionSchema).min(1),
 		discordWebhookUrl: z.string().url().optional(),
 		openclawCommand: z.string().min(1).default("openclaw"),
 		openclawArgs: z.array(z.string().min(1)).default(["system", "event"]),
 		openclawTimeoutMs: z.number().int().min(100).max(120000).default(5000),
 	})
-	.strict()
-	.superRefine((value, ctx) => {
-		if (value.actions.includes("discord_webhook") && !value.discordWebhookUrl) {
-			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
-				path: ["discordWebhookUrl"],
-				message: "discordWebhookUrl required when discord_webhook action enabled",
-			});
-		}
-	});
+	.strict();
 
 type WebhookPayload = z.infer<typeof WebhookPayloadSchema>;
-export type ReceiverAction = z.infer<typeof ReceiverActionSchema>;
 export type ReceiverConfig = z.infer<typeof ReceiverConfigSchema>;
 
 type EnvSource = Readonly<{
 	AH_WEBHOOK_RECEIVER_PORT?: string;
 	AH_WEBHOOK_RECEIVER_BIND_ADDRESS?: string;
 	AH_WEBHOOK_RECEIVER_TOKEN?: string;
-	AH_WEBHOOK_RECEIVER_ACTIONS?: string;
+	AH_DISCORD_WEBHOOK_URL?: string;
 	AH_WEBHOOK_RECEIVER_DISCORD_WEBHOOK_URL?: string;
 	AH_WEBHOOK_RECEIVER_OPENCLAW_BIN?: string;
 	AH_WEBHOOK_RECEIVER_OPENCLAW_ARGS?: string;
@@ -89,8 +79,10 @@ export function loadConfig(env: EnvSource = process.env as EnvSource): ReceiverC
 		port: parseIntWithDefault(env.AH_WEBHOOK_RECEIVER_PORT, 7071),
 		bindAddress: env.AH_WEBHOOK_RECEIVER_BIND_ADDRESS?.trim() || "127.0.0.1",
 		token: env.AH_WEBHOOK_RECEIVER_TOKEN?.trim() || undefined,
-		actions: parseCsv(env.AH_WEBHOOK_RECEIVER_ACTIONS) ?? ["stdout_log"],
-		discordWebhookUrl: env.AH_WEBHOOK_RECEIVER_DISCORD_WEBHOOK_URL?.trim() || undefined,
+		discordWebhookUrl:
+			env.AH_DISCORD_WEBHOOK_URL?.trim() ||
+			env.AH_WEBHOOK_RECEIVER_DISCORD_WEBHOOK_URL?.trim() ||
+			undefined,
 		openclawCommand: env.AH_WEBHOOK_RECEIVER_OPENCLAW_BIN?.trim() || "openclaw",
 		openclawArgs: parseCsv(env.AH_WEBHOOK_RECEIVER_OPENCLAW_ARGS) ?? ["system", "event"],
 		openclawTimeoutMs: parseIntWithDefault(env.AH_WEBHOOK_RECEIVER_OPENCLAW_TIMEOUT_MS, 5000),
@@ -110,15 +102,20 @@ export function matchesBearerToken(authHeader: string | undefined, expectedToken
 }
 
 export function formatEventMessage(payload: WebhookPayload): string {
-	const header =
-		`[${payload.event}]` +
-		` project=${payload.project}` +
-		` agent=${payload.agentId}` +
-		` provider=${payload.provider}` +
-		` status=${payload.status}`;
+	const header = `[${payload.event}] project=${payload.project} agent=${payload.agentId} provider=${payload.provider} status=${payload.status}${payload.discordChannel ? ` discordChannel=${payload.discordChannel}` : ""}${payload.sessionKey ? ` sessionKey=${payload.sessionKey}` : ""}`;
+	const extraEntries = payload.extra ? Object.entries(payload.extra) : [];
+	const extraLine =
+		extraEntries.length > 0
+			? `extra=${extraEntries
+					.map(([key, value]) => `${key}=${value}`)
+					.sort()
+					.join(",")}`
+			: "";
 	const tail = typeof payload.lastMessage === "string" ? payload.lastMessage.trim() : "";
-	if (!tail) return header;
-	return `${header}\n${tail.slice(0, 1200)}`;
+	if (!tail && !extraLine) return header;
+	if (!tail) return `${header}\n${extraLine}`;
+	if (!extraLine) return `${header}\n${tail.slice(0, 1200)}`;
+	return `${header}\n${extraLine}\n${tail.slice(0, 1200)}`;
 }
 
 async function runDiscordWebhookAction(url: string, payload: WebhookPayload): Promise<void> {
@@ -164,43 +161,38 @@ async function runOpenClawAction(config: ReceiverConfig, payload: WebhookPayload
 	}
 }
 
-export async function runAction(
-	action: ReceiverAction,
-	payload: WebhookPayload,
-	config: ReceiverConfig,
-): Promise<void> {
-	if (action === "stdout_log") {
-		receiverLog("info", "received webhook event", {
-			action,
-			payload,
-		});
-		return;
-	}
-
-	if (action === "discord_webhook") {
-		const url = config.discordWebhookUrl;
-		if (!url) {
-			throw new Error("discordWebhookUrl missing");
-		}
-		await runDiscordWebhookAction(url, payload);
-		return;
-	}
-
-	if (action === "openclaw_event") {
-		await runOpenClawAction(config, payload);
-	}
-}
-
 export async function runActions(config: ReceiverConfig, payload: WebhookPayload): Promise<void> {
-	for (const action of config.actions) {
+	if (payload.discordChannel) {
+		if (!config.discordWebhookUrl) {
+			receiverLog("warn", "discord routing requested but AH_DISCORD_WEBHOOK_URL not configured", {
+				discordChannel: payload.discordChannel,
+			});
+		} else {
+			try {
+				await runDiscordWebhookAction(config.discordWebhookUrl, payload);
+			} catch (error) {
+				receiverLog("warn", "receiver discord action failed", {
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
+		}
+	}
+
+	if (payload.sessionKey) {
 		try {
-			await runAction(action, payload, config);
+			await runOpenClawAction(config, payload);
 		} catch (error) {
-			receiverLog("warn", "receiver action failed", {
-				action,
+			receiverLog("warn", "receiver openclaw action failed", {
 				error: error instanceof Error ? error.message : String(error),
+				sessionKey: payload.sessionKey,
 			});
 		}
+	}
+
+	if (!payload.discordChannel && !payload.sessionKey) {
+		receiverLog("info", "received webhook event without routing fields", {
+			payload,
+		});
 	}
 }
 
@@ -248,8 +240,9 @@ export function startWebhookReceiver(config: ReceiverConfig): ReturnType<typeof 
 	receiverLog("info", "webhook receiver started", {
 		port: server.port,
 		bindAddress: config.bindAddress,
-		actions: config.actions,
 		tokenRequired: Boolean(config.token),
+		discordWebhookConfigured: Boolean(config.discordWebhookUrl),
+		openclawCommand: config.openclawCommand,
 	});
 	return server;
 }

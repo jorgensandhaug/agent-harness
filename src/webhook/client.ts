@@ -5,6 +5,7 @@ import { log } from "../log.ts";
 import type { AgentStatus } from "../providers/types.ts";
 import { readAgentMessages } from "../session/messages.ts";
 import type { Store } from "../session/store.ts";
+import type { Agent, AgentCallback } from "../session/types.ts";
 import type { AgentId } from "../types.ts";
 
 export type WebhookPayload = {
@@ -15,6 +16,9 @@ export type WebhookPayload = {
 	status: string;
 	lastMessage: string | null;
 	timestamp: string;
+	discordChannel?: string;
+	sessionKey?: string;
+	extra?: Record<string, string>;
 };
 
 type LifecycleState = {
@@ -23,10 +27,20 @@ type LifecycleState = {
 };
 
 type DeliverySource = "status_change" | "safety_net" | "manual_test";
+type DeliveryTargetKind = "agent_callback" | "global_fallback";
+
+type WebhookDeliveryTarget = {
+	kind: DeliveryTargetKind;
+	url: string;
+	token?: string;
+	callback?: AgentCallback;
+};
 
 export type WebhookDeliveryAttempt = {
 	ts: string;
 	source: DeliverySource;
+	target: DeliveryTargetKind;
+	url: string;
 	event: WebhookEvent;
 	project: string;
 	agentId: string;
@@ -47,6 +61,7 @@ export type WebhookClientStatus = {
 		tokenConfigured: boolean;
 		events: readonly WebhookEvent[];
 		safetyNet: WebhookConfig["safetyNet"];
+		globalFallbackConfigured: boolean;
 	};
 	counters: {
 		attempts: number;
@@ -76,6 +91,11 @@ export type WebhookTestInput = {
 	provider?: string;
 	status?: string;
 	lastMessage?: string | null;
+	url?: string;
+	token?: string;
+	discordChannel?: string;
+	sessionKey?: string;
+	extra?: Record<string, string>;
 };
 
 export type WebhookTestResult = {
@@ -89,6 +109,12 @@ export type WebhookClient = (() => void) & {
 };
 
 const MAX_RECENT_ATTEMPTS = 200;
+const DEFAULT_SAFETY_NET: WebhookConfig["safetyNet"] = {
+	enabled: false,
+	intervalMs: 30000,
+	stuckAfterMs: 180000,
+	stuckWarnIntervalMs: 300000,
+};
 
 function statusToWebhookEvent(to: AgentStatus): WebhookEvent | null {
 	switch (to) {
@@ -134,6 +160,38 @@ function previewText(value: string | null): string | null {
 	return normalized.slice(0, 140);
 }
 
+function trimToUndefined(value: string | undefined): string | undefined {
+	if (typeof value !== "string") return undefined;
+	const trimmed = value.trim();
+	return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeCallback(callback: AgentCallback): AgentCallback | null {
+	const url = trimToUndefined(callback.url);
+	if (!url) return null;
+	const token = trimToUndefined(callback.token);
+	const discordChannel = trimToUndefined(callback.discordChannel);
+	const sessionKey = trimToUndefined(callback.sessionKey);
+	return {
+		url,
+		...(token ? { token } : {}),
+		...(discordChannel ? { discordChannel } : {}),
+		...(sessionKey ? { sessionKey } : {}),
+		...(callback.extra ? { extra: callback.extra } : {}),
+	};
+}
+
+function callbackPayloadFields(
+	callback: AgentCallback | undefined,
+): Pick<WebhookPayload, "discordChannel" | "sessionKey" | "extra"> {
+	if (!callback) return {};
+	return {
+		...(callback.discordChannel ? { discordChannel: callback.discordChannel } : {}),
+		...(callback.sessionKey ? { sessionKey: callback.sessionKey } : {}),
+		...(callback.extra ? { extra: callback.extra } : {}),
+	};
+}
+
 async function getLastMessage(store: Store, agentId: AgentId): Promise<string | null> {
 	const agent = store.getAgent(agentId);
 	if (!agent) return null;
@@ -146,11 +204,38 @@ async function getLastMessage(store: Store, agentId: AgentId): Promise<string | 
 	}
 }
 
+function resolveTargetForEvent(
+	webhookEvent: WebhookEvent,
+	agent: Agent | undefined,
+	globalWebhookConfig: WebhookConfig | null,
+): WebhookDeliveryTarget | null {
+	if (agent?.callback) {
+		const callback = normalizeCallback(agent.callback);
+		if (callback) {
+			return {
+				kind: "agent_callback",
+				url: callback.url,
+				...(callback.token ? { token: callback.token } : {}),
+				callback,
+			};
+		}
+	}
+	if (!globalWebhookConfig) return null;
+	if (!globalWebhookConfig.events.includes(webhookEvent)) return null;
+	return {
+		kind: "global_fallback",
+		url: globalWebhookConfig.url,
+		...(globalWebhookConfig.token ? { token: globalWebhookConfig.token } : {}),
+	};
+}
+
 export function createWebhookClient(
-	webhookConfig: WebhookConfig,
+	globalWebhookConfig: WebhookConfig | null | undefined,
 	eventBus: EventBus,
 	store: Store,
 ): WebhookClient {
+	const fallbackWebhookConfig = globalWebhookConfig ?? null;
+	const safetyNetConfig = fallbackWebhookConfig?.safetyNet ?? DEFAULT_SAFETY_NET;
 	const lifecycleByAgent = new Map<string, LifecycleState>();
 	const deliveredTerminalStatusByAgent = new Map<string, AgentStatus>();
 	const lastStuckWarnAtMsByAgent = new Map<string, number>();
@@ -193,6 +278,7 @@ export function createWebhookClient(
 
 	async function postWebhookAttempt(
 		payload: WebhookPayload,
+		target: WebhookDeliveryTarget,
 		source: DeliverySource,
 		attempt: number,
 	): Promise<boolean> {
@@ -203,12 +289,12 @@ export function createWebhookClient(
 		const headers: { "Content-Type": string; Authorization?: string } = {
 			"Content-Type": "application/json",
 		};
-		if (webhookConfig.token) {
-			headers.Authorization = `Bearer ${webhookConfig.token}`;
+		if (target.token) {
+			headers.Authorization = `Bearer ${target.token}`;
 		}
 
 		try {
-			const response = await fetch(webhookConfig.url, {
+			const response = await fetch(target.url, {
 				method: "POST",
 				headers,
 				body: JSON.stringify(payload),
@@ -220,6 +306,8 @@ export function createWebhookClient(
 				pushAttempt({
 					ts,
 					source,
+					target: target.kind,
+					url: target.url,
 					event: payload.event,
 					project: payload.project,
 					agentId: payload.agentId,
@@ -231,7 +319,11 @@ export function createWebhookClient(
 					error: `http_${response.status}`,
 					lastMessagePreview: previewText(payload.lastMessage),
 				});
-				log.warn("webhook POST failed", { url: webhookConfig.url, status: response.status });
+				log.warn("webhook POST failed", {
+					url: target.url,
+					status: response.status,
+					target: target.kind,
+				});
 				return false;
 			}
 
@@ -240,6 +332,8 @@ export function createWebhookClient(
 			pushAttempt({
 				ts,
 				source,
+				target: target.kind,
+				url: target.url,
 				event: payload.event,
 				project: payload.project,
 				agentId: payload.agentId,
@@ -259,6 +353,8 @@ export function createWebhookClient(
 			pushAttempt({
 				ts,
 				source,
+				target: target.kind,
+				url: target.url,
 				event: payload.event,
 				project: payload.project,
 				agentId: payload.agentId,
@@ -271,8 +367,9 @@ export function createWebhookClient(
 				lastMessagePreview: previewText(payload.lastMessage),
 			});
 			log.warn("webhook POST error", {
-				url: webhookConfig.url,
+				url: target.url,
 				error: message,
+				target: target.kind,
 			});
 			return false;
 		}
@@ -280,13 +377,19 @@ export function createWebhookClient(
 
 	async function postWebhookWithRetry(
 		payload: WebhookPayload,
+		target: WebhookDeliveryTarget,
 		source: DeliverySource,
 	): Promise<boolean> {
-		const ok = await postWebhookAttempt(payload, source, 1);
+		const ok = await postWebhookAttempt(payload, target, source, 1);
 		if (ok) return true;
 		runtime.counters.retries += 1;
-		log.info("webhook retry", { url: webhookConfig.url, event: payload.event, source });
-		return postWebhookAttempt(payload, source, 2);
+		log.info("webhook retry", {
+			url: target.url,
+			event: payload.event,
+			source,
+			target: target.kind,
+		});
+		return postWebhookAttempt(payload, target, source, 2);
 	}
 
 	async function sendTerminalWebhook(
@@ -301,20 +404,24 @@ export function createWebhookClient(
 	): Promise<boolean> {
 		const webhookEvent = statusToWebhookEvent(input.status);
 		if (!webhookEvent) return false;
-		if (!webhookConfig.events.includes(webhookEvent)) return false;
+
+		const agent = store.getAgent(input.agentId as AgentId);
+		const target = resolveTargetForEvent(webhookEvent, agent, fallbackWebhookConfig);
+		if (!target) return false;
 
 		const lastMessage = await getLastMessage(store, input.agentId as AgentId);
 		const payload: WebhookPayload = {
 			event: webhookEvent,
 			project: input.project,
 			agentId: input.agentId,
-			provider: input.provider,
+			provider: agent?.provider ?? input.provider,
 			status: input.status,
 			lastMessage,
 			timestamp: input.timestamp,
+			...callbackPayloadFields(target.callback),
 		};
 
-		return postWebhookWithRetry(payload, source);
+		return postWebhookWithRetry(payload, target, source);
 	}
 
 	const unsubscribe = eventBus.subscribe(
@@ -345,8 +452,7 @@ export function createWebhookClient(
 	);
 
 	async function runSafetyNetCycle(): Promise<void> {
-		const settings = webhookConfig.safetyNet;
-		if (!settings.enabled) return;
+		if (!safetyNetConfig.enabled) return;
 
 		runtime.counters.safetyNetCycles += 1;
 		const nowMs = Date.now();
@@ -397,10 +503,10 @@ export function createWebhookClient(
 
 			if (!isStuckCandidateStatus(agent.status)) continue;
 			const ageMs = nowMs - previous.sinceMs;
-			if (ageMs < settings.stuckAfterMs) continue;
+			if (ageMs < safetyNetConfig.stuckAfterMs) continue;
 
 			const lastWarnMs = lastStuckWarnAtMsByAgent.get(agent.id) ?? 0;
-			if (nowMs - lastWarnMs < settings.stuckWarnIntervalMs) continue;
+			if (nowMs - lastWarnMs < safetyNetConfig.stuckWarnIntervalMs) continue;
 
 			lastStuckWarnAtMsByAgent.set(agent.id, nowMs);
 			runtime.counters.safetyNetWarnings += 1;
@@ -427,10 +533,13 @@ export function createWebhookClient(
 			enabled: true,
 			startedAt: runtime.startedAt,
 			config: {
-				url: webhookConfig.url,
-				tokenConfigured: typeof webhookConfig.token === "string" && webhookConfig.token.length > 0,
-				events: [...webhookConfig.events],
-				safetyNet: { ...webhookConfig.safetyNet },
+				url: fallbackWebhookConfig?.url ?? "",
+				tokenConfigured:
+					typeof fallbackWebhookConfig?.token === "string" &&
+					fallbackWebhookConfig.token.length > 0,
+				events: fallbackWebhookConfig ? [...fallbackWebhookConfig.events] : [],
+				safetyNet: { ...safetyNetConfig },
+				globalFallbackConfigured: fallbackWebhookConfig !== null,
 			},
 			counters: { ...runtime.counters },
 			lastAttemptAt: runtime.lastAttemptAt,
@@ -448,7 +557,35 @@ export function createWebhookClient(
 
 	async function sendTestWebhook(input: WebhookTestInput = {}): Promise<WebhookTestResult> {
 		runtime.counters.manualTests += 1;
-		const event = input.event ?? webhookConfig.events[0] ?? "agent_completed";
+		const event = input.event ?? fallbackWebhookConfig?.events[0] ?? "agent_completed";
+		const callback: AgentCallback | undefined =
+			typeof input.url === "string" && input.url.trim().length > 0
+				? {
+						url: input.url.trim(),
+						...(trimToUndefined(input.token) ? { token: trimToUndefined(input.token) } : {}),
+						...(trimToUndefined(input.discordChannel)
+							? { discordChannel: trimToUndefined(input.discordChannel) }
+							: {}),
+						...(trimToUndefined(input.sessionKey)
+							? { sessionKey: trimToUndefined(input.sessionKey) }
+							: {}),
+						...(input.extra ? { extra: input.extra } : {}),
+					}
+				: undefined;
+		const target: WebhookDeliveryTarget | null = callback
+			? {
+					kind: "agent_callback",
+					url: callback.url,
+					...(callback.token ? { token: callback.token } : {}),
+					callback,
+				}
+			: fallbackWebhookConfig
+				? {
+						kind: "global_fallback",
+						url: fallbackWebhookConfig.url,
+						...(fallbackWebhookConfig.token ? { token: fallbackWebhookConfig.token } : {}),
+					}
+				: null;
 		const payload: WebhookPayload = {
 			event,
 			project: input.project ?? "__inspect_test__",
@@ -457,12 +594,17 @@ export function createWebhookClient(
 			status: input.status ?? defaultStatusForEvent(event),
 			lastMessage: input.lastMessage ?? "manual inspector webhook test",
 			timestamp: new Date().toISOString(),
+			...callbackPayloadFields(callback),
 		};
-		const ok = await postWebhookWithRetry(payload, "manual_test");
+
+		if (!target) {
+			return { ok: false, payload };
+		}
+		const ok = await postWebhookWithRetry(payload, target, "manual_test");
 		return { ok, payload };
 	}
 
-	if (webhookConfig.safetyNet.enabled) {
+	if (safetyNetConfig.enabled) {
 		void runSafetyNetCycle();
 		safetyNetTimer = setInterval(() => {
 			runSafetyNetCycle().catch((error) => {
@@ -470,14 +612,15 @@ export function createWebhookClient(
 					error: error instanceof Error ? error.message : String(error),
 				});
 			});
-		}, webhookConfig.safetyNet.intervalMs);
+		}, safetyNetConfig.intervalMs);
 	}
 
 	log.info("webhook client started", {
-		url: webhookConfig.url,
-		events: webhookConfig.events,
-		safetyNetEnabled: webhookConfig.safetyNet.enabled,
-		safetyNetIntervalMs: webhookConfig.safetyNet.intervalMs,
+		globalFallbackConfigured: fallbackWebhookConfig !== null,
+		url: fallbackWebhookConfig?.url,
+		events: fallbackWebhookConfig?.events ?? [],
+		safetyNetEnabled: safetyNetConfig.enabled,
+		safetyNetIntervalMs: safetyNetConfig.intervalMs,
 	});
 
 	const stop = (() => {

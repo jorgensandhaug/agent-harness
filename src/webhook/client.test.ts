@@ -144,6 +144,106 @@ describe("webhook/client", () => {
 		unsubscribe();
 	});
 
+	it("uses per-agent callback over global fallback and includes routing fields", async () => {
+		const store = createStore();
+		store.addAgent({
+			...baseAgent(),
+			callback: {
+				url: "https://callback.test/hook",
+				token: "callback-secret",
+				discordChannel: "alerts",
+				sessionKey: "session-42",
+				extra: { requestId: "req-1" },
+			},
+		});
+		const bus = createEventBus(100);
+
+		const calls: Array<{ url: string; auth: string | null; payload: unknown }> = [];
+		(globalThis as { fetch: typeof fetch }).fetch = (async (
+			input: RequestInfo | URL,
+			init?: RequestInit,
+		) => {
+			const request = new Request(input, init);
+			calls.push({
+				url: request.url,
+				auth: request.headers.get("authorization"),
+				payload: await request.json(),
+			});
+			return new Response(null, { status: 200 });
+		}) as typeof fetch;
+
+		const unsubscribe = createWebhookClient(
+			webhookConfig({
+				url: "https://global.test/fallback",
+				token: "global-secret",
+				events: ["agent_completed"],
+			}),
+			bus,
+			store,
+		);
+
+		bus.emit({
+			id: "evt-1b" as EventId,
+			ts: "2026-02-18T10:00:00.000Z",
+			project: "proj-1",
+			agentId: "abcd1234",
+			type: "status_changed",
+			from: "processing",
+			to: "idle",
+		});
+
+		await waitFor(() => calls.length === 1);
+		expect(calls[0]).toEqual({
+			url: "https://callback.test/hook",
+			auth: "Bearer callback-secret",
+			payload: {
+				event: "agent_completed",
+				project: "proj-1",
+				agentId: "abcd1234",
+				provider: "codex",
+				status: "idle",
+				lastMessage: null,
+				timestamp: "2026-02-18T10:00:00.000Z",
+				discordChannel: "alerts",
+				sessionKey: "session-42",
+				extra: { requestId: "req-1" },
+			},
+		});
+		unsubscribe();
+	});
+
+	it("posts per-agent callback even when global webhook config is missing", async () => {
+		const store = createStore();
+		store.addAgent({
+			...baseAgent(),
+			callback: {
+				url: "https://callback-only.test/hook",
+			},
+		});
+		const bus = createEventBus(100);
+
+		const urls: string[] = [];
+		(globalThis as { fetch: typeof fetch }).fetch = (async (input: RequestInfo | URL) => {
+			urls.push(new Request(input).url);
+			return new Response(null, { status: 200 });
+		}) as typeof fetch;
+
+		const unsubscribe = createWebhookClient(null, bus, store);
+		bus.emit({
+			id: "evt-1c" as EventId,
+			ts: "2026-02-18T10:00:00.000Z",
+			project: "proj-1",
+			agentId: "abcd1234",
+			type: "status_changed",
+			from: "processing",
+			to: "idle",
+		});
+
+		await waitFor(() => urls.length === 1);
+		expect(urls[0]).toBe("https://callback-only.test/hook");
+		unsubscribe();
+	});
+
 	it("does not post when status change does not start from processing", async () => {
 		const store = createStore();
 		store.addAgent(baseAgent());

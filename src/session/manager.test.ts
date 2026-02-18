@@ -534,6 +534,40 @@ describe("session/manager.initial-input", () => {
 });
 
 describe("session/manager.subscriptions", () => {
+	it("persists per-agent callback routing", async () => {
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(makeConfig(), store, eventBus);
+
+		const projectRes = await manager.createProject("pc1", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await manager.createAgent(
+			"pc1",
+			"codex",
+			"Reply with exactly: 4",
+			undefined,
+			undefined,
+			{
+				url: "https://receiver.test/harness-webhook",
+				token: "callback-token",
+				discordChannel: "alerts",
+				sessionKey: "session-main",
+				extra: { requestId: "req-1" },
+			},
+		);
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+		expect(createRes.value.callback).toEqual({
+			url: "https://receiver.test/harness-webhook",
+			token: "callback-token",
+			discordChannel: "alerts",
+			sessionKey: "session-main",
+			extra: { requestId: "req-1" },
+		});
+	});
+
 	it("rejects unknown subscription id", async () => {
 		const store = createStore();
 		const eventBus = createEventBus(500);

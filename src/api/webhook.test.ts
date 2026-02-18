@@ -47,6 +47,7 @@ function makeWebhookStatus(url = "http://receiver.test/harness-webhook"): Webhoo
 				stuckAfterMs: 180000,
 				stuckWarnIntervalMs: 300000,
 			},
+			globalFallbackConfigured: true,
 		},
 		counters: {
 			attempts: 3,

@@ -34,7 +34,7 @@ import {
 } from "../types.ts";
 import { formatAttachCommand } from "./attach.ts";
 import type { Store } from "./store.ts";
-import type { Agent, Project } from "./types.ts";
+import type { Agent, AgentCallback, Project } from "./types.ts";
 
 export type ManagerError =
 	| { code: "PROJECT_NOT_FOUND"; name: string }
@@ -580,6 +580,7 @@ export function createManager(
 		task: string,
 		model?: string,
 		subscriptionId?: string,
+		callback?: AgentCallback,
 	): Promise<Result<Agent, ManagerError>> {
 		const pName = projectName(projectNameStr);
 		const project = store.getProject(pName);
@@ -740,6 +741,7 @@ export function createManager(
 			...(providerRuntimeDir ? { providerRuntimeDir } : {}),
 			...(providerSessionFile ? { providerSessionFile } : {}),
 			...(subscriptionId ? { subscriptionId } : {}),
+			...(callback ? { callback } : {}),
 			createdAt: now,
 			lastActivity: now,
 			lastCapturedOutput: "",

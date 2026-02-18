@@ -9,6 +9,15 @@ const CreateAgentBody = z.object({
 	task: z.string().min(1),
 	model: z.string().optional(),
 	subscription: z.string().min(1).optional(),
+	callback: z
+		.object({
+			url: z.string().url(),
+			token: z.string().min(1).optional(),
+			discordChannel: z.string().min(1).optional(),
+			sessionKey: z.string().min(1).optional(),
+			extra: z.record(z.string()).optional(),
+		})
+		.optional(),
 });
 
 const SendInputBody = z.object({
@@ -48,6 +57,7 @@ export function registerAgentRoutes(app: Hono, manager: Manager): void {
 			parsed.data.task,
 			parsed.data.model,
 			parsed.data.subscription,
+			parsed.data.callback,
 		);
 		if (!result.ok) {
 			const mapped = mapManagerError(result.error);

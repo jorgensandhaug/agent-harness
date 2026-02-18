@@ -34,9 +34,7 @@ export async function serveCommand(): Promise<void> {
 	log.info("event bus initialized");
 	const debugTracker = createDebugTracker(config, eventBus);
 	log.info("debug tracker initialized");
-	const webhookClient = config.webhook
-		? createWebhookClient(config.webhook, eventBus, store)
-		: null;
+	const webhookClient = createWebhookClient(config.webhook ?? null, eventBus, store);
 
 	// 5. Initialize session manager
 	const manager = createManager(config, store, eventBus, debugTracker);
@@ -76,7 +74,7 @@ export async function serveCommand(): Promise<void> {
 		// Stop poller
 		poller.stop();
 		debugTracker.stop();
-		webhookClient?.();
+		webhookClient();
 
 		// Stop accepting new requests
 		server.stop(true);

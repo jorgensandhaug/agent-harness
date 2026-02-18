@@ -120,6 +120,40 @@ export function registerWebhookRoutes(app: Hono, webhookClient: WebhookClient | 
 		if (typeof lastMessageRaw === "string" || lastMessageRaw === null) {
 			input.lastMessage = lastMessageRaw;
 		}
+		// biome-ignore lint/complexity/useLiteralKeys: index signature + noPropertyAccessFromIndexSignature
+		const urlRaw = body["url"];
+		if (typeof urlRaw === "string") {
+			input.url = urlRaw;
+		}
+		// biome-ignore lint/complexity/useLiteralKeys: index signature + noPropertyAccessFromIndexSignature
+		const tokenRaw = body["token"];
+		if (typeof tokenRaw === "string") {
+			input.token = tokenRaw;
+		}
+		// biome-ignore lint/complexity/useLiteralKeys: index signature + noPropertyAccessFromIndexSignature
+		const discordChannelRaw = body["discordChannel"];
+		if (typeof discordChannelRaw === "string") {
+			input.discordChannel = discordChannelRaw;
+		}
+		// biome-ignore lint/complexity/useLiteralKeys: index signature + noPropertyAccessFromIndexSignature
+		const sessionKeyRaw = body["sessionKey"];
+		if (typeof sessionKeyRaw === "string") {
+			input.sessionKey = sessionKeyRaw;
+		}
+		// biome-ignore lint/complexity/useLiteralKeys: index signature + noPropertyAccessFromIndexSignature
+		const extraRaw = body["extra"];
+		if (extraRaw && typeof extraRaw === "object" && !Array.isArray(extraRaw)) {
+			const entries = Object.entries(extraRaw);
+			const parsedExtra: Record<string, string> = {};
+			for (const [key, value] of entries) {
+				if (typeof value === "string") {
+					parsedExtra[key] = value;
+				}
+			}
+			if (Object.keys(parsedExtra).length > 0) {
+				input.extra = parsedExtra;
+			}
+		}
 
 		const result = await webhookClient.sendTestWebhook(input);
 
