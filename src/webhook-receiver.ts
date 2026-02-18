@@ -25,8 +25,6 @@ const ReceiverConfigSchema = z
 		port: z.number().int().min(1).max(65535),
 		bindAddress: z.string().min(1).default("127.0.0.1"),
 		token: z.string().min(1).optional(),
-		openclawCommand: z.string().min(1).default("openclaw"),
-		openclawTimeoutMs: z.number().int().min(100).max(120000).default(5000),
 		openclawHooksUrl: z.string().url().optional(),
 		openclawHooksToken: z.string().min(1).optional(),
 	})
@@ -41,8 +39,6 @@ type EnvSource = Readonly<{
 	AH_WEBHOOK_RECEIVER_PORT?: string;
 	AH_WEBHOOK_RECEIVER_BIND_ADDRESS?: string;
 	AH_WEBHOOK_RECEIVER_TOKEN?: string;
-	AH_WEBHOOK_RECEIVER_OPENCLAW_BIN?: string;
-	AH_WEBHOOK_RECEIVER_OPENCLAW_TIMEOUT_MS?: string;
 	AH_WEBHOOK_RECEIVER_HOOKS_URL?: string;
 	AH_WEBHOOK_RECEIVER_HOOKS_TOKEN?: string;
 	XDG_CONFIG_HOME?: string;
@@ -128,10 +124,6 @@ export function loadConfig(env: EnvSource = process.env as EnvSource): ReceiverC
 	const filePort = typeof fileConfig.port === "number" ? fileConfig.port : 7071;
 	const fileBindAddress =
 		typeof fileConfig.bindAddress === "string" ? fileConfig.bindAddress : "127.0.0.1";
-	const fileOpenclawCommand =
-		typeof fileConfig.openclawCommand === "string" ? fileConfig.openclawCommand : "openclaw";
-	const fileOpenclawTimeoutMs =
-		typeof fileConfig.openclawTimeoutMs === "number" ? fileConfig.openclawTimeoutMs : 5000;
 	const fileToken = typeof fileConfig.token === "string" ? fileConfig.token : undefined;
 	const fileHooksUrl =
 		typeof fileConfig.openclawHooksUrl === "string" ? fileConfig.openclawHooksUrl : undefined;
@@ -143,11 +135,6 @@ export function loadConfig(env: EnvSource = process.env as EnvSource): ReceiverC
 		port: parseIntWithDefault(env.AH_WEBHOOK_RECEIVER_PORT, filePort),
 		bindAddress: env.AH_WEBHOOK_RECEIVER_BIND_ADDRESS?.trim() || fileBindAddress,
 		token: env.AH_WEBHOOK_RECEIVER_TOKEN?.trim() || fileToken,
-		openclawCommand: env.AH_WEBHOOK_RECEIVER_OPENCLAW_BIN?.trim() || fileOpenclawCommand,
-		openclawTimeoutMs: parseIntWithDefault(
-			env.AH_WEBHOOK_RECEIVER_OPENCLAW_TIMEOUT_MS,
-			fileOpenclawTimeoutMs,
-		),
 		openclawHooksUrl: env.AH_WEBHOOK_RECEIVER_HOOKS_URL?.trim() || fileHooksUrl,
 		openclawHooksToken: env.AH_WEBHOOK_RECEIVER_HOOKS_TOKEN?.trim() || fileHooksToken,
 	});
@@ -182,43 +169,36 @@ export function formatEventMessage(payload: WebhookPayload): string {
 	return `${header}\n${extraLine}\n${tail.slice(0, 1200)}`;
 }
 
-async function readStreamText(stream: ReadableStream<Uint8Array> | number | null): Promise<string> {
-	if (!stream || typeof stream === "number") return "";
-	return new Response(stream).text();
-}
-
 async function runDiscordAction(config: ReceiverConfig, payload: WebhookPayload): Promise<void> {
-	const message = formatEventMessage(payload);
-	const cmd = [
-		config.openclawCommand,
-		"message",
-		"send",
-		"--channel",
-		"discord",
-		"--target",
-		`channel:${payload.discordChannel}`,
-		"--message",
-		message,
-	];
-	const proc = Bun.spawn(cmd, {
-		stdout: "pipe",
-		stderr: "pipe",
-	});
-
-	const timeout = new Promise<"timeout">((resolve) => {
-		setTimeout(() => resolve("timeout"), config.openclawTimeoutMs);
-	});
-
-	const exitOrTimeout = await Promise.race([proc.exited, timeout]);
-	if (exitOrTimeout === "timeout") {
-		proc.kill();
-		throw new Error(`openclaw discord command timed out after ${config.openclawTimeoutMs}ms`);
+	const hooksUrl = config.openclawHooksUrl;
+	if (!hooksUrl) {
+		throw new Error("hooks/tools endpoint is not configured");
 	}
-	if (exitOrTimeout !== 0) {
-		const stderr = (await readStreamText(proc.stderr)).trim();
-		throw new Error(
-			`openclaw discord command failed (${exitOrTimeout})${stderr ? `: ${stderr}` : ""}`,
-		);
+	// Derive gateway base URL from hooks URL (e.g. http://host:port/hooks/agent -> http://host:port)
+	const baseUrl = hooksUrl.replace(/\/hooks\/.*$/, "");
+	const toolsUrl = `${baseUrl}/tools/invoke`;
+	const message = formatEventMessage(payload);
+	const headers = new Headers({ "Content-Type": "application/json" });
+	if (config.openclawHooksToken) {
+		headers.set("Authorization", `Bearer ${config.openclawHooksToken}`);
+	}
+	const response = await fetch(toolsUrl, {
+		method: "POST",
+		headers,
+		body: JSON.stringify({
+			tool: "message",
+			args: {
+				action: "send",
+				channel: "discord",
+				target: `channel:${payload.discordChannel}`,
+				message,
+			},
+		}),
+		signal: AbortSignal.timeout(10000),
+	});
+	if (!response.ok) {
+		const body = await response.text().catch(() => "");
+		throw new Error(`tools/invoke http ${response.status}: ${body.slice(0, 200)}`);
 	}
 }
 
@@ -328,7 +308,6 @@ export function startWebhookReceiver(config: ReceiverConfig): ReturnType<typeof 
 		port: server.port,
 		bindAddress: config.bindAddress,
 		tokenRequired: Boolean(config.token),
-		openclawCommand: config.openclawCommand,
 		hooksConfigured: Boolean(config.openclawHooksUrl),
 	});
 	return server;
