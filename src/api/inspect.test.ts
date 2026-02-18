@@ -43,6 +43,7 @@ describe("api/inspect.route", () => {
 		expect(html).toContain("Copy attach");
 		expect(html).toContain("Connect Existing");
 		expect(html).toContain("Status source");
+		expect(html).toContain("Subscription (optional)");
 		expect(html).toContain("Internals messages");
 		expect(html).toContain("Last assistant message (internals)");
 		expect(html).toContain("/messages?limit=");

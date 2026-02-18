@@ -256,6 +256,11 @@ const INSPECT_HTML = String.raw`<!doctype html>
 				</div>
 
 				<div class="row">
+					<label for="subscription">Subscription (optional)</label>
+					<select id="subscription"></select>
+				</div>
+
+				<div class="row">
 					<label for="task">Initial task</label>
 					<textarea id="task">Reply with exactly: 4</textarea>
 				</div>
@@ -289,6 +294,8 @@ const INSPECT_HTML = String.raw`<!doctype html>
 					<div id="state-project">-</div>
 					<b>Agent</b>
 					<div id="state-agent">-</div>
+					<b>Subscription</b>
+					<div id="state-subscription">-</div>
 					<b>Status</b>
 					<div id="state-status">-</div>
 					<b>Status source</b>
@@ -377,6 +384,7 @@ const INSPECT_HTML = String.raw`<!doctype html>
 					const state = {
 						projectName: "",
 						agentId: "",
+						subscriptionId: "",
 						status: "idle",
 						lastStatusSource: "",
 						messagesSource: "",
@@ -409,6 +417,7 @@ const INSPECT_HTML = String.raw`<!doctype html>
 					existingAgent: document.getElementById("existing-agent"),
 					provider: document.getElementById("provider"),
 					model: document.getElementById("model"),
+					subscription: document.getElementById("subscription"),
 					task: document.getElementById("task"),
 					startAgent: document.getElementById("start-agent"),
 					reconnect: document.getElementById("reconnect-stream"),
@@ -417,6 +426,7 @@ const INSPECT_HTML = String.raw`<!doctype html>
 					uiStatus: document.getElementById("ui-status"),
 					stateProject: document.getElementById("state-project"),
 					stateAgent: document.getElementById("state-agent"),
+					stateSubscription: document.getElementById("state-subscription"),
 					stateStatus: document.getElementById("state-status"),
 					stateStatusSource: document.getElementById("state-status-source"),
 					stateEventId: document.getElementById("state-event-id"),
@@ -559,6 +569,7 @@ const INSPECT_HTML = String.raw`<!doctype html>
 						state.mismatchBadges = computeMismatches();
 						el.stateProject.textContent = state.projectName || "-";
 						el.stateAgent.textContent = state.agentId || "-";
+						el.stateSubscription.textContent = state.subscriptionId || "-";
 						el.stateStatus.textContent = state.status || "-";
 						el.stateStatusSource.textContent = state.lastStatusSource || "-";
 						el.stateEventId.textContent = state.lastEventId || "-";
@@ -581,6 +592,7 @@ const INSPECT_HTML = String.raw`<!doctype html>
 						const debugState = {
 							projectName: state.projectName || null,
 							agentId: state.agentId || null,
+							subscriptionId: state.subscriptionId || null,
 							status: state.status || null,
 							lastStatusSource: state.lastStatusSource || null,
 							messagesSource: state.messagesSource || null,
@@ -631,6 +643,46 @@ const INSPECT_HTML = String.raw`<!doctype html>
 					}
 				}
 
+				function subscriptionLabel(subscription) {
+					const id = String(subscription.id || "");
+					const mode = typeof subscription.mode === "string" ? subscription.mode : "unknown";
+					const provider =
+						typeof subscription.provider === "string" ? subscription.provider : "unknown";
+					const valid = subscription.valid === false ? "invalid" : "ok";
+					return id + " (" + provider + "/" + mode + ", " + valid + ")";
+				}
+
+				async function refreshSubscriptionsList() {
+					const provider = String(el.provider.value || "").trim();
+					const response = await api("/api/v1/subscriptions");
+					if (!response.ok) {
+						setSelectOptions(el.subscription, [], "(failed to load subscriptions)");
+						state.lastError = "load subscriptions failed: " + response.status;
+						renderState();
+						return;
+					}
+					const json = await response.json();
+					const subscriptions = Array.isArray(json.subscriptions) ? json.subscriptions : [];
+					const options = subscriptions
+						.filter(
+							(subscription) =>
+								subscription &&
+								typeof subscription === "object" &&
+								subscription.provider === provider,
+						)
+						.map((subscription) => ({
+							value: String(subscription.id || ""),
+							label: subscriptionLabel(subscription),
+						}));
+
+					const withDefault = [{ value: "", label: "(none / provider default)" }, ...options];
+					const selected = String(el.subscription.value || "").trim();
+					setSelectOptions(el.subscription, withDefault, "(none / provider default)");
+					if (selected && withDefault.some((option) => option.value === selected)) {
+						el.subscription.value = selected;
+					}
+				}
+
 				async function refreshAgentsList() {
 					const project = String(el.existingProject.value || "").trim();
 					if (!project) {
@@ -650,13 +702,16 @@ const INSPECT_HTML = String.raw`<!doctype html>
 					const agents = Array.isArray(json.agents) ? json.agents : [];
 					const options = agents.map((agent) => ({
 						value: String(agent.id || ""),
-						label:
-							String(agent.id || "") +
-							" (" +
-							String(agent.provider || "unknown") +
-							"/" +
-							String(agent.status || "unknown") +
-							")",
+						label: (() => {
+							const id = String(agent.id || "");
+							const provider = String(agent.provider || "unknown");
+							const status = String(agent.status || "unknown");
+							const subscription =
+								typeof agent.subscriptionId === "string" && agent.subscriptionId.length > 0
+									? ", sub=" + agent.subscriptionId
+									: "";
+							return id + " (" + provider + "/" + status + subscription + ")";
+						})(),
 					}));
 					setSelectOptions(el.existingAgent, options, "(no agents)");
 
@@ -836,6 +891,10 @@ const INSPECT_HTML = String.raw`<!doctype html>
 							state.attachCommand = agentJson.agent.attachCommand || state.attachCommand;
 							state.windowName = agentJson.agent.windowName || "";
 							state.lastActivity = agentJson.agent.lastActivity || "";
+							state.subscriptionId =
+								typeof agentJson.agent.subscriptionId === "string"
+									? agentJson.agent.subscriptionId
+									: state.subscriptionId;
 						}
 
 						const outputRes = await api(
@@ -944,11 +1003,18 @@ const INSPECT_HTML = String.raw`<!doctype html>
 						const json = await response.json();
 						state.projectName = projectName;
 						state.agentId = agentId;
+						state.subscriptionId =
+							json.agent && typeof json.agent.subscriptionId === "string"
+								? json.agent.subscriptionId
+								: "";
 						state.status = json.status || "idle";
 						state.lastStatusSource = "";
 						state.attachCommand = json.agent && json.agent.attachCommand ? json.agent.attachCommand : "";
 						state.windowName = json.agent && json.agent.windowName ? json.agent.windowName : "";
 						state.lastActivity = json.agent && json.agent.lastActivity ? json.agent.lastActivity : "";
+						if (json.agent && typeof json.agent.provider === "string") {
+							el.provider.value = json.agent.provider;
+						}
 						state.eventCounts = {};
 						state.eventLines = [];
 						state.eventTotal = 0;
@@ -962,6 +1028,15 @@ const INSPECT_HTML = String.raw`<!doctype html>
 						state.mismatchBadges = [];
 
 						pushEvent("[" + stamp() + "] connected existing agent: " + agentId);
+						await refreshSubscriptionsList();
+						if (
+							state.subscriptionId &&
+							Array.from(el.subscription.options).some(
+								(option) => option.value === state.subscriptionId,
+							)
+						) {
+							el.subscription.value = state.subscriptionId;
+						}
 						renderState();
 						await copyAttach();
 						connectStream();
@@ -980,6 +1055,7 @@ const INSPECT_HTML = String.raw`<!doctype html>
 					const provider = String(el.provider.value || "").trim();
 					const task = String(el.task.value || "").trim();
 					const model = String(el.model.value || "").trim();
+					const subscription = String(el.subscription.value || "").trim();
 
 					if (!projectName || !cwd || !provider || !task) {
 						setUiStatus("project/cwd/provider/task required");
@@ -997,6 +1073,7 @@ const INSPECT_HTML = String.raw`<!doctype html>
 									provider,
 									task,
 									model: model || undefined,
+									subscription: subscription || undefined,
 								}),
 							},
 						);
@@ -1008,6 +1085,11 @@ const INSPECT_HTML = String.raw`<!doctype html>
 						const createAgentJson = await createAgentRes.json();
 						state.projectName = projectName;
 						state.agentId = createAgentJson.agent.id || "";
+						state.subscriptionId =
+							(typeof createAgentJson.agent.subscriptionId === "string" &&
+							createAgentJson.agent.subscriptionId.length > 0
+								? createAgentJson.agent.subscriptionId
+								: subscription) || "";
 						state.status = createAgentJson.agent.status || "starting";
 						state.lastStatusSource = "";
 						state.attachCommand = createAgentJson.agent.attachCommand || "";
@@ -1086,6 +1168,7 @@ const INSPECT_HTML = String.raw`<!doctype html>
 						closeStream();
 						stopPolling();
 						state.agentId = "";
+						state.subscriptionId = "";
 						state.status = "idle";
 						state.lastStatusSource = "";
 						state.attachCommand = "";
@@ -1110,6 +1193,7 @@ const INSPECT_HTML = String.raw`<!doctype html>
 						stopPolling();
 						state.projectName = "";
 						state.agentId = "";
+						state.subscriptionId = "";
 						state.status = "idle";
 						state.lastStatusSource = "";
 						state.attachCommand = "";
@@ -1133,6 +1217,9 @@ const INSPECT_HTML = String.raw`<!doctype html>
 				});
 				el.refreshProjects.addEventListener("click", () => {
 					void refreshProjectsList();
+				});
+				el.provider.addEventListener("change", () => {
+					void refreshSubscriptionsList();
 				});
 				el.existingProject.addEventListener("change", () => {
 					void refreshAgentsList();
@@ -1158,6 +1245,7 @@ const INSPECT_HTML = String.raw`<!doctype html>
 
 				el.projectName.value = "inspect-" + Date.now();
 				el.projectCwd.value = ".";
+				void refreshSubscriptionsList();
 				void refreshProjectsList();
 				renderState();
 			})();
