@@ -44,6 +44,38 @@ describe("api/errors.mapManagerError", () => {
 				},
 			},
 			{
+				input: { code: "SUBSCRIPTION_NOT_FOUND", id: "sub-a" },
+				expected: {
+					status: 400,
+					body: { error: "INVALID_REQUEST", message: "Subscription 'sub-a' not found" },
+				},
+			},
+			{
+				input: {
+					code: "SUBSCRIPTION_PROVIDER_MISMATCH",
+					id: "sub-a",
+					provider: "codex",
+					subscriptionProvider: "claude-code",
+				},
+				expected: {
+					status: 400,
+					body: {
+						error: "INVALID_REQUEST",
+						message: "Subscription 'sub-a' is for provider 'claude-code', not 'codex'",
+					},
+				},
+			},
+			{
+				input: { code: "SUBSCRIPTION_INVALID", id: "sub-a", reason: "bad auth" },
+				expected: {
+					status: 400,
+					body: {
+						error: "INVALID_REQUEST",
+						message: "Subscription 'sub-a' invalid: bad auth",
+					},
+				},
+			},
+			{
 				input: { code: "TMUX_ERROR", message: "boom" },
 				expected: {
 					status: 500,

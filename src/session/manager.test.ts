@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { HarnessConfig } from "../config.ts";
 import { createEventBus } from "../events/bus.ts";
 import type { NormalizedEvent } from "../events/types.ts";
@@ -46,6 +49,7 @@ const fake: FakeTmuxState = {
 let simulateSlowCodexStartup = false;
 let simulateClaudeStartupConfirm = false;
 let simulateCodexPasteEnterRace = false;
+const cleanupDirs: string[] = [];
 
 function resetFake(): void {
 	fake.sessions.clear();
@@ -242,7 +246,7 @@ beforeEach(() => {
 	}) as typeof Bun.spawn;
 });
 
-afterEach(() => {
+afterEach(async () => {
 	(Bun as { spawn: typeof Bun.spawn }).spawn = originalSpawn;
 	if (originalDelay === undefined) {
 		process.env.HARNESS_INITIAL_TASK_DELAY_MS = undefined;
@@ -259,6 +263,7 @@ afterEach(() => {
 	} else {
 		process.env.HARNESS_TMUX_PASTE_ENTER_DELAY_MS = originalPasteEnterDelay;
 	}
+	await Promise.all(cleanupDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
 async function waitFor(check: () => boolean, timeoutMs: number, intervalMs = 10): Promise<void> {
@@ -270,6 +275,12 @@ async function waitFor(check: () => boolean, timeoutMs: number, intervalMs = 10)
 	throw new Error(`timeout after ${timeoutMs}ms`);
 }
 
+async function makeTempDir(prefix: string): Promise<string> {
+	const dir = await mkdtemp(join(tmpdir(), prefix));
+	cleanupDirs.push(dir);
+	return dir;
+}
+
 function makeConfig(): HarnessConfig {
 	return {
 		port: 0,
@@ -279,6 +290,7 @@ function makeConfig(): HarnessConfig {
 		pollIntervalMs: 200,
 		captureLines: 200,
 		maxEventHistory: 1000,
+		subscriptions: {},
 		providers: {
 			"claude-code": { command: "claude", extraArgs: [], env: {}, enabled: true },
 			codex: { command: "codex", extraArgs: [], env: {}, enabled: true },
@@ -518,5 +530,74 @@ describe("session/manager.initial-input", () => {
 				process.env.HARNESS_TMUX_PASTE_ENTER_DELAY_MS = priorPasteDelay;
 			}
 		}
+	});
+});
+
+describe("session/manager.subscriptions", () => {
+	it("rejects unknown subscription id", async () => {
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(makeConfig(), store, eventBus);
+
+		const projectRes = await manager.createProject("ps1", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await manager.createAgent(
+			"ps1",
+			"codex",
+			"Reply with exactly: 4",
+			undefined,
+			"missing-sub",
+		);
+		expect(createRes.ok).toBe(false);
+		if (createRes.ok) throw new Error("expected failure");
+		expect(createRes.error.code).toBe("SUBSCRIPTION_NOT_FOUND");
+	});
+
+	it("materializes claude subscription runtime dir and sets subscriptionId on agent", async () => {
+		const sourceDir = await makeTempDir("ah-sub-claude-src-");
+		await Bun.write(
+			join(sourceDir, ".credentials.json"),
+			JSON.stringify({
+				claudeAiOauth: {
+					accessToken: "sk-ant-oat01-test",
+					scopes: ["user:inference"],
+				},
+			}),
+		);
+
+		const config = makeConfig();
+		config.subscriptions = {
+			"claude-sub": {
+				provider: "claude-code",
+				mode: "oauth",
+				sourceDir,
+			},
+		};
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(config, store, eventBus);
+
+		const projectRes = await manager.createProject("ps2", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await manager.createAgent(
+			"ps2",
+			"claude-code",
+			"Reply with exactly: 4",
+			undefined,
+			"claude-sub",
+		);
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+		expect(createRes.value.subscriptionId).toBe("claude-sub");
+		expect(createRes.value.providerRuntimeDir).toBeDefined();
+		if (!createRes.value.providerRuntimeDir) throw new Error("missing runtime dir");
+		const runtimeCredentials = Bun.file(
+			join(createRes.value.providerRuntimeDir, ".credentials.json"),
+		);
+		expect(await runtimeCredentials.exists()).toBe(true);
 	});
 });

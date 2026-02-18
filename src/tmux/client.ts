@@ -76,24 +76,60 @@ export async function createWindow(
 	cwd: string,
 	cmd?: readonly string[],
 	env?: Record<string, string>,
+	unsetEnv?: readonly string[],
 ): Promise<Result<string, TmuxError>> {
-	// Set environment variables in the session before creating the window
-	if (env) {
-		for (const [k, v] of Object.entries(env)) {
-			const envResult = await setEnv(session, k, v);
-			if (!envResult.ok) return envResult;
-		}
-	}
-
 	const args = ["new-window", "-t", session, "-n", name, "-c", cwd, "-P", "-F", "#{pane_id}"];
-	if (cmd && cmd.length > 0) {
-		args.push(cmd.join(" "));
+	const command = buildWindowCommand(cmd, env, unsetEnv);
+	if (command !== null) {
+		args.push(command);
 	}
 
 	const result = await exec(args);
 	if (!result.ok) return result;
 
 	return ok(result.value.trim());
+}
+
+function shellQuote(value: string): string {
+	if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(value)) {
+		return value;
+	}
+	return `'${value.replaceAll("'", "'\"'\"'")}'`;
+}
+
+function buildWindowCommand(
+	cmd?: readonly string[],
+	env?: Record<string, string>,
+	unsetEnv?: readonly string[],
+): string | null {
+	const hasCmd = Boolean(cmd && cmd.length > 0);
+	const envEntries = Object.entries(env ?? {}).sort((a, b) => a[0].localeCompare(b[0]));
+	const unsetUnique = Array.from(
+		new Set((unsetEnv ?? []).filter((k) => k.trim().length > 0)),
+	).sort();
+	const hasEnv = envEntries.length > 0;
+	const hasUnset = unsetUnique.length > 0;
+	if (!hasCmd && !hasEnv && !hasUnset) {
+		return null;
+	}
+
+	const parts: string[] = [];
+	if (hasEnv || hasUnset) {
+		parts.push("env");
+		for (const key of unsetUnique) {
+			parts.push("-u", key);
+		}
+		for (const [key, value] of envEntries) {
+			parts.push(`${key}=${value}`);
+		}
+	}
+	if (hasCmd) {
+		parts.push(...(cmd ?? []));
+	} else {
+		parts.push("sh");
+	}
+
+	return parts.map(shellQuote).join(" ");
 }
 
 export async function sendInput(target: string, text: string): Promise<Result<void, TmuxError>> {

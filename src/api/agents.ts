@@ -8,6 +8,7 @@ const CreateAgentBody = z.object({
 	provider: z.string().min(1),
 	task: z.string().min(1),
 	model: z.string().optional(),
+	subscription: z.string().min(1).optional(),
 });
 
 const SendInputBody = z.object({
@@ -46,6 +47,7 @@ export function registerAgentRoutes(app: Hono, manager: Manager): void {
 			parsed.data.provider,
 			parsed.data.task,
 			parsed.data.model,
+			parsed.data.subscription,
 		);
 		if (!result.ok) {
 			const mapped = mapManagerError(result.error);

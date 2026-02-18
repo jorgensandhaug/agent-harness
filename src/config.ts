@@ -27,6 +27,36 @@ const AuthConfigSchema = z
 	})
 	.strict();
 
+const ClaudeSubscriptionSchema = z
+	.object({
+		provider: z.literal("claude-code"),
+		mode: z.literal("oauth").default("oauth"),
+		sourceDir: z.string().min(1),
+		expected: z
+			.object({
+				subscriptionType: z.string().min(1).optional(),
+				rateLimitTier: z.string().min(1).optional(),
+			})
+			.strict()
+			.optional(),
+	})
+	.strict();
+
+const CodexSubscriptionSchema = z
+	.object({
+		provider: z.literal("codex"),
+		mode: z.enum(["chatgpt", "apikey"]).default("chatgpt"),
+		sourceDir: z.string().min(1),
+		workspaceId: z.string().min(1).optional(),
+		enforceWorkspace: z.boolean().default(false),
+	})
+	.strict();
+
+const SubscriptionConfigSchema = z.discriminatedUnion("provider", [
+	ClaudeSubscriptionSchema,
+	CodexSubscriptionSchema,
+]);
+
 const HarnessConfigSchema = z
 	.object({
 		port: z.number().int().min(1).max(65535).default(7070),
@@ -38,6 +68,7 @@ const HarnessConfigSchema = z
 		maxEventHistory: z.number().int().min(100).max(100000).default(10000),
 		auth: AuthConfigSchema.optional(),
 		webhook: WebhookConfigSchema.optional(),
+		subscriptions: z.record(SubscriptionConfigSchema).default({}),
 		providers: z.record(ProviderConfigSchema).default({
 			"claude-code": {
 				command: "claude",
@@ -65,12 +96,28 @@ const HarnessConfigSchema = z
 			},
 		}),
 	})
-	.strict();
+	.strict()
+	.superRefine((value, ctx) => {
+		for (const [id, subscription] of Object.entries(value.subscriptions)) {
+			if (
+				subscription.provider === "codex" &&
+				subscription.enforceWorkspace &&
+				(!subscription.workspaceId || subscription.workspaceId.trim().length === 0)
+			) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ["subscriptions", id, "workspaceId"],
+					message: "workspaceId is required when enforceWorkspace=true",
+				});
+			}
+		}
+	});
 
 export type HarnessConfig = z.infer<typeof HarnessConfigSchema>;
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 export type WebhookConfig = z.infer<typeof WebhookConfigSchema>;
 export type WebhookEvent = z.infer<typeof WebhookEventSchema>;
+export type SubscriptionConfig = z.infer<typeof SubscriptionConfigSchema>;
 
 export async function loadConfig(path?: string): Promise<HarnessConfig> {
 	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation

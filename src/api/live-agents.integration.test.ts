@@ -67,6 +67,7 @@ function makeConfig(tmuxPrefix: string): HarnessConfig {
 		pollIntervalMs: 200,
 		captureLines: 200,
 		maxEventHistory: 5000,
+		subscriptions: {},
 		providers: {
 			"claude-code": {
 				command: "claude",

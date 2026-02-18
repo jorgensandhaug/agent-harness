@@ -35,6 +35,27 @@ export function mapManagerError(error: ManagerError): MappedError {
 				status: 400,
 				body: { error: "INVALID_REQUEST", message: `Provider '${error.name}' is disabled` },
 			};
+		case "SUBSCRIPTION_NOT_FOUND":
+			return {
+				status: 400,
+				body: { error: "INVALID_REQUEST", message: `Subscription '${error.id}' not found` },
+			};
+		case "SUBSCRIPTION_PROVIDER_MISMATCH":
+			return {
+				status: 400,
+				body: {
+					error: "INVALID_REQUEST",
+					message: `Subscription '${error.id}' is for provider '${error.subscriptionProvider}', not '${error.provider}'`,
+				},
+			};
+		case "SUBSCRIPTION_INVALID":
+			return {
+				status: 400,
+				body: {
+					error: "INVALID_REQUEST",
+					message: `Subscription '${error.id}' invalid: ${error.reason}`,
+				},
+			};
 		case "TMUX_ERROR":
 			return {
 				status: 500,

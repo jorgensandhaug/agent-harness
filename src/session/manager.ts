@@ -1,14 +1,24 @@
 import { randomUUID } from "node:crypto";
-import { access, lstat, mkdir, symlink } from "node:fs/promises";
+import {
+	access,
+	chmod,
+	copyFile,
+	lstat,
+	mkdir,
+	readFile,
+	symlink,
+	writeFile,
+} from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import type { HarnessConfig } from "../config.ts";
+import type { HarnessConfig, SubscriptionConfig } from "../config.ts";
 import type { DebugTracker } from "../debug/tracker.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { StatusChangeSource } from "../events/types.ts";
 import { log } from "../log.ts";
 import { getProvider } from "../providers/registry.ts";
 import type { AgentStatus } from "../providers/types.ts";
+import { summarizeSubscription } from "../subscriptions/credentials.ts";
 import * as tmux from "../tmux/client.ts";
 import {
 	type AgentId,
@@ -31,6 +41,14 @@ export type ManagerError =
 	| { code: "AGENT_NOT_FOUND"; id: string; project: string }
 	| { code: "UNKNOWN_PROVIDER"; name: string }
 	| { code: "PROVIDER_DISABLED"; name: string }
+	| { code: "SUBSCRIPTION_NOT_FOUND"; id: string }
+	| {
+			code: "SUBSCRIPTION_PROVIDER_MISMATCH";
+			id: string;
+			provider: string;
+			subscriptionProvider: string;
+	  }
+	| { code: "SUBSCRIPTION_INVALID"; id: string; reason: string }
 	| { code: "TMUX_ERROR"; message: string };
 
 export function createManager(
@@ -52,6 +70,51 @@ export function createManager(
 	const READY_POLL_INTERVAL_MS = 200;
 	const DEFAULT_CODEX_HOME = resolve(join(homedir(), ".codex"));
 	const DEFAULT_PI_HOME = resolve(join(homedir(), ".pi", "agent"));
+	const CLAUDE_AUTH_ENV_KEYS = [
+		"ANTHROPIC_API_KEY",
+		"ANTHROPIC_AUTH_TOKEN",
+		"CLAUDE_CODE_OAUTH_TOKEN",
+	];
+	const CODEX_AUTH_ENV_KEYS = ["OPENAI_API_KEY", "CODEX_API_KEY"];
+
+	async function ensureSecureDir(path: string): Promise<void> {
+		await mkdir(path, { recursive: true, mode: 0o700 });
+		try {
+			await chmod(path, 0o700);
+		} catch {
+			// best effort
+		}
+	}
+
+	async function copyRequiredFile(sourcePath: string, targetPath: string): Promise<void> {
+		await access(sourcePath);
+		await copyFile(sourcePath, targetPath);
+		try {
+			await chmod(targetPath, 0o600);
+		} catch {
+			// best effort
+		}
+	}
+
+	function withUnsetEnvKeys(
+		existing: readonly string[],
+		keys: readonly string[],
+	): readonly string[] {
+		return Array.from(new Set([...existing, ...keys]));
+	}
+
+	function escapedTomlString(value: string): string {
+		return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+	}
+
+	function upsertForcedWorkspaceId(content: string, workspaceId: string): string {
+		const line = `forced_chatgpt_workspace_id = \"${escapedTomlString(workspaceId)}\"`;
+		if (/^\s*forced_chatgpt_workspace_id\s*=/m.test(content)) {
+			return content.replace(/^\s*forced_chatgpt_workspace_id\s*=.*$/m, line);
+		}
+		const trimmed = content.trimEnd();
+		return trimmed.length > 0 ? `${trimmed}\n${line}\n` : `${line}\n`;
+	}
 
 	async function symlinkIfPresent(sourcePath: string, linkPath: string): Promise<void> {
 		try {
@@ -78,6 +141,33 @@ export function createManager(
 		}
 	}
 
+	async function prepareClaudeSubscriptionRuntimeDir(
+		id: AgentId,
+		env: Record<string, string>,
+		subscription: Extract<SubscriptionConfig, { provider: "claude-code" }>,
+	): Promise<{
+		runtimeDir: string;
+		env: Record<string, string>;
+		unsetEnv: readonly string[];
+	}> {
+		const runtimeDir = resolve(config.logDir, "claude", id);
+		await ensureSecureDir(runtimeDir);
+		await copyRequiredFile(
+			join(subscription.sourceDir, ".credentials.json"),
+			join(runtimeDir, ".credentials.json"),
+		);
+
+		const claudeProfileEnvKeys = Object.keys(process.env).filter((key) =>
+			key.startsWith("CLAUDE_PROFILE_"),
+		);
+
+		return {
+			runtimeDir,
+			env: { ...env, CLAUDE_CONFIG_DIR: runtimeDir },
+			unsetEnv: withUnsetEnvKeys([], [...CLAUDE_AUTH_ENV_KEYS, ...claudeProfileEnvKeys]),
+		};
+	}
+
 	async function prepareCodexRuntimeDir(
 		id: AgentId,
 		env: Record<string, string>,
@@ -89,7 +179,7 @@ export function createManager(
 		}
 
 		const runtimeDir = resolve(config.logDir, "codex", id);
-		await mkdir(runtimeDir, { recursive: true });
+		await ensureSecureDir(runtimeDir);
 		await symlinkIfPresent(join(DEFAULT_CODEX_HOME, "auth.json"), join(runtimeDir, "auth.json"));
 		await symlinkIfPresent(
 			join(DEFAULT_CODEX_HOME, "config.toml"),
@@ -99,6 +189,62 @@ export function createManager(
 		return {
 			runtimeDir,
 			env: { ...env, CODEX_HOME: runtimeDir },
+		};
+	}
+
+	async function prepareCodexSubscriptionRuntimeDir(
+		id: AgentId,
+		env: Record<string, string>,
+		subscription: Extract<SubscriptionConfig, { provider: "codex" }>,
+	): Promise<{
+		runtimeDir: string;
+		env: Record<string, string>;
+		unsetEnv: readonly string[];
+	}> {
+		const runtimeDir = resolve(config.logDir, "codex", id);
+		await ensureSecureDir(runtimeDir);
+
+		await copyRequiredFile(
+			join(subscription.sourceDir, "auth.json"),
+			join(runtimeDir, "auth.json"),
+		);
+
+		const sourceConfigToml = join(subscription.sourceDir, "config.toml");
+		const runtimeConfigToml = join(runtimeDir, "config.toml");
+		let sourceTomlExists = false;
+		try {
+			await access(sourceConfigToml);
+			sourceTomlExists = true;
+		} catch {
+			sourceTomlExists = false;
+		}
+
+		if (sourceTomlExists) {
+			await copyRequiredFile(sourceConfigToml, runtimeConfigToml);
+		}
+
+		if (subscription.enforceWorkspace && subscription.workspaceId) {
+			let content = "";
+			if (sourceTomlExists) {
+				try {
+					content = await readFile(runtimeConfigToml, "utf8");
+				} catch {
+					content = "";
+				}
+			}
+			const patched = upsertForcedWorkspaceId(content, subscription.workspaceId);
+			await writeFile(runtimeConfigToml, patched);
+			try {
+				await chmod(runtimeConfigToml, 0o600);
+			} catch {
+				// best effort
+			}
+		}
+
+		return {
+			runtimeDir,
+			env: { ...env, CODEX_HOME: runtimeDir },
+			unsetEnv: withUnsetEnvKeys([], CODEX_AUTH_ENV_KEYS),
 		};
 	}
 
@@ -113,7 +259,7 @@ export function createManager(
 		}
 
 		const runtimeDir = resolve(config.logDir, "pi", id);
-		await mkdir(runtimeDir, { recursive: true });
+		await ensureSecureDir(runtimeDir);
 		await symlinkIfPresent(join(DEFAULT_PI_HOME, "auth.json"), join(runtimeDir, "auth.json"));
 
 		return {
@@ -136,9 +282,9 @@ export function createManager(
 		const dataHome = join(runtimeRoot, "xdg-data");
 		const stateHome = join(runtimeRoot, "xdg-state");
 		const cacheHome = join(runtimeRoot, "xdg-cache");
-		await mkdir(dataHome, { recursive: true });
-		await mkdir(stateHome, { recursive: true });
-		await mkdir(cacheHome, { recursive: true });
+		await ensureSecureDir(dataHome);
+		await ensureSecureDir(stateHome);
+		await ensureSecureDir(cacheHome);
 
 		return {
 			dataHome,
@@ -289,6 +435,14 @@ export function createManager(
 		return store.listProjects();
 	}
 
+	async function listSubscriptions() {
+		const entries = Object.entries(config.subscriptions);
+		const summaries = await Promise.all(
+			entries.map(async ([id, subscription]) => summarizeSubscription(id, subscription)),
+		);
+		return summaries.sort((a, b) => a.id.localeCompare(b.id));
+	}
+
 	async function deleteProject(name: string): Promise<Result<void, ManagerError>> {
 		const pName = projectName(name);
 		const project = store.getProject(pName);
@@ -321,6 +475,7 @@ export function createManager(
 		providerName: string,
 		task: string,
 		model?: string,
+		subscriptionId?: string,
 	): Promise<Result<Agent, ManagerError>> {
 		const pName = projectName(projectNameStr);
 		const project = store.getProject(pName);
@@ -343,6 +498,31 @@ export function createManager(
 			return err({ code: "PROVIDER_DISABLED", name: providerName });
 		}
 
+		let subscription: SubscriptionConfig | undefined;
+		if (subscriptionId !== undefined) {
+			const selected = config.subscriptions[subscriptionId];
+			if (!selected) {
+				return err({ code: "SUBSCRIPTION_NOT_FOUND", id: subscriptionId });
+			}
+			if (selected.provider !== providerName) {
+				return err({
+					code: "SUBSCRIPTION_PROVIDER_MISMATCH",
+					id: subscriptionId,
+					provider: providerName,
+					subscriptionProvider: selected.provider,
+				});
+			}
+			const summary = await summarizeSubscription(subscriptionId, selected);
+			if (!summary.valid) {
+				return err({
+					code: "SUBSCRIPTION_INVALID",
+					id: subscriptionId,
+					reason: summary.reason ?? "unknown validation error",
+				});
+			}
+			subscription = selected;
+		}
+
 		// Override model if specified
 		const effectiveConfig = model ? { ...providerConfig, model } : providerConfig;
 
@@ -350,24 +530,53 @@ export function createManager(
 		const wName = windowName(providerName);
 		let cmd = [...provider.buildCommand(effectiveConfig)];
 		let env = provider.buildEnv(effectiveConfig);
+		let unsetEnv: readonly string[] = [];
 		let providerRuntimeDir: string | undefined;
 		let providerSessionFile: string | undefined;
+		if (providerName === "claude-code") {
+			const sessionId = randomUUID();
+			cmd = [...cmd, "--session-id", sessionId];
+			providerSessionFile = join(claudeProjectStorageDir(project.cwd), `${sessionId}.jsonl`);
+			if (subscription?.provider === "claude-code") {
+				try {
+					const prepared = await prepareClaudeSubscriptionRuntimeDir(id, env, subscription);
+					env = prepared.env;
+					providerRuntimeDir = prepared.runtimeDir;
+					unsetEnv = withUnsetEnvKeys(unsetEnv, prepared.unsetEnv);
+				} catch (error) {
+					return err({
+						code: "SUBSCRIPTION_INVALID",
+						id: subscriptionId ?? "unknown",
+						reason: `failed to materialize claude credentials: ${error instanceof Error ? error.message : String(error)}`,
+					});
+				}
+			}
+		}
 		if (providerName === "codex") {
 			try {
-				const prepared = await prepareCodexRuntimeDir(id, env);
-				env = prepared.env;
-				providerRuntimeDir = prepared.runtimeDir;
+				if (subscription?.provider === "codex") {
+					const prepared = await prepareCodexSubscriptionRuntimeDir(id, env, subscription);
+					env = prepared.env;
+					providerRuntimeDir = prepared.runtimeDir;
+					unsetEnv = withUnsetEnvKeys(unsetEnv, prepared.unsetEnv);
+				} else {
+					const prepared = await prepareCodexRuntimeDir(id, env);
+					env = prepared.env;
+					providerRuntimeDir = prepared.runtimeDir;
+				}
 			} catch (error) {
+				if (subscription) {
+					return err({
+						code: "SUBSCRIPTION_INVALID",
+						id: subscriptionId ?? "unknown",
+						reason: `failed to materialize codex credentials: ${error instanceof Error ? error.message : String(error)}`,
+					});
+				}
 				log.warn("failed to initialize codex runtime dir; using default codex home", {
 					agentId: id,
 					error: error instanceof Error ? error.message : String(error),
 				});
 			}
-		}
-		if (providerName === "claude-code") {
-			const sessionId = randomUUID();
-			cmd = [...cmd, "--session-id", sessionId];
-			providerSessionFile = join(claudeProjectStorageDir(project.cwd), `${sessionId}.jsonl`);
 		}
 		if (providerName === "pi") {
 			try {
@@ -396,7 +605,14 @@ export function createManager(
 		const target = `${project.tmuxSession}:${wName}`;
 
 		// Create tmux window with the agent command
-		const windowResult = await tmux.createWindow(project.tmuxSession, wName, project.cwd, cmd, env);
+		const windowResult = await tmux.createWindow(
+			project.tmuxSession,
+			wName,
+			project.cwd,
+			cmd,
+			env,
+			unsetEnv,
+		);
 		if (!windowResult.ok) {
 			return err({
 				code: "TMUX_ERROR",
@@ -416,6 +632,7 @@ export function createManager(
 			attachCommand: formatAttachCommand(target),
 			...(providerRuntimeDir ? { providerRuntimeDir } : {}),
 			...(providerSessionFile ? { providerSessionFile } : {}),
+			...(subscriptionId ? { subscriptionId } : {}),
 			createdAt: now,
 			lastActivity: now,
 			lastCapturedOutput: "",
@@ -693,6 +910,7 @@ export function createManager(
 		createProject,
 		getProject,
 		listProjects,
+		listSubscriptions,
 		deleteProject,
 		createAgent,
 		getAgent,

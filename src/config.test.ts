@@ -44,6 +44,7 @@ describe("config/load.defaults", () => {
 			"bypassPermissions",
 		]);
 		expect(config.providers.codex?.extraArgs).toEqual(["--yolo"]);
+		expect(config.subscriptions).toEqual({});
 	});
 });
 
@@ -75,6 +76,35 @@ describe("config/load.valid-file", () => {
 			model: "nano",
 			enabled: true,
 		});
+	});
+
+	it("parses subscription profiles", async () => {
+		const dir = await makeTempDir();
+		const path = join(dir, "harness.json");
+		await writeFile(
+			path,
+			JSON.stringify({
+				subscriptions: {
+					"claude-max": {
+						provider: "claude-code",
+						sourceDir: "/tmp/claude-max",
+					},
+					"codex-plus": {
+						provider: "codex",
+						mode: "chatgpt",
+						sourceDir: "/tmp/codex-plus",
+						workspaceId: "acct-123",
+						enforceWorkspace: true,
+					},
+				},
+			}),
+		);
+
+		const config = await loadConfig(path);
+		expect(config.subscriptions["claude-max"]?.provider).toBe("claude-code");
+		expect(config.subscriptions["claude-max"]?.mode).toBe("oauth");
+		expect(config.subscriptions["codex-plus"]?.provider).toBe("codex");
+		expect(config.subscriptions["codex-plus"]?.mode).toBe("chatgpt");
 	});
 });
 
@@ -116,5 +146,27 @@ describe("config/load.invalid-file", () => {
 		await writeFile(path, JSON.stringify({ port: "bad" }));
 
 		await expect(loadConfig(path)).rejects.toThrow(/Invalid config: port:/);
+	});
+
+	it("rejects codex subscription with enforceWorkspace but no workspaceId", async () => {
+		const dir = await makeTempDir();
+		const path = join(dir, "harness.json");
+		await writeFile(
+			path,
+			JSON.stringify({
+				subscriptions: {
+					bad: {
+						provider: "codex",
+						mode: "chatgpt",
+						sourceDir: "/tmp/codex",
+						enforceWorkspace: true,
+					},
+				},
+			}),
+		);
+
+		await expect(loadConfig(path)).rejects.toThrow(
+			/workspaceId is required when enforceWorkspace=true/,
+		);
 	});
 });

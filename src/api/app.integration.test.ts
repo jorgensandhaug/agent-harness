@@ -276,6 +276,7 @@ function makeConfig() {
 		pollIntervalMs: 200,
 		captureLines: 200,
 		maxEventHistory: 1000,
+		subscriptions: {},
 		providers: {
 			"claude-code": { command: "fake-claude", extraArgs: [], env: {}, enabled: true },
 			codex: { command: "fake-codex", extraArgs: [], env: {}, enabled: true },
@@ -396,6 +397,17 @@ describe("http/health", () => {
 	});
 });
 
+describe("http/subscriptions", () => {
+	it("lists configured subscriptions", async () => {
+		if (!env) throw new Error("env missing");
+		const response = await fetch(`${env.baseUrl}/api/v1/subscriptions`);
+		expect(response.status).toBe(200);
+		const json = await response.json();
+		expect(Array.isArray(json.subscriptions)).toBe(true);
+		expect(json.subscriptions).toEqual([]);
+	});
+});
+
 describe("http/projects.crud", () => {
 	it("supports create/list/get/delete project endpoints", async () => {
 		if (!env) throw new Error("env missing");
@@ -490,6 +502,31 @@ describe("http/agents.crud-input-output-abort", () => {
 			},
 		);
 		expect(deleteAgentRes.status).toBe(204);
+	});
+
+	it("returns 400 when requested subscription does not exist", async () => {
+		if (!env) throw new Error("env missing");
+		await apiJson(env.baseUrl, "/api/v1/projects", {
+			method: "POST",
+			body: JSON.stringify({ name: "p-agents-missing-sub", cwd: process.cwd() }),
+		});
+
+		const createAgentRes = await apiJson(
+			env.baseUrl,
+			"/api/v1/projects/p-agents-missing-sub/agents",
+			{
+				method: "POST",
+				body: JSON.stringify({
+					provider: "codex",
+					task: "Reply with exactly: 4",
+					subscription: "does-not-exist",
+				}),
+			},
+		);
+		expect(createAgentRes.status).toBe(400);
+		const body = await createAgentRes.json();
+		expect(body.error).toBe("INVALID_REQUEST");
+		expect(body.message).toContain("Subscription 'does-not-exist' not found");
 	});
 });
 

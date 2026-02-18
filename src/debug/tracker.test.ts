@@ -13,6 +13,7 @@ function makeConfig(): HarnessConfig {
 		pollIntervalMs: 250,
 		captureLines: 300,
 		maxEventHistory: 1000,
+		subscriptions: {},
 		providers: {
 			"claude-code": { command: "claude", extraArgs: [], env: {}, enabled: true },
 			codex: { command: "codex", extraArgs: [], env: {}, enabled: true },

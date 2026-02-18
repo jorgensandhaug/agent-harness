@@ -11,6 +11,7 @@ import { registerEventRoutes } from "./events.ts";
 import { registerHealthRoutes } from "./health.ts";
 import { registerInspectRoutes } from "./inspect.ts";
 import { registerProjectRoutes } from "./projects.ts";
+import { registerSubscriptionRoutes } from "./subscriptions.ts";
 
 export function createApp(
 	manager: Manager,
@@ -66,6 +67,7 @@ export function createApp(
 
 	registerProjectRoutes(app, manager);
 	registerAgentRoutes(app, manager);
+	registerSubscriptionRoutes(app, manager);
 	registerDebugRoutes(app, manager, debugTracker);
 	registerEventRoutes(app, manager, eventBus);
 	registerInspectRoutes(app);

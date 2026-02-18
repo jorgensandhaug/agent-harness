@@ -18,6 +18,7 @@ export interface Agent {
 	windowName: string;
 	tmuxTarget: string;
 	attachCommand: string;
+	subscriptionId?: string;
 	providerRuntimeDir?: string;
 	providerSessionFile?: string;
 	createdAt: string;
