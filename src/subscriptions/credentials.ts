@@ -44,6 +44,18 @@ type Summary = {
 	metadata: Record<string, MetadataValue>;
 };
 
+function claudeSourceRef(
+	subscription: Extract<SubscriptionConfig, { provider: "claude-code" }>,
+): string {
+	if (typeof subscription.sourceDir === "string" && subscription.sourceDir.trim().length > 0) {
+		return subscription.sourceDir;
+	}
+	if (typeof subscription.tokenFile === "string" && subscription.tokenFile.trim().length > 0) {
+		return subscription.tokenFile;
+	}
+	throw new Error("claude subscription missing sourceDir/tokenFile");
+}
+
 type CodexOrganizationClaim = {
 	title?: string;
 	is_default?: boolean;
@@ -130,6 +142,7 @@ function summarizeClaude(
 	subscription: Extract<SubscriptionConfig, { provider: "claude-code" }>,
 	credentials: z.output<typeof ClaudeCredentialsSchema>,
 ): Summary {
+	const sourceRef = claudeSourceRef(subscription);
 	const oauth = credentials.claudeAiOauth;
 	const scopes = oauth.scopes ?? [];
 	const hasInferenceScope = scopes.includes("user:inference");
@@ -138,7 +151,7 @@ function summarizeClaude(
 			id,
 			provider: subscription.provider,
 			mode: subscription.mode,
-			sourceDir: subscription.sourceDir,
+			sourceDir: sourceRef,
 			valid: false,
 			reason: "missing required scope user:inference",
 			metadata: {
@@ -157,7 +170,7 @@ function summarizeClaude(
 			id,
 			provider: subscription.provider,
 			mode: subscription.mode,
-			sourceDir: subscription.sourceDir,
+			sourceDir: sourceRef,
 			valid: false,
 			reason: `subscriptionType mismatch (expected ${subscription.expected.subscriptionType})`,
 			metadata: {
@@ -176,7 +189,7 @@ function summarizeClaude(
 			id,
 			provider: subscription.provider,
 			mode: subscription.mode,
-			sourceDir: subscription.sourceDir,
+			sourceDir: sourceRef,
 			valid: false,
 			reason: `rateLimitTier mismatch (expected ${subscription.expected.rateLimitTier})`,
 			metadata: {
@@ -191,7 +204,7 @@ function summarizeClaude(
 		id,
 		provider: subscription.provider,
 		mode: subscription.mode,
-		sourceDir: subscription.sourceDir,
+		sourceDir: sourceRef,
 		valid: true,
 		reason: null,
 		metadata: {
@@ -200,6 +213,41 @@ function summarizeClaude(
 			subscriptionType: oauth.subscriptionType ?? null,
 			rateLimitTier: oauth.rateLimitTier ?? null,
 			expiresAtMs: oauth.expiresAt ?? null,
+		},
+	};
+}
+
+async function summarizeClaudeTokenFile(
+	id: string,
+	subscription: Extract<SubscriptionConfig, { provider: "claude-code" }>,
+	tokenFile: string,
+): Promise<Summary> {
+	const tokenText = await Bun.file(tokenFile)
+		.text()
+		.catch(() => null);
+	const token = typeof tokenText === "string" ? tokenText.trim() : "";
+	if (token.length === 0) {
+		return {
+			id,
+			provider: subscription.provider,
+			mode: subscription.mode,
+			sourceDir: tokenFile,
+			valid: false,
+			reason: "missing or unreadable tokenFile",
+			metadata: {},
+		};
+	}
+
+	return {
+		id,
+		provider: subscription.provider,
+		mode: subscription.mode,
+		sourceDir: tokenFile,
+		valid: true,
+		reason: null,
+		metadata: {
+			tokenLength: token.length,
+			expectedChecksSkipped: subscription.expected !== undefined,
 		},
 	};
 }
@@ -307,32 +355,48 @@ export async function summarizeSubscription(
 	subscription: SubscriptionConfig,
 ): Promise<Summary> {
 	if (subscription.provider === "claude-code") {
-		const credPath = join(subscription.sourceDir, ".credentials.json");
-		const raw = await readJson(credPath);
-		if (raw === null) {
-			return {
-				id,
-				provider: subscription.provider,
-				mode: subscription.mode,
-				sourceDir: subscription.sourceDir,
-				valid: false,
-				reason: "missing or unreadable .credentials.json",
-				metadata: {},
-			};
+		if (typeof subscription.sourceDir === "string" && subscription.sourceDir.trim().length > 0) {
+			const credPath = join(subscription.sourceDir, ".credentials.json");
+			const raw = await readJson(credPath);
+			if (raw === null) {
+				return {
+					id,
+					provider: subscription.provider,
+					mode: subscription.mode,
+					sourceDir: subscription.sourceDir,
+					valid: false,
+					reason: "missing or unreadable .credentials.json",
+					metadata: {},
+				};
+			}
+			const parsed = ClaudeCredentialsSchema.safeParse(raw);
+			if (!parsed.success) {
+				return {
+					id,
+					provider: subscription.provider,
+					mode: subscription.mode,
+					sourceDir: subscription.sourceDir,
+					valid: false,
+					reason: "invalid .credentials.json shape",
+					metadata: {},
+				};
+			}
+			return summarizeClaude(id, subscription, parsed.data);
 		}
-		const parsed = ClaudeCredentialsSchema.safeParse(raw);
-		if (!parsed.success) {
-			return {
-				id,
-				provider: subscription.provider,
-				mode: subscription.mode,
-				sourceDir: subscription.sourceDir,
-				valid: false,
-				reason: "invalid .credentials.json shape",
-				metadata: {},
-			};
+
+		if (typeof subscription.tokenFile === "string" && subscription.tokenFile.trim().length > 0) {
+			return summarizeClaudeTokenFile(id, subscription, subscription.tokenFile);
 		}
-		return summarizeClaude(id, subscription, parsed.data);
+
+		return {
+			id,
+			provider: subscription.provider,
+			mode: subscription.mode,
+			sourceDir: "(missing)",
+			valid: false,
+			reason: "missing sourceDir/tokenFile for claude subscription",
+			metadata: {},
+		};
 	}
 
 	const authPath = join(subscription.sourceDir, "auth.json");

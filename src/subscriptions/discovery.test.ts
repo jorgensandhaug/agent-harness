@@ -24,6 +24,7 @@ describe("subscriptions/discovery", () => {
 			enabled: false,
 			includeDefaults: false,
 			claudeDirs: [],
+			claudeTokenFiles: [],
 			codexDirs: [],
 		});
 		expect(discovered).toEqual([]);
@@ -62,6 +63,7 @@ describe("subscriptions/discovery", () => {
 			enabled: true,
 			includeDefaults: false,
 			claudeDirs: [claudeDir],
+			claudeTokenFiles: [],
 			codexDirs: [codexDir],
 		});
 
@@ -106,6 +108,7 @@ describe("subscriptions/discovery", () => {
 			enabled: true,
 			includeDefaults: false,
 			claudeDirs: [],
+			claudeTokenFiles: [],
 			codexDirs: [codexDir],
 		});
 
@@ -116,5 +119,55 @@ describe("subscriptions/discovery", () => {
 			sourceDir: codexDir,
 			enforceWorkspace: false,
 		});
+	});
+
+	it("discovers claude token files and de-dupes by token value", async () => {
+		const root = await makeTempDir("ah-discovery-");
+		const claudeDir = join(root, ".claude-default");
+		await mkdir(claudeDir, { recursive: true });
+		const defaultToken = "sk-ant-oat01-default";
+		const cloudgeniToken = "sk-ant-oat01-cloudgeni";
+
+		await Bun.write(
+			join(claudeDir, ".credentials.json"),
+			JSON.stringify({
+				claudeAiOauth: {
+					accessToken: defaultToken,
+					scopes: ["user:inference"],
+				},
+			}),
+		);
+
+		const duplicateTokenFile = join(root, "default.token");
+		const distinctTokenFile = join(root, "cloudgeni.token");
+		await Bun.write(duplicateTokenFile, `${defaultToken}\n`);
+		await Bun.write(distinctTokenFile, `${cloudgeniToken}\n`);
+
+		const discovered = await discoverSubscriptions({
+			enabled: true,
+			includeDefaults: false,
+			claudeDirs: [claudeDir],
+			claudeTokenFiles: [duplicateTokenFile, distinctTokenFile],
+			codexDirs: [],
+		});
+
+		const claudeSubs = discovered.filter((entry) => entry.subscription.provider === "claude-code");
+		expect(claudeSubs).toHaveLength(2);
+		expect(
+			claudeSubs.some(
+				(entry) =>
+					entry.subscription.provider === "claude-code" &&
+					typeof entry.subscription.sourceDir === "string" &&
+					entry.subscription.sourceDir === claudeDir,
+			),
+		).toBe(true);
+		expect(
+			claudeSubs.some(
+				(entry) =>
+					entry.subscription.provider === "claude-code" &&
+					typeof entry.subscription.tokenFile === "string" &&
+					entry.subscription.tokenFile === distinctTokenFile,
+			),
+		).toBe(true);
 	});
 });

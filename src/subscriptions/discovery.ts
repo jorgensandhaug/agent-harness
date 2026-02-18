@@ -37,24 +37,45 @@ function shortHash(value: string): string {
 	return createHash("sha1").update(value).digest("hex").slice(0, 8);
 }
 
-function autoIdFor(provider: "claude-code" | "codex", sourceDir: string): string {
+function claudeLabelFromDir(sourceDir: string): string {
 	const base = basename(sourceDir);
-	const labelRaw =
-		provider === "claude-code"
-			? base === ".claude"
-				? "default"
-				: base.replace(/^\.claude-?/, "")
-			: base === ".codex"
-				? "default"
-				: base.replace(/^\.codex-?/, "");
+	const labelRaw = base === ".claude" ? "default" : base.replace(/^\.claude-?/, "");
+	return sanitizeIdSegment(labelRaw.length > 0 ? labelRaw : base) || "profile";
+}
+
+function claudeLabelFromTokenFile(tokenFile: string): string {
+	const base = basename(tokenFile).replace(/\.token$/i, "");
+	return sanitizeIdSegment(base) || "profile";
+}
+
+function autoIdForClaudeDir(sourceDir: string): string {
+	const label = claudeLabelFromDir(sourceDir);
+	return `auto-claude-${label}-${shortHash(sourceDir)}`;
+}
+
+function autoIdForClaudeTokenFile(tokenFile: string): string {
+	const label = claudeLabelFromTokenFile(tokenFile);
+	return `auto-claude-${label}-${shortHash(tokenFile)}`;
+}
+
+function autoIdForCodexDir(sourceDir: string): string {
+	const base = basename(sourceDir);
+	const labelRaw = base === ".codex" ? "default" : base.replace(/^\.codex-?/, "");
 	const label = sanitizeIdSegment(labelRaw.length > 0 ? labelRaw : base) || "profile";
-	const prefix = provider === "claude-code" ? "auto-claude" : "auto-codex";
-	return `${prefix}-${label}-${shortHash(sourceDir)}`;
+	return `auto-codex-${label}-${shortHash(sourceDir)}`;
 }
 
 async function readDirNames(path: string): Promise<readonly string[]> {
 	try {
 		return await readdir(path);
+	} catch {
+		return [];
+	}
+}
+
+async function readDirNamesWithTypes(path: string) {
+	try {
+		return await readdir(path, { withFileTypes: true });
 	} catch {
 		return [];
 	}
@@ -107,6 +128,71 @@ function collectCandidateDirs(
 	})();
 }
 
+async function collectClaudeTokenFiles(
+	extraPaths: readonly string[],
+	includeDefaults: boolean,
+): Promise<readonly string[]> {
+	const candidates = new Set<string>();
+	if (includeDefaults) {
+		const defaultDirs = [
+			join(homedir(), "dotfiles", "secrets", "profiles", "claude"),
+			join(homedir(), "dotfiles", "secrets", "vm1", "profiles", "claude"),
+		];
+		for (const dir of defaultDirs) {
+			const entries = await readDirNamesWithTypes(dir);
+			for (const entry of entries) {
+				if (!entry.isFile() || !entry.name.endsWith(".token")) continue;
+				candidates.add(normalizePath(join(dir, entry.name)));
+			}
+		}
+	}
+
+	for (const value of extraPaths) {
+		const trimmed = value.trim();
+		if (trimmed.length === 0) continue;
+		const normalized = normalizePath(trimmed);
+		if (trimmed.endsWith(".token")) {
+			candidates.add(normalized);
+			continue;
+		}
+
+		const entries = await readDirNamesWithTypes(normalized);
+		if (entries.length > 0) {
+			for (const entry of entries) {
+				if (!entry.isFile() || !entry.name.endsWith(".token")) continue;
+				candidates.add(normalizePath(join(normalized, entry.name)));
+			}
+			continue;
+		}
+
+		candidates.add(normalized);
+	}
+
+	return Array.from(candidates).sort((a, b) => a.localeCompare(b));
+}
+
+function requirePathList(
+	field: "claudeDirs" | "codexDirs" | "claudeTokenFiles",
+	value: readonly string[] | undefined,
+): readonly string[] {
+	if (!Array.isArray(value)) {
+		throw new Error(`invalid subscription discovery config: ${field} must be defined`);
+	}
+	return value;
+}
+
+function extractClaudeAccessToken(raw: Record<string, unknown>): string | null {
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+	const oauth = parseJsonObject(raw["claudeAiOauth"]);
+	if (!oauth) return null;
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+	return nonEmptyString(oauth["accessToken"]);
+}
+
+function isLikelyClaudeOauthAccessToken(token: string): boolean {
+	return /^sk-ant-oat\d{2}-/i.test(token);
+}
+
 function inferCodexMode(auth: Record<string, unknown>): "chatgpt" | "apikey" | null {
 	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
 	const explicitMode = nonEmptyString(auth["auth_mode"]);
@@ -148,11 +234,14 @@ export async function discoverSubscriptions(
 	discovery: SubscriptionDiscoveryConfig,
 ): Promise<readonly DiscoveredSubscription[]> {
 	if (!discovery.enabled) return [];
+	const claudeDirs = requirePathList("claudeDirs", discovery.claudeDirs);
+	const codexDirs = requirePathList("codexDirs", discovery.codexDirs);
+	const claudeTokenFiles = requirePathList("claudeTokenFiles", discovery.claudeTokenFiles);
 
 	const claudeCandidates = await collectCandidateDirs(
 		join(homedir(), ".claude"),
 		".claude-",
-		discovery.claudeDirs,
+		claudeDirs,
 		// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
 		process.env["CLAUDE_CONFIG_DIR"],
 		discovery.includeDefaults,
@@ -160,18 +249,35 @@ export async function discoverSubscriptions(
 	const codexCandidates = await collectCandidateDirs(
 		join(homedir(), ".codex"),
 		".codex-",
-		discovery.codexDirs,
+		codexDirs,
 		// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
 		process.env["CODEX_HOME"],
 		discovery.includeDefaults,
 	);
+	const claudeTokenFileCandidates = await collectClaudeTokenFiles(
+		claudeTokenFiles,
+		discovery.includeDefaults,
+	);
 
 	const discovered: DiscoveredSubscription[] = [];
+	const seenClaudeTokenHashes = new Set<string>();
+	const seenClaudeLabels = new Set<string>();
 
 	for (const dir of claudeCandidates) {
 		const credentialsPath = join(dir, ".credentials.json");
 		if (!(await fileExists(credentialsPath))) continue;
-		const id = autoIdFor("claude-code", dir);
+		const label = claudeLabelFromDir(dir);
+		if (seenClaudeLabels.has(label)) continue;
+		const parsedCredentials = await readJson(credentialsPath);
+		const token = parsedCredentials ? extractClaudeAccessToken(parsedCredentials) : null;
+		if (token) {
+			const tokenHash = shortHash(`claude-token:${token}`);
+			if (seenClaudeTokenHashes.has(tokenHash)) continue;
+			seenClaudeTokenHashes.add(tokenHash);
+		}
+		seenClaudeLabels.add(label);
+
+		const id = autoIdForClaudeDir(dir);
 		discovered.push({
 			id,
 			source: "discovered",
@@ -179,6 +285,33 @@ export async function discoverSubscriptions(
 				provider: "claude-code",
 				mode: "oauth",
 				sourceDir: dir,
+			},
+		});
+	}
+
+	for (const tokenFile of claudeTokenFileCandidates) {
+		if (!(await fileExists(tokenFile))) continue;
+		const tokenText = await Bun.file(tokenFile)
+			.text()
+			.catch(() => "");
+		const token = tokenText.trim();
+		if (token.length === 0) continue;
+		if (!isLikelyClaudeOauthAccessToken(token)) continue;
+		const label = claudeLabelFromTokenFile(tokenFile);
+		if (seenClaudeLabels.has(label)) continue;
+		const tokenHash = shortHash(`claude-token:${token}`);
+		if (seenClaudeTokenHashes.has(tokenHash)) continue;
+		seenClaudeTokenHashes.add(tokenHash);
+		seenClaudeLabels.add(label);
+
+		const id = autoIdForClaudeTokenFile(tokenFile);
+		discovered.push({
+			id,
+			source: "discovered",
+			subscription: {
+				provider: "claude-code",
+				mode: "oauth",
+				tokenFile,
 			},
 		});
 	}
@@ -192,7 +325,7 @@ export async function discoverSubscriptions(
 		const mode = inferCodexMode(auth);
 		if (!mode) continue;
 		const workspaceId = extractCodexAccountId(auth);
-		const id = autoIdFor("codex", dir);
+		const id = autoIdForCodexDir(dir);
 		discovered.push({
 			id,
 			source: "discovered",

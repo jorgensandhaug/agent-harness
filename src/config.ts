@@ -46,7 +46,8 @@ const ClaudeSubscriptionSchema = z
 	.object({
 		provider: z.literal("claude-code"),
 		mode: z.literal("oauth").default("oauth"),
-		sourceDir: z.string().min(1),
+		sourceDir: z.string().min(1).optional(),
+		tokenFile: z.string().min(1).optional(),
 		expected: z
 			.object({
 				subscriptionType: z.string().min(1).optional(),
@@ -77,6 +78,7 @@ const SubscriptionDiscoveryConfigSchema = z
 		enabled: z.boolean().default(true),
 		includeDefaults: z.boolean().default(true),
 		claudeDirs: z.array(z.string().min(1)).default([]),
+		claudeTokenFiles: z.array(z.string().min(1)).default([]),
 		codexDirs: z.array(z.string().min(1)).default([]),
 	})
 	.strict();
@@ -125,6 +127,26 @@ const HarnessConfigSchema = z
 	.strict()
 	.superRefine((value, ctx) => {
 		for (const [id, subscription] of Object.entries(value.subscriptions)) {
+			if (subscription.provider === "claude-code") {
+				const hasSourceDir =
+					typeof subscription.sourceDir === "string" && subscription.sourceDir.trim().length > 0;
+				const hasTokenFile =
+					typeof subscription.tokenFile === "string" && subscription.tokenFile.trim().length > 0;
+				if (!hasSourceDir && !hasTokenFile) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						path: ["subscriptions", id, "sourceDir"],
+						message: "either sourceDir or tokenFile is required for claude oauth subscription",
+					});
+				}
+				if (hasSourceDir && hasTokenFile) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						path: ["subscriptions", id, "tokenFile"],
+						message: "sourceDir and tokenFile are mutually exclusive",
+					});
+				}
+			}
 			if (
 				subscription.provider === "codex" &&
 				subscription.enforceWorkspace &&
@@ -211,6 +233,7 @@ export async function loadConfig(path?: string): Promise<HarnessConfig> {
 				enabled: true,
 				includeDefaults: true,
 				claudeDirs: [],
+				claudeTokenFiles: [],
 				codexDirs: [],
 			},
 		};

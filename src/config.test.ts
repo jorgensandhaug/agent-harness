@@ -56,6 +56,7 @@ describe("config/load.defaults", () => {
 			enabled: true,
 			includeDefaults: true,
 			claudeDirs: [],
+			claudeTokenFiles: [],
 			codexDirs: [],
 		});
 	});
@@ -120,6 +121,29 @@ describe("config/load.valid-file", () => {
 		expect(config.subscriptions["codex-plus"]?.mode).toBe("chatgpt");
 	});
 
+	it("parses claude tokenFile subscription profile", async () => {
+		const dir = await makeTempDir();
+		const path = join(dir, "harness.json");
+		await writeFile(
+			path,
+			JSON.stringify({
+				subscriptions: {
+					"claude-cloudgeni": {
+						provider: "claude-code",
+						mode: "oauth",
+						tokenFile: "/home/jorge/dotfiles/secrets/profiles/claude/cloudgeni.token",
+					},
+				},
+			}),
+		);
+
+		const config = await loadConfig(path);
+		expect(config.subscriptions["claude-cloudgeni"]?.provider).toBe("claude-code");
+		expect(config.subscriptions["claude-cloudgeni"]?.tokenFile).toBe(
+			"/home/jorge/dotfiles/secrets/profiles/claude/cloudgeni.token",
+		);
+	});
+
 	it("applies webhook safety-net defaults", async () => {
 		const dir = await makeTempDir();
 		const path = join(dir, "harness.json");
@@ -180,6 +204,7 @@ describe("config/load.valid-file", () => {
 					enabled: false,
 					includeDefaults: false,
 					claudeDirs: ["/home/jorge/.claude-work"],
+					claudeTokenFiles: ["/home/jorge/dotfiles/secrets/profiles/claude/default.token"],
 					codexDirs: ["/home/jorge/.codex-team"],
 				},
 			}),
@@ -190,6 +215,7 @@ describe("config/load.valid-file", () => {
 			enabled: false,
 			includeDefaults: false,
 			claudeDirs: ["/home/jorge/.claude-work"],
+			claudeTokenFiles: ["/home/jorge/dotfiles/secrets/profiles/claude/default.token"],
 			codexDirs: ["/home/jorge/.codex-team"],
 		});
 	});
@@ -273,6 +299,26 @@ describe("config/load.invalid-file", () => {
 
 		await expect(loadConfig(path)).rejects.toThrow(
 			/workspaceId is required when enforceWorkspace=true/,
+		);
+	});
+
+	it("rejects claude subscription without sourceDir or tokenFile", async () => {
+		const dir = await makeTempDir();
+		const path = join(dir, "harness.json");
+		await writeFile(
+			path,
+			JSON.stringify({
+				subscriptions: {
+					bad: {
+						provider: "claude-code",
+						mode: "oauth",
+					},
+				},
+			}),
+		);
+
+		await expect(loadConfig(path)).rejects.toThrow(
+			/either sourceDir or tokenFile is required for claude oauth subscription/,
 		);
 	});
 });

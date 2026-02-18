@@ -84,6 +84,15 @@ export function createManager(
 	};
 
 	function subscriptionSignature(subscription: SubscriptionConfig): string {
+		if (subscription.provider === "claude-code") {
+			if (typeof subscription.sourceDir === "string" && subscription.sourceDir.trim().length > 0) {
+				return `${subscription.provider}:sourceDir:${resolve(subscription.sourceDir)}`;
+			}
+			if (typeof subscription.tokenFile === "string" && subscription.tokenFile.trim().length > 0) {
+				return `${subscription.provider}:tokenFile:${resolve(subscription.tokenFile)}`;
+			}
+			return `${subscription.provider}:invalid`;
+		}
 		return `${subscription.provider}:${resolve(subscription.sourceDir)}`;
 	}
 
@@ -191,31 +200,50 @@ export function createManager(
 		}
 	}
 
-	async function prepareClaudeSubscriptionRuntimeDir(
-		id: AgentId,
+	async function prepareClaudeSubscriptionEnv(
 		env: Record<string, string>,
 		subscription: Extract<SubscriptionConfig, { provider: "claude-code" }>,
 	): Promise<{
-		runtimeDir: string;
+		runtimeDir?: string;
 		env: Record<string, string>;
 		unsetEnv: readonly string[];
 	}> {
-		const runtimeDir = resolve(config.logDir, "claude", id);
-		await ensureSecureDir(runtimeDir);
-		await copyRequiredFile(
-			join(subscription.sourceDir, ".credentials.json"),
-			join(runtimeDir, ".credentials.json"),
-		);
-
 		const claudeProfileEnvKeys = Object.keys(process.env).filter((key) =>
 			key.startsWith("CLAUDE_PROFILE_"),
 		);
+		const unsetBase = withUnsetEnvKeys([], [...CLAUDE_AUTH_ENV_KEYS, ...claudeProfileEnvKeys]);
 
-		return {
-			runtimeDir,
-			env: { ...env, CLAUDE_CONFIG_DIR: runtimeDir },
-			unsetEnv: withUnsetEnvKeys([], [...CLAUDE_AUTH_ENV_KEYS, ...claudeProfileEnvKeys]),
-		};
+		if (typeof subscription.sourceDir === "string" && subscription.sourceDir.trim().length > 0) {
+			const runtimeDir = resolve(subscription.sourceDir);
+			const defaultClaudeDir = resolve(join(homedir(), ".claude"));
+			if (runtimeDir === defaultClaudeDir) {
+				// Keep default Claude behavior to avoid first-run onboarding flows tied to explicit CLAUDE_CONFIG_DIR.
+				return {
+					runtimeDir,
+					env,
+					unsetEnv: withUnsetEnvKeys(unsetBase, ["CLAUDE_CONFIG_DIR"]),
+				};
+			}
+			return {
+				runtimeDir,
+				env: { ...env, CLAUDE_CONFIG_DIR: runtimeDir },
+				unsetEnv: unsetBase,
+			};
+		}
+
+		if (typeof subscription.tokenFile === "string" && subscription.tokenFile.trim().length > 0) {
+			const tokenRaw = await Bun.file(subscription.tokenFile).text();
+			const token = tokenRaw.trim();
+			if (token.length === 0) {
+				throw new Error(`tokenFile is empty: ${subscription.tokenFile}`);
+			}
+			return {
+				env: { ...env, CLAUDE_CODE_OAUTH_TOKEN: token },
+				unsetEnv: withUnsetEnvKeys(unsetBase, ["CLAUDE_CONFIG_DIR"]),
+			};
+		}
+
+		throw new Error("claude subscription missing sourceDir/tokenFile");
 	}
 
 	async function prepareCodexRuntimeDir(
@@ -593,15 +621,17 @@ export function createManager(
 			providerSessionFile = join(claudeProjectStorageDir(project.cwd), `${sessionId}.jsonl`);
 			if (subscription?.provider === "claude-code") {
 				try {
-					const prepared = await prepareClaudeSubscriptionRuntimeDir(id, env, subscription);
+					const prepared = await prepareClaudeSubscriptionEnv(env, subscription);
 					env = prepared.env;
-					providerRuntimeDir = prepared.runtimeDir;
+					if (prepared.runtimeDir) {
+						providerRuntimeDir = prepared.runtimeDir;
+					}
 					unsetEnv = withUnsetEnvKeys(unsetEnv, prepared.unsetEnv);
 				} catch (error) {
 					return err({
 						code: "SUBSCRIPTION_INVALID",
 						id: subscriptionId ?? "unknown",
-						reason: `failed to materialize claude credentials: ${error instanceof Error ? error.message : String(error)}`,
+						reason: `failed to apply claude subscription: ${error instanceof Error ? error.message : String(error)}`,
 					});
 				}
 			}

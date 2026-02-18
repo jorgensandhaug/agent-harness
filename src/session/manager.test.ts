@@ -555,7 +555,7 @@ describe("session/manager.subscriptions", () => {
 		expect(createRes.error.code).toBe("SUBSCRIPTION_NOT_FOUND");
 	});
 
-	it("materializes claude subscription runtime dir and sets subscriptionId on agent", async () => {
+	it("uses claude sourceDir directly and sets subscriptionId on agent", async () => {
 		const sourceDir = await makeTempDir("ah-sub-claude-src-");
 		await Bun.write(
 			join(sourceDir, ".credentials.json"),
@@ -593,12 +593,41 @@ describe("session/manager.subscriptions", () => {
 		expect(createRes.ok).toBe(true);
 		if (!createRes.ok) throw new Error("agent create failed");
 		expect(createRes.value.subscriptionId).toBe("claude-sub");
-		expect(createRes.value.providerRuntimeDir).toBeDefined();
-		if (!createRes.value.providerRuntimeDir) throw new Error("missing runtime dir");
-		const runtimeCredentials = Bun.file(
-			join(createRes.value.providerRuntimeDir, ".credentials.json"),
+		expect(createRes.value.providerRuntimeDir).toBe(sourceDir);
+	});
+
+	it("supports claude tokenFile subscriptions without materializing runtime credentials", async () => {
+		const sourceDir = await makeTempDir("ah-sub-claude-token-");
+		const tokenFile = join(sourceDir, "cloudgeni.token");
+		await Bun.write(tokenFile, "sk-ant-oat01-cloudgeni\n");
+
+		const config = makeConfig();
+		config.subscriptions = {
+			"claude-token-sub": {
+				provider: "claude-code",
+				mode: "oauth",
+				tokenFile,
+			},
+		};
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(config, store, eventBus);
+
+		const projectRes = await manager.createProject("ps2b", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await manager.createAgent(
+			"ps2b",
+			"claude-code",
+			"Reply with exactly: 4",
+			undefined,
+			"claude-token-sub",
 		);
-		expect(await runtimeCredentials.exists()).toBe(true);
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+		expect(createRes.value.subscriptionId).toBe("claude-token-sub");
+		expect(createRes.value.providerRuntimeDir).toBeUndefined();
 	});
 
 	it("discovers codex subscriptions and allows selecting discovered id", async () => {
@@ -621,6 +650,7 @@ describe("session/manager.subscriptions", () => {
 			enabled: true,
 			includeDefaults: false,
 			claudeDirs: [],
+			claudeTokenFiles: [],
 			codexDirs: [discoveredDir],
 		};
 		const store = createStore();

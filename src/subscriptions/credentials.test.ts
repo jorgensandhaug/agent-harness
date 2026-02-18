@@ -68,6 +68,36 @@ describe("subscriptions/credentials.summarizeSubscription", () => {
 		expect(summary.reason).toContain("user:inference");
 	});
 
+	it("validates claude tokenFile subscriptions", async () => {
+		const dir = await makeTempDir("ah-sub-claude-token-");
+		const tokenFile = join(dir, "cloudgeni.token");
+		await Bun.write(tokenFile, "sk-ant-oat01-cloudgeni\n");
+		const sub: SubscriptionConfig = {
+			provider: "claude-code",
+			mode: "oauth",
+			tokenFile,
+		};
+
+		const summary = await summarizeSubscription("claude-token-a", sub);
+		expect(summary.valid).toBe(true);
+		expect(summary.metadata.tokenLength).toBeGreaterThan(0);
+	});
+
+	it("rejects claude tokenFile subscriptions when token file is empty", async () => {
+		const dir = await makeTempDir("ah-sub-claude-token-");
+		const tokenFile = join(dir, "empty.token");
+		await Bun.write(tokenFile, "   \n");
+		const sub: SubscriptionConfig = {
+			provider: "claude-code",
+			mode: "oauth",
+			tokenFile,
+		};
+
+		const summary = await summarizeSubscription("claude-token-b", sub);
+		expect(summary.valid).toBe(false);
+		expect(summary.reason).toContain("tokenFile");
+	});
+
 	it("validates codex chatgpt auth and extracts metadata", async () => {
 		const dir = await makeTempDir("ah-sub-codex-");
 		const payload = Buffer.from(
