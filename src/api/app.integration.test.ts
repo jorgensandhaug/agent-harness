@@ -706,6 +706,110 @@ describe("http/agents.crud-input-output-abort", () => {
 			},
 		});
 	});
+
+	it("uses caller-provided name as the agent id and tmux window name", async () => {
+		if (!env) throw new Error("env missing");
+		await apiJson(env.baseUrl, "/api/v1/projects", {
+			method: "POST",
+			body: JSON.stringify({ name: "p-agents-named", cwd: process.cwd() }),
+		});
+
+		const createAgentRes = await apiJson(env.baseUrl, "/api/v1/projects/p-agents-named/agents", {
+			method: "POST",
+			body: JSON.stringify({
+				provider: "codex",
+				task: "Reply with exactly: 4",
+				name: "codex-bright-fox",
+			}),
+		});
+		expect(createAgentRes.status).toBe(201);
+		const createAgentJson = await createAgentRes.json();
+		expect(createAgentJson.agent.id).toBe("codex-bright-fox");
+		expect(createAgentJson.agent.windowName).toBe("codex-bright-fox");
+		expect(createAgentJson.agent.tmuxTarget).toContain(":codex-bright-fox");
+	});
+
+	it("auto-generates readable provider-adjective-noun ids when name is omitted", async () => {
+		if (!env) throw new Error("env missing");
+		await apiJson(env.baseUrl, "/api/v1/projects", {
+			method: "POST",
+			body: JSON.stringify({ name: "p-agents-auto-name", cwd: process.cwd() }),
+		});
+
+		const createAgentRes = await apiJson(env.baseUrl, "/api/v1/projects/p-agents-auto-name/agents", {
+			method: "POST",
+			body: JSON.stringify({
+				provider: "codex",
+				task: "Reply with exactly: 4",
+			}),
+		});
+		expect(createAgentRes.status).toBe(201);
+		const createAgentJson = await createAgentRes.json();
+		expect(createAgentJson.agent.id).toMatch(/^codex-[a-z]{3,8}-[a-z]{3,8}$/);
+		expect(createAgentJson.agent.windowName).toBe(createAgentJson.agent.id);
+		expect(createAgentJson.agent.tmuxTarget).toContain(`:${createAgentJson.agent.id}`);
+	});
+
+	it("rejects duplicate names within the same project", async () => {
+		if (!env) throw new Error("env missing");
+		await apiJson(env.baseUrl, "/api/v1/projects", {
+			method: "POST",
+			body: JSON.stringify({ name: "p-agents-name-conflict", cwd: process.cwd() }),
+		});
+
+		const first = await apiJson(env.baseUrl, "/api/v1/projects/p-agents-name-conflict/agents", {
+			method: "POST",
+			body: JSON.stringify({
+				provider: "codex",
+				task: "Reply with exactly: 4",
+				name: "codex-clear-wolf",
+			}),
+		});
+		expect(first.status).toBe(201);
+
+		const second = await apiJson(env.baseUrl, "/api/v1/projects/p-agents-name-conflict/agents", {
+			method: "POST",
+			body: JSON.stringify({
+				provider: "codex",
+				task: "Reply with exactly: 4",
+				name: "codex-clear-wolf",
+			}),
+		});
+		expect(second.status).toBe(409);
+		const body = await second.json();
+		expect(body.error).toBe("NAME_CONFLICT");
+	});
+
+	it("allows the same name in different projects", async () => {
+		if (!env) throw new Error("env missing");
+		await apiJson(env.baseUrl, "/api/v1/projects", {
+			method: "POST",
+			body: JSON.stringify({ name: "p-agents-same-name-a", cwd: process.cwd() }),
+		});
+		await apiJson(env.baseUrl, "/api/v1/projects", {
+			method: "POST",
+			body: JSON.stringify({ name: "p-agents-same-name-b", cwd: process.cwd() }),
+		});
+
+		const first = await apiJson(env.baseUrl, "/api/v1/projects/p-agents-same-name-a/agents", {
+			method: "POST",
+			body: JSON.stringify({
+				provider: "codex",
+				task: "Reply with exactly: 4",
+				name: "codex-same-bear",
+			}),
+		});
+		const second = await apiJson(env.baseUrl, "/api/v1/projects/p-agents-same-name-b/agents", {
+			method: "POST",
+			body: JSON.stringify({
+				provider: "codex",
+				task: "Reply with exactly: 4",
+				name: "codex-same-bear",
+			}),
+		});
+		expect(first.status).toBe(201);
+		expect(second.status).toBe(201);
+	});
 });
 
 describe("http/events.sse.project-stream", () => {

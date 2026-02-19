@@ -15,7 +15,8 @@ export function registerDebugRoutes(app: Hono, manager: Manager, debugTracker: D
 			return c.json(mapped.body, mapped.status);
 		}
 
-		const debug = debugTracker.getAgentDebug(agentId);
+		const debugKey = `${agentResult.value.project}:${agentResult.value.id}`;
+		const debug = debugTracker.getAgentDebug(debugKey);
 		if (!debug) {
 			return c.json(
 				{

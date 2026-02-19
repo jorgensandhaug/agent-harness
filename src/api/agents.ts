@@ -16,6 +16,7 @@ import { mapManagerError } from "./errors.ts";
 const CreateAgentBody = z.object({
 	provider: z.string().min(1),
 	task: z.string().min(1),
+	name: z.string().optional(),
 	model: z.string().optional(),
 	subscription: z.string().min(1).optional(),
 	callback: z
@@ -75,6 +76,7 @@ export function registerAgentRoutes(app: Hono, manager: Manager): void {
 			parsed.data.model,
 			parsed.data.subscription,
 			parsed.data.callback,
+			parsed.data.name,
 		);
 		if (!result.ok) {
 			const mapped = mapManagerError(result.error);
@@ -103,7 +105,7 @@ export function registerAgentRoutes(app: Hono, manager: Manager): void {
 		const compactAgents = await Promise.all(
 			result.value.map(async (agent) => {
 				const brief = await resolveAgentBrief(agent);
-				manager.updateAgentBrief(agent.id, brief);
+				manager.updateAgentBrief(agent.project, agent.id, brief);
 				return toCompactAgentListItem(agent, brief);
 			}),
 		);
@@ -122,7 +124,7 @@ export function registerAgentRoutes(app: Hono, manager: Manager): void {
 		const agent = result.value;
 		if (isCompact(c)) {
 			const brief = await resolveAgentBrief(agent);
-			manager.updateAgentBrief(agent.id, brief);
+			manager.updateAgentBrief(agent.project, agent.id, brief);
 			return c.json({
 				agent: toCompactAgentStatus(agent, brief),
 			});

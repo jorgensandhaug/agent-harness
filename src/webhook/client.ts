@@ -6,7 +6,7 @@ import type { AgentStatus } from "../providers/types.ts";
 import { readAgentMessages } from "../session/messages.ts";
 import type { Store } from "../session/store.ts";
 import type { Agent, AgentCallback } from "../session/types.ts";
-import type { AgentId } from "../types.ts";
+import { type AgentId, projectName } from "../types.ts";
 
 export type WebhookPayload = {
 	event: WebhookEvent;
@@ -198,8 +198,12 @@ function callbackPayloadFields(
 	};
 }
 
-async function getLastMessage(store: Store, agentId: AgentId): Promise<string | null> {
-	const agent = store.getAgent(agentId);
+async function getLastMessage(
+	store: Store,
+	project: string,
+	agentId: AgentId,
+): Promise<string | null> {
+	const agent = store.getAgent(projectName(project), agentId);
 	if (!agent) return null;
 
 	try {
@@ -237,6 +241,10 @@ function resolveTargetForEvent(
 
 function hasValidCallback(agent: Agent): boolean {
 	return agent.callback ? normalizeCallback(agent.callback) !== null : false;
+}
+
+function scopedAgentKey(project: string, agentId: string): string {
+	return `${project}:${agentId}`;
 }
 
 export function createWebhookClient(
@@ -420,15 +428,16 @@ export function createWebhookClient(
 		const webhookEvent = statusToWebhookEvent(input.status);
 		if (!webhookEvent) return false;
 
-		const agent = store.getAgent(input.agentId as AgentId);
+		const agent = store.getAgent(projectName(input.project), input.agentId as AgentId);
 		const target = resolveTargetForEvent(webhookEvent, agent, fallbackWebhookConfig);
 		if (!target) return false;
+		const callbackAgentId = agent?.id ?? input.agentId;
 
-		const lastMessage = await getLastMessage(store, input.agentId as AgentId);
+		const lastMessage = await getLastMessage(store, input.project, callbackAgentId as AgentId);
 		const payload: WebhookPayload = {
 			event: webhookEvent,
 			project: input.project,
-			agentId: input.agentId,
+			agentId: callbackAgentId,
 			provider: agent?.provider ?? input.provider,
 			status: input.status,
 			lastMessage,
@@ -444,12 +453,13 @@ export function createWebhookClient(
 		(event: NormalizedEvent) => {
 			if (event.type !== "status_changed") return;
 			const sinceMs = parseIsoMs(event.ts) ?? Date.now();
-			updateLifecycle(event.agentId, event.to, sinceMs);
+			const scopedId = scopedAgentKey(event.project, event.agentId);
+			updateLifecycle(scopedId, event.to, sinceMs);
 
 			if (!isTerminalTransition(event.from, event.to)) return;
 
 			void (async () => {
-				const agent = store.getAgent(event.agentId as AgentId);
+				const agent = store.getAgent(projectName(event.project), event.agentId as AgentId);
 				const provider = agent?.provider ?? "unknown";
 				const sent = await sendTerminalWebhook("status_change", {
 					project: event.project,
@@ -459,7 +469,7 @@ export function createWebhookClient(
 					timestamp: event.ts,
 				});
 				if (sent) {
-					deliveredTerminalStatusByAgent.set(event.agentId, event.to);
+					deliveredTerminalStatusByAgent.set(scopedId, event.to);
 				}
 			})();
 		},
@@ -475,13 +485,14 @@ export function createWebhookClient(
 		const liveAgentIds = new Set<string>();
 
 		for (const agent of agents) {
-			liveAgentIds.add(agent.id);
-			const previous = lifecycleByAgent.get(agent.id);
+			const scopedId = scopedAgentKey(agent.project, agent.id);
+			liveAgentIds.add(scopedId);
+			const previous = lifecycleByAgent.get(scopedId);
 
 			if (!previous || previous.status !== agent.status) {
-				updateLifecycle(agent.id, agent.status, nowMs);
+				updateLifecycle(scopedId, agent.status, nowMs);
 				if (isTerminalStatus(agent.status)) {
-					if (deliveredTerminalStatusByAgent.get(agent.id) !== agent.status) {
+					if (deliveredTerminalStatusByAgent.get(scopedId) !== agent.status) {
 						const timestamp = agent.lastActivity.trim().length > 0 ? agent.lastActivity : nowIso;
 						const sent = await sendTerminalWebhook("safety_net", {
 							project: agent.project,
@@ -491,7 +502,7 @@ export function createWebhookClient(
 							timestamp,
 						});
 						if (sent) {
-							deliveredTerminalStatusByAgent.set(agent.id, agent.status);
+							deliveredTerminalStatusByAgent.set(scopedId, agent.status);
 						}
 					}
 				}
@@ -499,7 +510,7 @@ export function createWebhookClient(
 			}
 
 			if (isTerminalStatus(agent.status)) {
-				if (deliveredTerminalStatusByAgent.get(agent.id) !== agent.status) {
+				if (deliveredTerminalStatusByAgent.get(scopedId) !== agent.status) {
 					const timestamp = agent.lastActivity.trim().length > 0 ? agent.lastActivity : nowIso;
 					const sent = await sendTerminalWebhook("safety_net", {
 						project: agent.project,
@@ -509,7 +520,7 @@ export function createWebhookClient(
 						timestamp,
 					});
 					if (sent) {
-						deliveredTerminalStatusByAgent.set(agent.id, agent.status);
+						deliveredTerminalStatusByAgent.set(scopedId, agent.status);
 					}
 				}
 				continue;
@@ -519,10 +530,10 @@ export function createWebhookClient(
 			const ageMs = nowMs - previous.sinceMs;
 			if (ageMs < safetyNetConfig.stuckAfterMs) continue;
 
-			const lastWarnMs = lastStuckWarnAtMsByAgent.get(agent.id) ?? 0;
+			const lastWarnMs = lastStuckWarnAtMsByAgent.get(scopedId) ?? 0;
 			if (nowMs - lastWarnMs < safetyNetConfig.stuckWarnIntervalMs) continue;
 
-			lastStuckWarnAtMsByAgent.set(agent.id, nowMs);
+			lastStuckWarnAtMsByAgent.set(scopedId, nowMs);
 			runtime.counters.safetyNetWarnings += 1;
 			runtime.lastSafetyNetWarningAt = new Date(nowMs).toISOString();
 			log.warn("webhook safety-net detected stuck agent", {

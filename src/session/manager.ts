@@ -27,8 +27,10 @@ import {
 	type Result,
 	agentId,
 	err,
+	isValidAgentId,
 	newAgentId,
 	newEventId,
+	normalizeAgentIdInput,
 	ok,
 	projectName,
 } from "../types.ts";
@@ -40,6 +42,8 @@ export type ManagerError =
 	| { code: "PROJECT_NOT_FOUND"; name: string }
 	| { code: "PROJECT_EXISTS"; name: string }
 	| { code: "AGENT_NOT_FOUND"; id: string; project: string }
+	| { code: "AGENT_NAME_INVALID"; name: string; reason: string }
+	| { code: "NAME_CONFLICT"; name: string; project: string }
 	| { code: "UNKNOWN_PROVIDER"; name: string }
 	| { code: "PROVIDER_DISABLED"; name: string }
 	| { code: "SUBSCRIPTION_NOT_FOUND"; id: string }
@@ -296,6 +300,7 @@ export function createManager(
 	}
 
 	async function prepareCodexRuntimeDir(
+		project: ProjectName,
 		id: AgentId,
 		env: Record<string, string>,
 	): Promise<{ runtimeDir: string; env: Record<string, string> }> {
@@ -305,7 +310,7 @@ export function createManager(
 			return { runtimeDir: existing, env };
 		}
 
-		const runtimeDir = resolve(config.logDir, "codex", id);
+		const runtimeDir = resolve(config.logDir, "codex", project, id);
 		await ensureSecureDir(runtimeDir);
 		await symlinkIfPresent(join(DEFAULT_CODEX_HOME, "auth.json"), join(runtimeDir, "auth.json"));
 		await symlinkIfPresent(
@@ -320,6 +325,7 @@ export function createManager(
 	}
 
 	async function prepareCodexSubscriptionRuntimeDir(
+		project: ProjectName,
 		id: AgentId,
 		env: Record<string, string>,
 		subscription: Extract<SubscriptionConfig, { provider: "codex" }>,
@@ -328,7 +334,7 @@ export function createManager(
 		env: Record<string, string>;
 		unsetEnv: readonly string[];
 	}> {
-		const runtimeDir = resolve(config.logDir, "codex", id);
+		const runtimeDir = resolve(config.logDir, "codex", project, id);
 		await ensureSecureDir(runtimeDir);
 
 		await copyRequiredFile(
@@ -376,6 +382,7 @@ export function createManager(
 	}
 
 	async function preparePiRuntimeDir(
+		project: ProjectName,
 		id: AgentId,
 		env: Record<string, string>,
 	): Promise<{ runtimeDir: string; env: Record<string, string> }> {
@@ -385,7 +392,7 @@ export function createManager(
 			return { runtimeDir: existing, env };
 		}
 
-		const runtimeDir = resolve(config.logDir, "pi", id);
+		const runtimeDir = resolve(config.logDir, "pi", project, id);
 		await ensureSecureDir(runtimeDir);
 		await symlinkIfPresent(join(DEFAULT_PI_HOME, "auth.json"), join(runtimeDir, "auth.json"));
 
@@ -396,6 +403,7 @@ export function createManager(
 	}
 
 	async function prepareOpenCodeRuntime(
+		project: ProjectName,
 		id: AgentId,
 		env: Record<string, string>,
 	): Promise<{ dataHome: string; env: Record<string, string> }> {
@@ -405,7 +413,7 @@ export function createManager(
 			return { dataHome: existing, env };
 		}
 
-		const runtimeRoot = resolve(config.logDir, "opencode", id);
+		const runtimeRoot = resolve(config.logDir, "opencode", project, id);
 		const dataHome = join(runtimeRoot, "xdg-data");
 		const stateHome = join(runtimeRoot, "xdg-state");
 		const cacheHome = join(runtimeRoot, "xdg-cache");
@@ -437,7 +445,7 @@ export function createManager(
 	): void {
 		if (agent.status === nextStatus) return;
 		const from = agent.status;
-		store.updateAgentStatus(agent.id, nextStatus);
+		store.updateAgentStatus(agent.project, agent.id, nextStatus);
 		eventBus.emit({
 			id: newEventId(),
 			ts: new Date().toISOString(),
@@ -528,9 +536,8 @@ export function createManager(
 		return `${config.tmuxPrefix}-${name}`;
 	}
 
-	function windowName(providerName: string): string {
-		const hex = Math.random().toString(16).slice(2, 6);
-		return `${providerName}-${hex}`;
+	function debugAgentKey(project: ProjectName, id: AgentId): string {
+		return `${project}:${id}`;
 	}
 
 	function projectNameFromSession(sessionName: string): ProjectName | null {
@@ -660,7 +667,7 @@ export function createManager(
 		}
 
 		for (const agent of store.listAgents(pName)) {
-			debugTracker?.removeAgent(agent.id);
+			debugTracker?.removeAgent(debugAgentKey(agent.project, agent.id));
 		}
 
 		store.removeProject(pName);
@@ -677,6 +684,7 @@ export function createManager(
 		model?: string,
 		subscriptionId?: string,
 		callback?: AgentCallback,
+		name?: string,
 	): Promise<Result<Agent, ManagerError>> {
 		const pName = projectName(projectNameStr);
 		const project = store.getProject(pName);
@@ -727,9 +735,25 @@ export function createManager(
 
 		// Override model if specified
 		const effectiveConfig = model ? { ...providerConfig, model } : providerConfig;
-
-		const id = newAgentId();
-		const wName = windowName(providerName);
+		const existingAgentNames = new Set(store.listAgents(pName).map((agent) => agent.id as string));
+		let id: AgentId;
+		if (name !== undefined) {
+			const normalizedName = normalizeAgentIdInput(name);
+			if (!isValidAgentId(normalizedName)) {
+				return err({
+					code: "AGENT_NAME_INVALID",
+					name,
+					reason: "must be 3-40 chars of lowercase a-z, 0-9, or hyphen",
+				});
+			}
+			if (existingAgentNames.has(normalizedName)) {
+				return err({ code: "NAME_CONFLICT", name: normalizedName, project: projectNameStr });
+			}
+			id = agentId(normalizedName);
+		} else {
+			id = newAgentId(providerName, existingAgentNames);
+		}
+		const wName = id;
 		let cmd = [...provider.buildCommand(effectiveConfig)];
 		let env = provider.buildEnv(effectiveConfig);
 		let unsetEnv: readonly string[] = [];
@@ -759,12 +783,12 @@ export function createManager(
 		if (providerName === "codex") {
 			try {
 				if (subscription?.provider === "codex") {
-					const prepared = await prepareCodexSubscriptionRuntimeDir(id, env, subscription);
+					const prepared = await prepareCodexSubscriptionRuntimeDir(pName, id, env, subscription);
 					env = prepared.env;
 					providerRuntimeDir = prepared.runtimeDir;
 					unsetEnv = withUnsetEnvKeys(unsetEnv, prepared.unsetEnv);
 				} else {
-					const prepared = await prepareCodexRuntimeDir(id, env);
+					const prepared = await prepareCodexRuntimeDir(pName, id, env);
 					env = prepared.env;
 					providerRuntimeDir = prepared.runtimeDir;
 				}
@@ -784,7 +808,7 @@ export function createManager(
 		}
 		if (providerName === "pi") {
 			try {
-				const prepared = await preparePiRuntimeDir(id, env);
+				const prepared = await preparePiRuntimeDir(pName, id, env);
 				env = prepared.env;
 				providerRuntimeDir = prepared.runtimeDir;
 			} catch (error) {
@@ -796,7 +820,7 @@ export function createManager(
 		}
 		if (providerName === "opencode") {
 			try {
-				const prepared = await prepareOpenCodeRuntime(id, env);
+				const prepared = await prepareOpenCodeRuntime(pName, id, env);
 				env = prepared.env;
 				providerRuntimeDir = prepared.dataHome;
 			} catch (error) {
@@ -855,7 +879,7 @@ export function createManager(
 		};
 
 		store.addAgent(agent);
-		debugTracker?.ensureAgent(id);
+		debugTracker?.ensureAgent(debugAgentKey(agent.project, id));
 
 		// Emit agent_started event
 		eventBus.emit({
@@ -872,7 +896,7 @@ export function createManager(
 		// Send initial task after provider startup delay so the TUI is ready to accept input.
 		const delayMs = initialTaskDelayMs(providerName);
 		setTimeout(async () => {
-			const stillExists = (): boolean => Boolean(store.getAgent(id));
+			const stillExists = (): boolean => Boolean(store.getAgent(pName, id));
 			if (!stillExists()) return;
 
 			let lastStatus: AgentStatus = "starting";
@@ -962,8 +986,9 @@ export function createManager(
 	}
 
 	function getAgent(projectNameStr: string, id: string): Result<Agent, ManagerError> {
-		const agent = store.getAgent(agentId(id));
-		if (!agent || agent.project !== projectName(projectNameStr)) {
+		const pName = projectName(projectNameStr);
+		const agent = store.getAgent(pName, agentId(id));
+		if (!agent) {
 			return err({ code: "AGENT_NOT_FOUND", id, project: projectNameStr });
 		}
 		return ok(agent);
@@ -1108,22 +1133,22 @@ export function createManager(
 			exitCode: null,
 		});
 
-		store.removeAgent(agent.id);
-		debugTracker?.removeAgent(agent.id);
+		store.removeAgent(agent.project, agent.id);
+		debugTracker?.removeAgent(debugAgentKey(agent.project, agent.id));
 		log.info("agent deleted", { id, project: projectNameStr });
 		return ok(undefined);
 	}
 
-	function updateAgentStatus(id: AgentId, status: AgentStatus): void {
-		store.updateAgentStatus(id, status);
+	function updateAgentStatus(project: ProjectName, id: AgentId, status: AgentStatus): void {
+		store.updateAgentStatus(project, id, status);
 	}
 
-	function updateAgentBrief(id: AgentId, brief: string[]): void {
-		store.updateAgentBrief(id, brief);
+	function updateAgentBrief(project: ProjectName, id: AgentId, brief: string[]): void {
+		store.updateAgentBrief(project, id, brief);
 	}
 
-	function updateAgentOutput(id: AgentId, output: string): void {
-		store.updateAgentOutput(id, output);
+	function updateAgentOutput(project: ProjectName, id: AgentId, output: string): void {
+		store.updateAgentOutput(project, id, output);
 	}
 
 	return {

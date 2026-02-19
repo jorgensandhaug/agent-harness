@@ -28,20 +28,21 @@ describe("debug/tracker", () => {
 		const config = makeConfig();
 		const eventBus = createEventBus(200);
 		const tracker = createDebugTracker(config, eventBus);
+		const agentKey = "p1:a1";
 
-		tracker.ensureAgent("a1");
-		tracker.notePoll("a1", {
+		tracker.ensureAgent(agentKey);
+		tracker.notePoll(agentKey, {
 			lastPollAt: "2026-02-17T00:00:00.000Z",
 			lastCaptureBytes: 128,
 			lastDiffBytes: 16,
 		});
-		tracker.noteTmux("a1", { paneDead: false, paneCurrentCommand: "claude" });
-		tracker.noteParser("a1", {
+		tracker.noteTmux(agentKey, { paneDead: false, paneCurrentCommand: "claude" });
+		tracker.noteParser(agentKey, {
 			lastParsedStatus: "processing",
 			lastProviderEventsCount: 2,
 			warningsToAppend: ["unparsed token"],
 		});
-		tracker.noteError("a1", "parse", "bad token");
+		tracker.noteError(agentKey, "parse", "bad token");
 
 		eventBus.emit({
 			id: newEventId(),
@@ -62,7 +63,7 @@ describe("debug/tracker", () => {
 			text: "hello",
 		});
 
-		const debug = tracker.getAgentDebug("a1");
+		const debug = tracker.getAgentDebug(agentKey);
 		expect(debug).not.toBeNull();
 		if (!debug) throw new Error("debug missing");
 
@@ -81,8 +82,8 @@ describe("debug/tracker", () => {
 		expect(debug.statusTransitions[0]?.source).toBe("internals_claude_jsonl");
 		expect(debug.errors.length).toBe(1);
 
-		tracker.removeAgent("a1");
-		expect(tracker.getAgentDebug("a1")).toBeNull();
+		tracker.removeAgent(agentKey);
+		expect(tracker.getAgentDebug(agentKey)).toBeNull();
 		tracker.stop();
 	});
 });

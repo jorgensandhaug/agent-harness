@@ -8,7 +8,7 @@ import type { AgentStatus } from "../providers/types.ts";
 import type { Manager } from "../session/manager.ts";
 import type { Store } from "../session/store.ts";
 import * as tmux from "../tmux/client.ts";
-import { type AgentId, newEventId } from "../types.ts";
+import { type AgentId, type ProjectName, newEventId } from "../types.ts";
 import { newClaudeInternalsCursor, readClaudeInternalsStatus } from "./claude-internals.ts";
 import { newCodexInternalsCursor, readCodexInternalsStatus } from "./codex-internals.ts";
 import { diffCaptures } from "./differ.ts";
@@ -83,20 +83,21 @@ export function createPoller(
 		providerRuntimeDir?: string;
 		providerSessionFile?: string;
 	}): Promise<void> {
+		const scopedAgentId = `${agent.project}:${agent.id}`;
 		const pollTs = new Date().toISOString();
-		debugTracker?.notePoll(agent.id, { lastPollAt: pollTs });
+		debugTracker?.notePoll(scopedAgentId, { lastPollAt: pollTs });
 
 		const providerResult = getProvider(agent.provider);
 		if (!providerResult.ok) return;
 		const provider = providerResult.value;
-		const runtime = runtimeFor(agent.id);
+		const runtime = runtimeFor(scopedAgentId);
 		const nowMs = Date.now();
 
 		// Check if pane is dead (process exited)
 		const paneDeadResult = await tmux.getPaneVar(agent.tmuxTarget, "pane_dead");
 		if (!paneDeadResult.ok) {
 			debugTracker?.noteError(
-				agent.id,
+				scopedAgentId,
 				"tmux",
 				`pane_dead query failed: ${JSON.stringify(paneDeadResult.error)}`,
 			);
@@ -109,14 +110,14 @@ export function createPoller(
 				});
 			}
 		} else {
-			debugTracker?.noteTmux(agent.id, { paneDead: paneDeadResult.value === "1" });
+			debugTracker?.noteTmux(scopedAgentId, { paneDead: paneDeadResult.value === "1" });
 			runtime.lastPaneDeadErrorWarnAtMs = null;
 		}
 
 		const paneCommandResult = await tmux.getPaneVar(agent.tmuxTarget, "pane_current_command");
 		if (!paneCommandResult.ok) {
 			debugTracker?.noteError(
-				agent.id,
+				scopedAgentId,
 				"tmux",
 				`pane_current_command query failed: ${JSON.stringify(paneCommandResult.error)}`,
 			);
@@ -129,15 +130,15 @@ export function createPoller(
 				});
 			}
 		} else {
-			debugTracker?.noteTmux(agent.id, { paneCurrentCommand: paneCommandResult.value });
+			debugTracker?.noteTmux(scopedAgentId, { paneCurrentCommand: paneCommandResult.value });
 			runtime.lastPaneCommandErrorWarnAtMs = null;
 		}
 
 		if (paneDeadResult.ok && paneDeadResult.value === "1") {
-			statusRuntime.delete(agent.id);
+			statusRuntime.delete(scopedAgentId);
 			if (agent.status !== "exited") {
 				const from = agent.status;
-				manager.updateAgentStatus(agent.id as AgentId, "exited");
+				manager.updateAgentStatus(agent.project as ProjectName, agent.id as AgentId, "exited");
 				eventBus.emit({
 					id: newEventId(),
 					ts: new Date().toISOString(),
@@ -164,7 +165,7 @@ export function createPoller(
 		const captureResult = await tmux.capturePane(agent.tmuxTarget, config.captureLines);
 		if (!captureResult.ok) {
 			debugTracker?.noteError(
-				agent.id,
+				scopedAgentId,
 				"capture",
 				`capture-pane failed: ${JSON.stringify(captureResult.error)}`,
 			);
@@ -181,11 +182,11 @@ export function createPoller(
 		runtime.lastCaptureErrorWarnAtMs = null;
 
 		const currentOutput = captureResult.value;
-		debugTracker?.notePoll(agent.id, { lastCaptureBytes: currentOutput.length });
+		debugTracker?.notePoll(scopedAgentId, { lastCaptureBytes: currentOutput.length });
 
 		// Detect new content via diff
 		const diff = diffCaptures(agent.lastCapturedOutput, currentOutput);
-		debugTracker?.notePoll(agent.id, { lastDiffBytes: diff.length });
+		debugTracker?.notePoll(scopedAgentId, { lastDiffBytes: diff.length });
 		const diffHasContent = diff.trim().length > 0;
 		const statusNowMs = Date.now();
 		if (diffHasContent) {
@@ -193,7 +194,7 @@ export function createPoller(
 		}
 
 		// Update stored output
-		manager.updateAgentOutput(agent.id as AgentId, currentOutput);
+		manager.updateAgentOutput(agent.project as ProjectName, agent.id as AgentId, currentOutput);
 
 		let providerEvents: ReturnType<typeof provider.parseOutputDiff> = [];
 		if (diffHasContent) {
@@ -201,10 +202,10 @@ export function createPoller(
 				providerEvents = provider.parseOutputDiff(diff);
 			} catch (error) {
 				const msg = error instanceof Error ? error.message : String(error);
-				debugTracker?.noteError(agent.id, "parse", `parseOutputDiff failed: ${msg}`);
+				debugTracker?.noteError(scopedAgentId, "parse", `parseOutputDiff failed: ${msg}`);
 			}
 		}
-		debugTracker?.noteParser(agent.id, {
+		debugTracker?.noteParser(scopedAgentId, {
 			lastProviderEventsCount: providerEvents.length,
 		});
 
@@ -214,10 +215,10 @@ export function createPoller(
 			try {
 				parsedStatus = provider.parseStatus(currentOutput);
 				parsedStatusSource = "ui_parser";
-				debugTracker?.noteParser(agent.id, { lastParsedStatus: parsedStatus });
+				debugTracker?.noteParser(scopedAgentId, { lastParsedStatus: parsedStatus });
 			} catch (error) {
 				const msg = error instanceof Error ? error.message : String(error);
-				debugTracker?.noteError(agent.id, "parse", `parseStatus failed: ${msg}`);
+				debugTracker?.noteError(scopedAgentId, "parse", `parseStatus failed: ${msg}`);
 			}
 		}
 		if (agent.provider === "codex" && agent.providerRuntimeDir) {
@@ -229,7 +230,7 @@ export function createPoller(
 				runtime.codexCursor = codexInternals.cursor;
 				if (codexInternals.parseErrorCount > 0) {
 					debugTracker?.noteError(
-						agent.id,
+						scopedAgentId,
 						"parse",
 						`codex internals parse errors: ${codexInternals.parseErrorCount}`,
 					);
@@ -237,11 +238,11 @@ export function createPoller(
 				if (codexInternals.status) {
 					parsedStatus = codexInternals.status;
 					parsedStatusSource = "internals_codex_jsonl";
-					debugTracker?.noteParser(agent.id, { lastParsedStatus: parsedStatus });
+					debugTracker?.noteParser(scopedAgentId, { lastParsedStatus: parsedStatus });
 				}
 			} catch (error) {
 				const msg = error instanceof Error ? error.message : String(error);
-				debugTracker?.noteError(agent.id, "parse", `codex internals read failed: ${msg}`);
+				debugTracker?.noteError(scopedAgentId, "parse", `codex internals read failed: ${msg}`);
 			}
 		}
 		if (agent.provider === "claude-code" && agent.providerSessionFile) {
@@ -253,7 +254,7 @@ export function createPoller(
 				runtime.claudeCursor = claudeInternals.cursor;
 				if (claudeInternals.parseErrorCount > 0) {
 					debugTracker?.noteError(
-						agent.id,
+						scopedAgentId,
 						"parse",
 						`claude internals parse errors: ${claudeInternals.parseErrorCount}`,
 					);
@@ -261,11 +262,11 @@ export function createPoller(
 				if (claudeInternals.status) {
 					parsedStatus = claudeInternals.status;
 					parsedStatusSource = "internals_claude_jsonl";
-					debugTracker?.noteParser(agent.id, { lastParsedStatus: parsedStatus });
+					debugTracker?.noteParser(scopedAgentId, { lastParsedStatus: parsedStatus });
 				}
 			} catch (error) {
 				const msg = error instanceof Error ? error.message : String(error);
-				debugTracker?.noteError(agent.id, "parse", `claude internals read failed: ${msg}`);
+				debugTracker?.noteError(scopedAgentId, "parse", `claude internals read failed: ${msg}`);
 			}
 		}
 		if (agent.provider === "pi" && agent.providerRuntimeDir) {
@@ -274,7 +275,7 @@ export function createPoller(
 				runtime.piCursor = piInternals.cursor;
 				if (piInternals.parseErrorCount > 0) {
 					debugTracker?.noteError(
-						agent.id,
+						scopedAgentId,
 						"parse",
 						`pi internals parse errors: ${piInternals.parseErrorCount}`,
 					);
@@ -282,11 +283,11 @@ export function createPoller(
 				if (piInternals.status) {
 					parsedStatus = piInternals.status;
 					parsedStatusSource = "internals_pi_jsonl";
-					debugTracker?.noteParser(agent.id, { lastParsedStatus: parsedStatus });
+					debugTracker?.noteParser(scopedAgentId, { lastParsedStatus: parsedStatus });
 				}
 			} catch (error) {
 				const msg = error instanceof Error ? error.message : String(error);
-				debugTracker?.noteError(agent.id, "parse", `pi internals read failed: ${msg}`);
+				debugTracker?.noteError(scopedAgentId, "parse", `pi internals read failed: ${msg}`);
 			}
 		}
 		if (agent.provider === "opencode" && agent.providerRuntimeDir) {
@@ -298,7 +299,7 @@ export function createPoller(
 				runtime.opencodeCursor = opencodeInternals.cursor;
 				if (opencodeInternals.parseErrorCount > 0) {
 					debugTracker?.noteError(
-						agent.id,
+						scopedAgentId,
 						"parse",
 						`opencode internals parse errors: ${opencodeInternals.parseErrorCount}`,
 					);
@@ -306,11 +307,11 @@ export function createPoller(
 				if (opencodeInternals.status) {
 					parsedStatus = opencodeInternals.status;
 					parsedStatusSource = "internals_opencode_storage";
-					debugTracker?.noteParser(agent.id, { lastParsedStatus: parsedStatus });
+					debugTracker?.noteParser(scopedAgentId, { lastParsedStatus: parsedStatus });
 				}
 			} catch (error) {
 				const msg = error instanceof Error ? error.message : String(error);
-				debugTracker?.noteError(agent.id, "parse", `opencode internals read failed: ${msg}`);
+				debugTracker?.noteError(scopedAgentId, "parse", `opencode internals read failed: ${msg}`);
 			}
 		}
 		const newStatus = deriveStatusFromSignals({
@@ -331,7 +332,7 @@ export function createPoller(
 			newStatus === parsedStatus ? parsedStatusSource : "fallback_heuristic";
 		if (newStatus !== agent.status) {
 			const from = agent.status;
-			manager.updateAgentStatus(agent.id as AgentId, newStatus);
+			manager.updateAgentStatus(agent.project as ProjectName, agent.id as AgentId, newStatus);
 			eventBus.emit({
 				id: newEventId(),
 				ts: new Date().toISOString(),
@@ -439,10 +440,10 @@ export function createPoller(
 			}
 
 			if (warnings.length > 0) {
-				debugTracker?.noteParser(agent.id, { warningsToAppend: warnings });
+				debugTracker?.noteParser(scopedAgentId, { warningsToAppend: warnings });
 			}
 		} else {
-			debugTracker?.noteParser(agent.id, { lastProviderEventsCount: 0 });
+			debugTracker?.noteParser(scopedAgentId, { lastProviderEventsCount: 0 });
 		}
 	}
 

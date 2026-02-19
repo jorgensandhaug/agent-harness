@@ -4,7 +4,11 @@ import type { Agent, Project } from "./types.ts";
 
 export function createStore() {
 	const projects = new Map<ProjectName, Project>();
-	const agents = new Map<AgentId, Agent>();
+	const agents = new Map<string, Agent>();
+
+	function agentKey(project: ProjectName, id: AgentId): string {
+		return `${project}:${id}`;
+	}
 
 	function normalizeBriefLines(lines: readonly string[]): string[] {
 		return lines
@@ -49,8 +53,8 @@ export function createStore() {
 
 	// --- Agents ---
 
-	function getAgent(id: AgentId): Agent | undefined {
-		return agents.get(id);
+	function getAgent(project: ProjectName, id: AgentId): Agent | undefined {
+		return agents.get(agentKey(project, id));
 	}
 
 	function listAgents(projectName?: ProjectName): readonly Agent[] {
@@ -62,37 +66,37 @@ export function createStore() {
 	}
 
 	function addAgent(agent: Agent): void {
-		agents.set(agent.id, agent);
+		agents.set(agentKey(agent.project, agent.id), agent);
 		updateProjectAgentCount(agent.project);
 	}
 
-	function removeAgent(id: AgentId): boolean {
-		const agent = agents.get(id);
+	function removeAgent(project: ProjectName, id: AgentId): boolean {
+		const agent = agents.get(agentKey(project, id));
 		if (!agent) return false;
 		const projectName = agent.project;
-		const deleted = agents.delete(id);
+		const deleted = agents.delete(agentKey(project, id));
 		if (deleted) updateProjectAgentCount(projectName);
 		return deleted;
 	}
 
-	function updateAgentStatus(id: AgentId, status: AgentStatus): void {
-		const agent = agents.get(id);
+	function updateAgentStatus(project: ProjectName, id: AgentId, status: AgentStatus): void {
+		const agent = agents.get(agentKey(project, id));
 		if (agent) {
 			agent.status = status;
 			agent.lastActivity = new Date().toISOString();
 		}
 	}
 
-	function updateAgentBrief(id: AgentId, brief: string[]): void {
-		const agent = agents.get(id);
+	function updateAgentBrief(project: ProjectName, id: AgentId, brief: string[]): void {
+		const agent = agents.get(agentKey(project, id));
 		if (agent) {
 			agent.brief = normalizeBriefLines(brief);
 			agent.lastActivity = new Date().toISOString();
 		}
 	}
 
-	function updateAgentOutput(id: AgentId, output: string): void {
-		const agent = agents.get(id);
+	function updateAgentOutput(project: ProjectName, id: AgentId, output: string): void {
+		const agent = agents.get(agentKey(project, id));
 		if (agent) {
 			agent.lastCapturedOutput = output;
 			agent.lastActivity = new Date().toISOString();

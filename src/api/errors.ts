@@ -25,6 +25,22 @@ export function mapManagerError(error: ManagerError): MappedError {
 					message: `Agent '${error.id}' not found in project '${error.project}'`,
 				},
 			};
+		case "AGENT_NAME_INVALID":
+			return {
+				status: 400,
+				body: {
+					error: "INVALID_REQUEST",
+					message: `Invalid agent name '${error.name}': ${error.reason}`,
+				},
+			};
+		case "NAME_CONFLICT":
+			return {
+				status: 409,
+				body: {
+					error: "NAME_CONFLICT",
+					message: `Agent name '${error.name}' already exists in project '${error.project}'`,
+				},
+			};
 		case "UNKNOWN_PROVIDER":
 			return {
 				status: 400,

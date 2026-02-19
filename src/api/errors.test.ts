@@ -30,6 +30,31 @@ describe("api/errors.mapManagerError", () => {
 				},
 			},
 			{
+				input: {
+					code: "AGENT_NAME_INVALID",
+					name: "Bad Name",
+					reason: "must be 3-40 chars of lowercase a-z, 0-9, or hyphen",
+				},
+				expected: {
+					status: 400,
+					body: {
+						error: "INVALID_REQUEST",
+						message:
+							"Invalid agent name 'Bad Name': must be 3-40 chars of lowercase a-z, 0-9, or hyphen",
+					},
+				},
+			},
+			{
+				input: { code: "NAME_CONFLICT", name: "codex-bright-fox", project: "proj" },
+				expected: {
+					status: 409,
+					body: {
+						error: "NAME_CONFLICT",
+						message: "Agent name 'codex-bright-fox' already exists in project 'proj'",
+					},
+				},
+			},
+			{
 				input: { code: "UNKNOWN_PROVIDER", name: "x" },
 				expected: {
 					status: 400,

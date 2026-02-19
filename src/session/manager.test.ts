@@ -842,3 +842,98 @@ describe("session/manager.subscriptions", () => {
 		expect(createRes.value.subscriptionId).toBe(discoveredId);
 	});
 });
+
+describe("session/manager.agent-names", () => {
+	it("uses provided name as id/window and validates format", async () => {
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(makeConfig(), store, eventBus);
+
+		const projectRes = await manager.createProject("pn1", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await manager.createAgent(
+			"pn1",
+			"codex",
+			"Reply with exactly: 4",
+			undefined,
+			undefined,
+			undefined,
+			"codex-bright-fox",
+		);
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+		expect(createRes.value.id).toBe("codex-bright-fox");
+		expect(createRes.value.windowName).toBe("codex-bright-fox");
+		expect(createRes.value.tmuxTarget).toContain(":codex-bright-fox");
+
+		const invalidRes = await manager.createAgent(
+			"pn1",
+			"codex",
+			"Reply with exactly: 4",
+			undefined,
+			undefined,
+			undefined,
+			"Bad Name",
+		);
+		expect(invalidRes.ok).toBe(false);
+		if (invalidRes.ok) throw new Error("expected failure");
+		expect(invalidRes.error.code).toBe("AGENT_NAME_INVALID");
+	});
+
+	it("auto-generates provider-adjective-noun ids and enforces project-local uniqueness", async () => {
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(makeConfig(), store, eventBus);
+
+		const p1Res = await manager.createProject("pn2-a", process.cwd());
+		expect(p1Res.ok).toBe(true);
+		if (!p1Res.ok) throw new Error("project create failed");
+		const p2Res = await manager.createProject("pn2-b", process.cwd());
+		expect(p2Res.ok).toBe(true);
+		if (!p2Res.ok) throw new Error("project create failed");
+
+		const autoRes = await manager.createAgent("pn2-a", "codex", "Reply with exactly: 4");
+		expect(autoRes.ok).toBe(true);
+		if (!autoRes.ok) throw new Error("agent create failed");
+		expect(autoRes.value.id).toMatch(/^codex-[a-z]{3,8}-[a-z]{3,8}$/);
+		expect(autoRes.value.windowName).toBe(autoRes.value.id);
+
+		const namedA = await manager.createAgent(
+			"pn2-a",
+			"codex",
+			"Reply with exactly: 4",
+			undefined,
+			undefined,
+			undefined,
+			"codex-same-otter",
+		);
+		expect(namedA.ok).toBe(true);
+		if (!namedA.ok) throw new Error("agent create failed");
+
+		const namedConflict = await manager.createAgent(
+			"pn2-a",
+			"codex",
+			"Reply with exactly: 4",
+			undefined,
+			undefined,
+			undefined,
+			"codex-same-otter",
+		);
+		expect(namedConflict.ok).toBe(false);
+		if (namedConflict.ok) throw new Error("expected failure");
+		expect(namedConflict.error.code).toBe("NAME_CONFLICT");
+
+		const namedOtherProject = await manager.createAgent(
+			"pn2-b",
+			"codex",
+			"Reply with exactly: 4",
+			undefined,
+			undefined,
+			undefined,
+			"codex-same-otter",
+		);
+		expect(namedOtherProject.ok).toBe(true);
+	});
+});

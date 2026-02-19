@@ -194,7 +194,8 @@ export function createDebugTracker(config: HarnessConfig, eventBus: EventBus) {
 	}
 
 	function observeEvent(event: NormalizedEvent): void {
-		const state = ensureAgent(event.agentId);
+		const scopedAgentId = `${event.project}:${event.agentId}`;
+		const state = ensureAgent(scopedAgentId);
 		state.stream.lastEventId = event.id;
 		state.stream.emittedCounts[event.type] = (state.stream.emittedCounts[event.type] ?? 0) + 1;
 
