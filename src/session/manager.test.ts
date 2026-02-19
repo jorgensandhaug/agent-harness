@@ -8,6 +8,7 @@ import { createEventBus } from "../events/bus.ts";
 import type { NormalizedEvent } from "../events/types.ts";
 import { createManager } from "./manager.ts";
 import { createStore } from "./store.ts";
+import * as tmux from "../tmux/client.ts";
 
 const originalSpawn = Bun.spawn;
 const originalDelay = process.env.HARNESS_INITIAL_TASK_DELAY_MS;
@@ -581,6 +582,47 @@ describe("session/manager.initial-input", () => {
 			expect(window.submitCount).toBeGreaterThanOrEqual(1);
 
 			const deleteRes = await manager.deleteProject("p7");
+			expect(deleteRes.ok).toBe(true);
+		} finally {
+			if (priorDelay === undefined) {
+				process.env.HARNESS_INITIAL_TASK_DELAY_MS = undefined;
+			} else {
+				process.env.HARNESS_INITIAL_TASK_DELAY_MS = priorDelay;
+			}
+		}
+	});
+
+	it("reproduces codex collapsed-paste bug with single-Enter tmux sendInput", async () => {
+		simulateCodexCollapsedPasteSubmit = true;
+		const priorDelay = process.env.HARNESS_INITIAL_TASK_DELAY_MS;
+		process.env.HARNESS_INITIAL_TASK_DELAY_MS = "10000";
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(makeConfig(), store, eventBus);
+
+		try {
+			const projectRes = await manager.createProject("p7b", process.cwd());
+			expect(projectRes.ok).toBe(true);
+			if (!projectRes.ok) throw new Error("project create failed");
+
+			const createRes = await manager.createAgent("p7b", "codex", "initial task");
+			expect(createRes.ok).toBe(true);
+			if (!createRes.ok) throw new Error("agent create failed");
+			const target = createRes.value.tmuxTarget;
+			const [sessionName, windowName] = target.split(":");
+			if (!sessionName || !windowName) throw new Error("bad tmux target");
+			const session = fake.sessions.get(sessionName);
+			const window = session?.windows.get(windowName);
+			if (!window) throw new Error("window missing");
+
+			const longPrompt = `Long prompt: ${"bug ".repeat(200)}`;
+			const inputRes = await tmux.sendInput(target, longPrompt);
+			expect(inputRes.ok).toBe(true);
+			expect(window.buffer).toContain(`[Pasted Content ${longPrompt.length} chars]`);
+			expect(window.enterKeyCount).toBeGreaterThanOrEqual(1);
+			expect(window.submitCount).toBe(0);
+
+			const deleteRes = await manager.deleteProject("p7b");
 			expect(deleteRes.ok).toBe(true);
 		} finally {
 			if (priorDelay === undefined) {
