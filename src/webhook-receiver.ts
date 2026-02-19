@@ -25,10 +25,7 @@ const ReceiverConfigSchema = z
 		port: z.number().int().min(1).max(65535),
 		bindAddress: z.string().min(1).default("127.0.0.1"),
 		token: z.string().min(1).optional(),
-		openclawHooksUrl: z.string().url().optional(),
-		openclawHooksToken: z.string().min(1).optional(),
-		gatewayToken: z.string().min(1).optional(),
-		discordBotToken: z.string().min(1).optional(),
+		discordBotToken: z.string().min(1),
 	})
 	.strict();
 
@@ -42,9 +39,6 @@ type EnvSource = Readonly<{
 	AH_WEBHOOK_RECEIVER_PORT?: string;
 	AH_WEBHOOK_RECEIVER_BIND_ADDRESS?: string;
 	AH_WEBHOOK_RECEIVER_TOKEN?: string;
-	AH_WEBHOOK_RECEIVER_HOOKS_URL?: string;
-	AH_WEBHOOK_RECEIVER_HOOKS_TOKEN?: string;
-	AH_WEBHOOK_RECEIVER_GATEWAY_TOKEN?: string;
 	AH_WEBHOOK_RECEIVER_DISCORD_BOT_TOKEN?: string;
 	XDG_CONFIG_HOME?: string;
 	HOME?: string;
@@ -130,12 +124,6 @@ export function loadConfig(env: EnvSource = process.env as EnvSource): ReceiverC
 	const fileBindAddress =
 		typeof fileConfig.bindAddress === "string" ? fileConfig.bindAddress : "127.0.0.1";
 	const fileToken = typeof fileConfig.token === "string" ? fileConfig.token : undefined;
-	const fileHooksUrl =
-		typeof fileConfig.openclawHooksUrl === "string" ? fileConfig.openclawHooksUrl : undefined;
-	const fileHooksToken =
-		typeof fileConfig.openclawHooksToken === "string" ? fileConfig.openclawHooksToken : undefined;
-	const fileGatewayToken =
-		typeof fileConfig.gatewayToken === "string" ? fileConfig.gatewayToken : undefined;
 	const fileDiscordBotToken =
 		typeof fileConfig.discordBotToken === "string" ? fileConfig.discordBotToken : undefined;
 
@@ -144,9 +132,6 @@ export function loadConfig(env: EnvSource = process.env as EnvSource): ReceiverC
 		port: parseIntWithDefault(env.AH_WEBHOOK_RECEIVER_PORT, filePort),
 		bindAddress: env.AH_WEBHOOK_RECEIVER_BIND_ADDRESS?.trim() || fileBindAddress,
 		token: env.AH_WEBHOOK_RECEIVER_TOKEN?.trim() || fileToken,
-		openclawHooksUrl: env.AH_WEBHOOK_RECEIVER_HOOKS_URL?.trim() || fileHooksUrl,
-		openclawHooksToken: env.AH_WEBHOOK_RECEIVER_HOOKS_TOKEN?.trim() || fileHooksToken,
-		gatewayToken: env.AH_WEBHOOK_RECEIVER_GATEWAY_TOKEN?.trim() || fileGatewayToken,
 		discordBotToken:
 			env.AH_WEBHOOK_RECEIVER_DISCORD_BOT_TOKEN?.trim() || fileDiscordBotToken,
 	});
@@ -162,23 +147,6 @@ export function matchesBearerToken(authHeader: string | undefined, expectedToken
 	if (!authHeader.startsWith(prefix)) return false;
 	const token = authHeader.slice(prefix.length);
 	return token === expectedToken;
-}
-
-export function formatEventMessage(payload: WebhookPayload): string {
-	const header = `[${payload.event}] project=${payload.project} agent=${payload.agentId} provider=${payload.provider} status=${payload.status}${payload.discordChannel ? ` discordChannel=${payload.discordChannel}` : ""}${payload.sessionKey ? ` sessionKey=${payload.sessionKey}` : ""}`;
-	const extraEntries = payload.extra ? Object.entries(payload.extra) : [];
-	const extraLine =
-		extraEntries.length > 0
-			? `extra=${extraEntries
-					.map(([key, value]) => `${key}=${value}`)
-					.sort()
-					.join(",")}`
-			: "";
-	const tail = typeof payload.lastMessage === "string" ? payload.lastMessage.trim() : "";
-	if (!tail && !extraLine) return header;
-	if (!tail) return `${header}\n${extraLine}`;
-	if (!extraLine) return `${header}\n${tail.slice(0, 1200)}`;
-	return `${header}\n${extraLine}\n${tail.slice(0, 1200)}`;
 }
 
 export function formatHeaderMessage(payload: WebhookPayload): string {
@@ -200,164 +168,55 @@ function parseDiscordChannelId(discordChannel: string): string {
 }
 
 async function runDiscordAction(config: ReceiverConfig, payload: WebhookPayload): Promise<void> {
-	if (config.discordBotToken) {
-		const header = formatHeaderMessage(payload);
-		const lastMessage = typeof payload.lastMessage === "string" ? payload.lastMessage.trim() : "";
-		const inlineMessage =
-			lastMessage.length > 0 && lastMessage.length < DISCORD_INLINE_CHAR_LIMIT
-				? `${header}\n${lastMessage}`
-				: header;
-		const channelId = parseDiscordChannelId(payload.discordChannel!);
-		let response: Response;
-		if (lastMessage.length >= DISCORD_INLINE_CHAR_LIMIT) {
-			const form = new FormData();
-			form.set(
-				"payload_json",
-				JSON.stringify({
-					content: header,
-					allowed_mentions: { parse: [] },
-				}),
-			);
-			form.set("files[0]", new File([lastMessage], "message.txt", { type: "text/plain" }));
-			response = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
-				method: "POST",
-				headers: {
-					Authorization: `Bot ${config.discordBotToken}`,
-				},
-				body: form,
-				signal: AbortSignal.timeout(10000),
-			});
-		} else {
-			response = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bot ${config.discordBotToken}`,
-				},
-				body: JSON.stringify({
-					content: inlineMessage,
-					allowed_mentions: { parse: [] },
-				}),
-				signal: AbortSignal.timeout(10000),
-			});
-		}
-		if (!response.ok) {
-			const body = await response.text().catch(() => "");
-			throw new Error(`discord api http ${response.status}: ${body.slice(0, 200)}`);
-		}
-		return;
-	}
-	const message = formatEventMessage(payload).slice(0, 2000);
-
-	const hooksUrl = config.openclawHooksUrl;
-	if (!hooksUrl) {
-		throw new Error("hooks/tools endpoint is not configured");
+	const discordBotToken = config.discordBotToken?.trim();
+	if (!discordBotToken) {
+		throw new Error("discord bot token not configured");
 	}
 
-	// Derive gateway base URL from hooks URL (e.g. http://host:port/hooks/agent -> http://host:port)
-	const parsedHooksUrl = new URL(hooksUrl);
-	const pathWithoutHooks = parsedHooksUrl.pathname.replace(/\/hooks\/.*$/, "");
-	const baseUrl = `${parsedHooksUrl.origin}${pathWithoutHooks}`;
-	const toolsUrl = `${baseUrl}/tools/invoke`;
-	const headers = new Headers({ "Content-Type": "application/json" });
-	if (config.gatewayToken) {
-		headers.set("Authorization", `Bearer ${config.gatewayToken}`);
-	}
-	const response = await fetch(toolsUrl, {
-		method: "POST",
-		headers,
-		body: JSON.stringify({
-			tool: "message",
-			args: {
-				action: "send",
-				channel: "discord",
-				target: `channel:${payload.discordChannel}`,
-				message,
+	const header = formatHeaderMessage(payload);
+	const lastMessage = typeof payload.lastMessage === "string" ? payload.lastMessage.trim() : "";
+	const inlineMessage =
+		lastMessage.length > 0 && lastMessage.length < DISCORD_INLINE_CHAR_LIMIT
+			? `${header}\n${lastMessage}`
+			: header;
+	const channelId = parseDiscordChannelId(payload.discordChannel!);
+	let response: Response;
+	if (lastMessage.length >= DISCORD_INLINE_CHAR_LIMIT) {
+		const form = new FormData();
+		form.set(
+			"payload_json",
+			JSON.stringify({
+				content: header,
+				allowed_mentions: { parse: [] },
+			}),
+		);
+		form.set("files[0]", new File([lastMessage], "message.txt", { type: "text/plain" }));
+		response = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+			method: "POST",
+			headers: {
+				Authorization: `Bot ${discordBotToken}`,
 			},
-		}),
-		signal: AbortSignal.timeout(10000),
-	});
+			body: form,
+			signal: AbortSignal.timeout(10000),
+		});
+	} else {
+		response = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bot ${discordBotToken}`,
+			},
+			body: JSON.stringify({
+				content: inlineMessage,
+				allowed_mentions: { parse: [] },
+			}),
+			signal: AbortSignal.timeout(10000),
+		});
+	}
 	if (!response.ok) {
 		const body = await response.text().catch(() => "");
-		throw new Error(`tools/invoke http ${response.status}: ${body.slice(0, 200)}`);
+		throw new Error(`discord api http ${response.status}: ${body.slice(0, 200)}`);
 	}
-}
-
-async function runChatSendAction(config: ReceiverConfig, payload: WebhookPayload): Promise<void> {
-	const hooksUrl = config.openclawHooksUrl;
-	if (!hooksUrl) {
-		throw new Error("hooks URL not configured (needed to derive gateway WebSocket URL)");
-	}
-	const gatewayToken = config.gatewayToken;
-	if (!gatewayToken) {
-		throw new Error("gateway token not configured (needed for chat.send auth)");
-	}
-
-	const parsedUrl = new URL(hooksUrl);
-	const wsProtocol = parsedUrl.protocol === "https:" ? "wss:" : "ws:";
-	const wsUrl = `${wsProtocol}//${parsedUrl.host}`;
-
-	const message = formatEventMessage(payload);
-	const sessionKey = payload.sessionKey!;
-	const idempotencyKey = `ah-${payload.project}-${payload.agentId}-${Date.now()}`;
-
-	const rpcPayload = {
-		method: "chat.send",
-		id: idempotencyKey,
-		params: { sessionKey, message, idempotencyKey },
-	};
-
-	return new Promise<void>((resolve, reject) => {
-		const timeout = setTimeout(() => {
-			ws.close();
-			reject(new Error("chat.send WebSocket timeout after 15s"));
-		}, 15000);
-
-		const ws = new WebSocket(wsUrl);
-
-		ws.onopen = () => {
-			ws.send(JSON.stringify({ method: "auth", id: "auth-1", params: { token: gatewayToken } }));
-		};
-
-		ws.onmessage = (event) => {
-			try {
-				const data = JSON.parse(String(event.data));
-				if (data.id === "auth-1") {
-					if (data.error) {
-						clearTimeout(timeout);
-						ws.close();
-						reject(new Error(`gateway auth failed: ${JSON.stringify(data.error)}`));
-						return;
-					}
-					ws.send(JSON.stringify(rpcPayload));
-				} else if (data.id === idempotencyKey) {
-					clearTimeout(timeout);
-					ws.close();
-					if (data.error) {
-						reject(new Error(`chat.send failed: ${JSON.stringify(data.error)}`));
-					} else {
-						receiverLog("info", "chat.send delivered", {
-							sessionKey,
-							project: payload.project,
-							agentId: payload.agentId,
-						});
-						resolve();
-					}
-				}
-			} catch {
-				// ignore parse errors
-			}
-		};
-
-		ws.onerror = (err) => {
-			clearTimeout(timeout);
-			reject(new Error(`WebSocket error: ${String(err)}`));
-		};
-
-		ws.onclose = () => {
-			clearTimeout(timeout);
-		};
-	});
 }
 export async function runActions(config: ReceiverConfig, payload: WebhookPayload): Promise<void> {
 	if (payload.discordChannel) {
@@ -367,27 +226,6 @@ export async function runActions(config: ReceiverConfig, payload: WebhookPayload
 			receiverLog("warn", "receiver discord action failed", {
 				error: error instanceof Error ? error.message : String(error),
 			});
-		}
-	}
-
-	if (payload.sessionKey) {
-		if (!config.openclawHooksUrl) {
-			receiverLog(
-				"warn",
-				"session bump requested but AH_WEBHOOK_RECEIVER_HOOKS_URL not configured",
-				{
-					sessionKey: payload.sessionKey,
-				},
-			);
-		} else {
-			try {
-				await runChatSendAction(config, payload);
-			} catch (error) {
-				receiverLog("warn", "receiver chat.send action failed", {
-					error: error instanceof Error ? error.message : String(error),
-					sessionKey: payload.sessionKey,
-				});
-			}
 		}
 	}
 
@@ -459,8 +297,7 @@ export function startWebhookReceiver(config: ReceiverConfig): ReturnType<typeof 
 		port: server.port,
 		bindAddress: config.bindAddress,
 		tokenRequired: Boolean(config.token),
-		hooksConfigured: Boolean(config.openclawHooksUrl),
-		discordDirectConfigured: Boolean(config.discordBotToken),
+		discordConfigured: Boolean(config.discordBotToken),
 	});
 	return server;
 }

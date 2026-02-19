@@ -5,7 +5,6 @@ import { join } from "node:path";
 import {
 	type ReceiverConfig,
 	createReceiverApp,
-	formatEventMessage,
 	formatHeaderMessage,
 	loadConfig,
 	matchesBearerToken,
@@ -36,10 +35,7 @@ function baseConfig(overrides: Partial<ReceiverConfig> = {}): ReceiverConfig {
 		port: 7071,
 		bindAddress: "127.0.0.1",
 		token: undefined,
-		openclawHooksUrl: undefined,
-		openclawHooksToken: undefined,
-		gatewayToken: undefined,
-		discordBotToken: undefined,
+		discordBotToken: "test-discord-bot-token",
 		...overrides,
 	};
 }
@@ -57,25 +53,19 @@ function basePayload() {
 }
 
 describe("webhook-receiver/loadConfig", () => {
-	it("loads defaults", () => {
-		const config = loadConfig({});
+	it("loads defaults with required discord bot token", () => {
+		const config = loadConfig({
+			AH_WEBHOOK_RECEIVER_DISCORD_BOT_TOKEN: "test-token",
+		});
 		expect(config.port).toBe(7071);
 		expect(config.bindAddress).toBe("127.0.0.1");
-		expect(config.openclawHooksUrl).toBeUndefined();
-		expect(config.openclawHooksToken).toBeUndefined();
-		expect(config.gatewayToken).toBeUndefined();
+		expect(config.discordBotToken).toBe("test-token");
 	});
 
-	it("accepts hooks config from env vars", () => {
+	it("accepts discord bot token from env var", () => {
 		const config = loadConfig({
-			AH_WEBHOOK_RECEIVER_HOOKS_URL: "http://127.0.0.1:18789/hooks/agent",
-			AH_WEBHOOK_RECEIVER_HOOKS_TOKEN: "tok-123",
-			AH_WEBHOOK_RECEIVER_GATEWAY_TOKEN: "gateway-123",
 			AH_WEBHOOK_RECEIVER_DISCORD_BOT_TOKEN: "discord-bot-token-123",
 		});
-		expect(config.openclawHooksUrl).toBe("http://127.0.0.1:18789/hooks/agent");
-		expect(config.openclawHooksToken).toBe("tok-123");
-		expect(config.gatewayToken).toBe("gateway-123");
 		expect(config.discordBotToken).toBe("discord-bot-token-123");
 	});
 
@@ -87,6 +77,7 @@ describe("webhook-receiver/loadConfig", () => {
 			JSON.stringify({
 				port: 7171,
 				bindAddress: "0.0.0.0",
+				discordBotToken: "file-token",
 			}),
 		);
 
@@ -105,6 +96,7 @@ describe("webhook-receiver/loadConfig", () => {
 			join(configDir, "webhook-receiver.json"),
 			JSON.stringify({
 				port: 7272,
+				discordBotToken: "xdg-token",
 			}),
 		);
 
@@ -121,22 +113,16 @@ describe("webhook-receiver/loadConfig", () => {
 			path,
 			JSON.stringify({
 				port: 7373,
-				openclawHooksToken: "from-file-token",
-				gatewayToken: "from-file-gateway-token",
 				discordBotToken: "from-file-discord-token",
 			}),
 		);
 
 		const config = loadConfig({
 			AH_WEBHOOK_RECEIVER_CONFIG: path,
-				AH_WEBHOOK_RECEIVER_PORT: "7474",
-				AH_WEBHOOK_RECEIVER_HOOKS_TOKEN: "from-env-token",
-				AH_WEBHOOK_RECEIVER_GATEWAY_TOKEN: "from-env-gateway-token",
-				AH_WEBHOOK_RECEIVER_DISCORD_BOT_TOKEN: "from-env-discord-token",
-			});
+			AH_WEBHOOK_RECEIVER_PORT: "7474",
+			AH_WEBHOOK_RECEIVER_DISCORD_BOT_TOKEN: "from-env-discord-token",
+		});
 		expect(config.port).toBe(7474);
-		expect(config.openclawHooksToken).toBe("from-env-token");
-		expect(config.gatewayToken).toBe("from-env-gateway-token");
 		expect(config.discordBotToken).toBe("from-env-discord-token");
 	});
 });
@@ -151,48 +137,6 @@ describe("webhook-receiver/auth", () => {
 });
 
 describe("webhook-receiver/actions", () => {
-	it("posts to tools/invoke for discord when payload has discordChannel", async () => {
-		const calls: Array<{ url: string; body: unknown; authHeader: string | null }> = [];
-		(globalThis as { fetch: typeof fetch }).fetch = (async (
-			input: RequestInfo | URL,
-			init?: RequestInit,
-		) => {
-			const request = new Request(input, init);
-			const body = await request.json();
-			calls.push({
-				url: request.url,
-				body,
-				authHeader: request.headers.get("authorization"),
-			});
-			return new Response(JSON.stringify({ ok: true }), { status: 200 });
-		}) as typeof fetch;
-
-		await runActions(
-			baseConfig({
-				openclawHooksUrl: "http://127.0.0.1:18789/hooks/agent",
-				openclawHooksToken: "hooks-token-ignored-for-discord",
-				gatewayToken: "gateway-token-456",
-			}),
-			{
-				...basePayload(),
-				discordChannel: "alerts",
-			},
-		);
-
-		expect(calls.length).toBe(1);
-		expect(calls[0]?.url).toBe("http://127.0.0.1:18789/tools/invoke");
-		expect(calls[0]?.authHeader).toBe("Bearer gateway-token-456");
-		const body = calls[0]?.body as {
-			tool: string;
-			args: { action: string; channel: string; target: string; message: string };
-		};
-		expect(body.tool).toBe("message");
-		expect(body.args.action).toBe("send");
-		expect(body.args.channel).toBe("discord");
-		expect(body.args.target).toBe("channel:alerts");
-		expect(body.args.message).toContain("discordChannel=alerts");
-	});
-
 	it("posts directly to discord api when discord bot token is configured", async () => {
 		const calls: Array<{ url: string; body: unknown; authHeader: string | null }> = [];
 		(globalThis as { fetch: typeof fetch }).fetch = (async (
@@ -296,28 +240,6 @@ describe("webhook-receiver/actions", () => {
 		expect(parsedPayloadJson.content).not.toContain(longLastMessage);
 		expect(parsedPayloadJson.allowed_mentions?.parse).toEqual([]);
 	});
-
-	it("requires gateway token for chat.send when payload has sessionKey", async () => {
-		let caughtError: Error | null = null;
-		try {
-			await runActions(
-				baseConfig({
-					openclawHooksUrl: "http://127.0.0.1:18789/hooks/agent",
-					openclawHooksToken: "tok-123",
-					// no gatewayToken
-				}),
-				{
-					...basePayload(),
-					sessionKey: "main-session",
-				},
-			);
-		} catch {
-			// runActions catches internally, so we check logs
-		}
-		// With no gatewayToken, chat.send should log a warning but not crash
-		// The action is caught internally in runActions
-		expect(true).toBe(true);
-	});
 });
 
 describe("webhook-receiver/http", () => {
@@ -356,8 +278,7 @@ describe("webhook-receiver/http", () => {
 
 		const app = createReceiverApp(
 			baseConfig({
-				openclawHooksUrl: "http://127.0.0.1:18789/hooks/agent",
-				gatewayToken: "gateway-token-456",
+				discordBotToken: "discord-bot-token-slow",
 			}),
 		);
 
@@ -367,7 +288,7 @@ describe("webhook-receiver/http", () => {
 				headers: { "content-type": "application/json" },
 				body: JSON.stringify({
 					...basePayload(),
-					discordChannel: "alerts",
+					discordChannel: "1473266182177165354",
 				}),
 			}),
 		);
@@ -411,24 +332,5 @@ describe("webhook-receiver/format", () => {
 		const header = formatHeaderMessage(basePayload());
 		expect(header).toContain("[agent_completed]");
 		expect(header).not.toContain("extra=");
-	});
-
-	it("formats event message with routing fields and extra metadata", () => {
-		const withText = formatEventMessage({
-			...basePayload(),
-			discordChannel: "alerts",
-			sessionKey: "ops-room",
-			extra: {
-				requestId: "req-1",
-			},
-		});
-		expect(withText).toContain("[agent_completed]");
-		expect(withText).toContain("discordChannel=alerts");
-		expect(withText).toContain("sessionKey=ops-room");
-		expect(withText).toContain("extra=requestId=req-1");
-		expect(withText).toContain("\nDone");
-
-		const withoutText = formatEventMessage({ ...basePayload(), lastMessage: null });
-		expect(withoutText.includes("\n")).toBe(false);
 	});
 });
