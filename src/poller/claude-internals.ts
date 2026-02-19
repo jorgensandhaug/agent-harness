@@ -22,6 +22,10 @@ type ClaudeRecord = {
 	} | null;
 };
 
+function isTerminalAssistantStopReason(reason: string): boolean {
+	return reason === "end_turn" || reason === "max_tokens" || reason === "stop_sequence";
+}
+
 export function newClaudeInternalsCursor(): ClaudeInternalsCursor {
 	return {
 		offset: 0,
@@ -44,7 +48,9 @@ function statusFromRecord(record: ClaudeRecord): AgentStatus | null {
 		const stopReason =
 			typeof record.message?.stop_reason === "string" ? record.message.stop_reason : null;
 		if (stopReason === "error") return "error";
-		return "idle";
+		if (!stopReason) return "processing";
+		if (isTerminalAssistantStopReason(stopReason)) return "idle";
+		return "processing";
 	}
 	if (type === "system") {
 		const level = typeof record.level === "string" ? record.level : null;
