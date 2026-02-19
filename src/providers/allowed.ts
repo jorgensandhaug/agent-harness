@@ -1,4 +1,4 @@
-export const ALLOWED_PROVIDERS = ["codex"] as const;
+export const ALLOWED_PROVIDERS = ["codex", "claude-code"] as const;
 
 const allowedProviders = new Set<string>(ALLOWED_PROVIDERS);
 

@@ -30,6 +30,11 @@ describe("api/subscriptions.route", () => {
 		const body = await response.json();
 		expect(body.subscriptions).toEqual([
 			{
+				id: "claude-max",
+				model: "claude-3-7-sonnet-latest",
+				subscription: { provider: "claude-code" },
+			},
+			{
 				id: "codex-plus",
 				model: "gpt-5-codex",
 				subscription: { provider: "codex" },

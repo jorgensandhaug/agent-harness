@@ -748,7 +748,7 @@ describe("http/agents.crud-input-output-abort", () => {
 			{
 				method: "POST",
 				body: JSON.stringify({
-					provider: "claude-code",
+					provider: "pi",
 					task: "Reply with exactly: 4",
 				}),
 			},
@@ -756,7 +756,7 @@ describe("http/agents.crud-input-output-abort", () => {
 		expect(createAgentRes.status).toBe(400);
 		const body = await createAgentRes.json();
 		expect(body).toEqual({
-			error: 'Only the codex provider is currently supported. Please use provider: "codex".',
+			error: 'Only the following providers are currently supported: "codex", "claude-code".',
 		});
 	});
 

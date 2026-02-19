@@ -3,7 +3,7 @@ import { getProvider, listProviders } from "./registry.ts";
 
 describe("providers/registry", () => {
 	it("lists only allowed providers", () => {
-		expect(listProviders()).toEqual(["codex"]);
+		expect(listProviders()).toEqual(["claude-code", "codex"]);
 	});
 
 	it("keeps provider lookup available for built-in providers", () => {
