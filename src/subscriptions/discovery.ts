@@ -160,22 +160,8 @@ function collectCandidateDirs(
 
 async function collectClaudeTokenFiles(
 	extraPaths: readonly string[],
-	includeDefaults: boolean,
 ): Promise<readonly PathCandidate[]> {
 	const candidates = new Map<string, Set<string>>();
-	if (includeDefaults) {
-		const defaultDirs = [
-			join(homedir(), "dotfiles", "secrets", "profiles", "claude"),
-			join(homedir(), "dotfiles", "secrets", "vm1", "profiles", "claude"),
-		];
-		for (const dir of defaultDirs) {
-			const entries = await readDirNamesWithTypes(dir);
-			for (const entry of entries) {
-				if (!entry.isFile() || !entry.name.endsWith(".token")) continue;
-				addReason(candidates, normalizePath(join(dir, entry.name)), "default_token_dir_scan");
-			}
-		}
-	}
 
 	for (const value of extraPaths) {
 		const trimmed = value.trim();
@@ -295,7 +281,6 @@ export async function discoverSubscriptions(
 	);
 	const claudeTokenFileCandidates = await collectClaudeTokenFiles(
 		claudeTokenFiles,
-		discovery.includeDefaults,
 	);
 
 	const discovered: DiscoveredSubscription[] = [];

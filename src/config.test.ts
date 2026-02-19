@@ -179,7 +179,7 @@ describe("config/load.valid-file", () => {
 					"claude-cloudgeni": {
 						provider: "claude-code",
 						mode: "oauth",
-						tokenFile: "/home/jorge/dotfiles/secrets/profiles/claude/cloudgeni.token",
+						tokenFile: "/tmp/claude-tokens/cloudgeni.token",
 					},
 				},
 			}),
@@ -188,7 +188,7 @@ describe("config/load.valid-file", () => {
 		const config = await loadConfig(path);
 		expect(config.subscriptions["claude-cloudgeni"]?.provider).toBe("claude-code");
 		expect(config.subscriptions["claude-cloudgeni"]?.tokenFile).toBe(
-			"/home/jorge/dotfiles/secrets/profiles/claude/cloudgeni.token",
+			"/tmp/claude-tokens/cloudgeni.token",
 		);
 	});
 
@@ -251,9 +251,9 @@ describe("config/load.valid-file", () => {
 				subscriptionDiscovery: {
 					enabled: false,
 					includeDefaults: false,
-					claudeDirs: ["/home/jorge/.claude-work"],
-					claudeTokenFiles: ["/home/jorge/dotfiles/secrets/profiles/claude/default.token"],
-					codexDirs: ["/home/jorge/.codex-team"],
+					claudeDirs: ["/tmp/claude-work"],
+					claudeTokenFiles: ["/tmp/claude-tokens/default.token"],
+					codexDirs: ["/tmp/codex-team"],
 				},
 			}),
 		);
@@ -262,9 +262,9 @@ describe("config/load.valid-file", () => {
 		expect(config.subscriptionDiscovery).toEqual({
 			enabled: false,
 			includeDefaults: false,
-			claudeDirs: ["/home/jorge/.claude-work"],
-			claudeTokenFiles: ["/home/jorge/dotfiles/secrets/profiles/claude/default.token"],
-			codexDirs: ["/home/jorge/.codex-team"],
+			claudeDirs: ["/tmp/claude-work"],
+			claudeTokenFiles: ["/tmp/claude-tokens/default.token"],
+			codexDirs: ["/tmp/codex-team"],
 		});
 	});
 });
