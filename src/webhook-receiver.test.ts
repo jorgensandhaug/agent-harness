@@ -6,6 +6,7 @@ import {
 	type ReceiverConfig,
 	createReceiverApp,
 	formatEventMessage,
+	formatHeaderMessage,
 	loadConfig,
 	matchesBearerToken,
 	runActions,
@@ -225,8 +226,75 @@ describe("webhook-receiver/actions", () => {
 			content: string;
 			allowed_mentions: { parse: string[] };
 		};
-		expect(body.content).toContain("discordChannel=1473266182177165354");
+		expect(body.content).toContain("[agent_completed]");
+		expect(body.content).toContain("project=proj-1");
+		expect(body.content).toContain("agent=abcd1234");
+		expect(body.content).toContain("provider=codex");
+		expect(body.content).toContain("status=idle");
+		expect(body.content).toContain("\nDone");
+		expect(body.content).not.toContain("discordChannel=");
 		expect(body.allowed_mentions.parse).toEqual([]);
+	});
+
+	it("uploads lastMessage as message.txt when direct discord message is long", async () => {
+		const calls: Array<{
+			url: string;
+			authHeader: string | null;
+			contentType: string | null;
+			payloadJson: string | null;
+			fileName: string | null;
+			fileText: string | null;
+		}> = [];
+		(globalThis as { fetch: typeof fetch }).fetch = (async (
+			input: RequestInfo | URL,
+			init?: RequestInit,
+		) => {
+			const request = new Request(input, init);
+			const form = await request.formData();
+			const fileEntry = form.get("files[0]");
+			calls.push({
+				url: request.url,
+				authHeader: request.headers.get("authorization"),
+				contentType: request.headers.get("content-type"),
+				payloadJson:
+					typeof form.get("payload_json") === "string"
+						? (form.get("payload_json") as string)
+						: null,
+				fileName: fileEntry instanceof File ? fileEntry.name : null,
+				fileText: fileEntry instanceof File ? await fileEntry.text() : null,
+			});
+			return new Response(JSON.stringify({ id: "456" }), { status: 200 });
+		}) as typeof fetch;
+
+		const longLastMessage = "x".repeat(250);
+		await runActions(
+			baseConfig({
+				discordBotToken: "discord-bot-token-789",
+			}),
+			{
+				...basePayload(),
+				lastMessage: longLastMessage,
+				discordChannel: "1473266182177165354",
+			},
+		);
+
+		expect(calls.length).toBe(1);
+		expect(calls[0]?.url).toBe("https://discord.com/api/v10/channels/1473266182177165354/messages");
+		expect(calls[0]?.authHeader).toBe("Bot discord-bot-token-789");
+		expect(calls[0]?.contentType).toContain("multipart/form-data");
+		expect(calls[0]?.fileName).toBe("message.txt");
+		expect(calls[0]?.fileText).toBe(longLastMessage);
+
+		const payloadJson = calls[0]?.payloadJson;
+		expect(payloadJson).not.toBeNull();
+		const parsedPayloadJson = JSON.parse(payloadJson ?? "{}") as {
+			content?: string;
+			allowed_mentions?: { parse?: string[] };
+		};
+		expect(parsedPayloadJson.content).toContain("[agent_completed]");
+		expect(parsedPayloadJson.content).toContain("project=proj-1");
+		expect(parsedPayloadJson.content).not.toContain(longLastMessage);
+		expect(parsedPayloadJson.allowed_mentions?.parse).toEqual([]);
 	});
 
 	it("requires gateway token for chat.send when payload has sessionKey", async () => {
@@ -318,6 +386,33 @@ describe("webhook-receiver/http", () => {
 });
 
 describe("webhook-receiver/format", () => {
+	it("formats header message without routing fields and with extra metadata", () => {
+		const header = formatHeaderMessage({
+			...basePayload(),
+			discordChannel: "alerts",
+			sessionKey: "ops-room",
+			extra: {
+				requestId: "req-1",
+				retry: "2",
+			},
+		});
+		expect(header).toContain("[agent_completed]");
+		expect(header).toContain("project=proj-1");
+		expect(header).toContain("agent=abcd1234");
+		expect(header).toContain("provider=codex");
+		expect(header).toContain("status=idle");
+		expect(header).toContain("extra=requestId=req-1,retry=2");
+		expect(header).not.toContain("discordChannel=");
+		expect(header).not.toContain("sessionKey=");
+		expect(header.includes("\n")).toBe(false);
+	});
+
+	it("formats header message without extra metadata", () => {
+		const header = formatHeaderMessage(basePayload());
+		expect(header).toContain("[agent_completed]");
+		expect(header).not.toContain("extra=");
+	});
+
 	it("formats event message with routing fields and extra metadata", () => {
 		const withText = formatEventMessage({
 			...basePayload(),

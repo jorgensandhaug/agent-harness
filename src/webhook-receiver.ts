@@ -35,6 +35,7 @@ const ReceiverConfigSchema = z
 type WebhookPayload = z.infer<typeof WebhookPayloadSchema>;
 export type ReceiverConfig = z.infer<typeof ReceiverConfigSchema>;
 type ReceiverFileConfig = Partial<ReceiverConfig>;
+const DISCORD_INLINE_CHAR_LIMIT = 250;
 
 type EnvSource = Readonly<{
 	AH_WEBHOOK_RECEIVER_CONFIG?: string;
@@ -180,6 +181,17 @@ export function formatEventMessage(payload: WebhookPayload): string {
 	return `${header}\n${extraLine}\n${tail.slice(0, 1200)}`;
 }
 
+export function formatHeaderMessage(payload: WebhookPayload): string {
+	const base = `[${payload.event}] project=${payload.project} agent=${payload.agentId} provider=${payload.provider} status=${payload.status}`;
+	const extraEntries = payload.extra ? Object.entries(payload.extra) : [];
+	if (extraEntries.length === 0) return base;
+	const extra = extraEntries
+		.map(([key, value]) => `${key}=${value}`)
+		.sort()
+		.join(",");
+	return `${base} extra=${extra}`;
+}
+
 function parseDiscordChannelId(discordChannel: string): string {
 	const trimmed = discordChannel.trim();
 	if (!trimmed) throw new Error("discordChannel is empty");
@@ -188,28 +200,54 @@ function parseDiscordChannelId(discordChannel: string): string {
 }
 
 async function runDiscordAction(config: ReceiverConfig, payload: WebhookPayload): Promise<void> {
-	const message = formatEventMessage(payload).slice(0, 2000);
-
 	if (config.discordBotToken) {
+		const header = formatHeaderMessage(payload);
+		const lastMessage = typeof payload.lastMessage === "string" ? payload.lastMessage.trim() : "";
+		const inlineMessage =
+			lastMessage.length > 0 && lastMessage.length < DISCORD_INLINE_CHAR_LIMIT
+				? `${header}\n${lastMessage}`
+				: header;
 		const channelId = parseDiscordChannelId(payload.discordChannel!);
-		const response = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bot ${config.discordBotToken}`,
-			},
-			body: JSON.stringify({
-				content: message,
-				allowed_mentions: { parse: [] },
-			}),
-			signal: AbortSignal.timeout(10000),
-		});
+		let response: Response;
+		if (lastMessage.length >= DISCORD_INLINE_CHAR_LIMIT) {
+			const form = new FormData();
+			form.set(
+				"payload_json",
+				JSON.stringify({
+					content: header,
+					allowed_mentions: { parse: [] },
+				}),
+			);
+			form.set("files[0]", new File([lastMessage], "message.txt", { type: "text/plain" }));
+			response = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+				method: "POST",
+				headers: {
+					Authorization: `Bot ${config.discordBotToken}`,
+				},
+				body: form,
+				signal: AbortSignal.timeout(10000),
+			});
+		} else {
+			response = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bot ${config.discordBotToken}`,
+				},
+				body: JSON.stringify({
+					content: inlineMessage,
+					allowed_mentions: { parse: [] },
+				}),
+				signal: AbortSignal.timeout(10000),
+			});
+		}
 		if (!response.ok) {
 			const body = await response.text().catch(() => "");
 			throw new Error(`discord api http ${response.status}: ${body.slice(0, 200)}`);
 		}
 		return;
 	}
+	const message = formatEventMessage(payload).slice(0, 2000);
 
 	const hooksUrl = config.openclawHooksUrl;
 	if (!hooksUrl) {
