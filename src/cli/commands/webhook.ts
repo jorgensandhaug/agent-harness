@@ -88,6 +88,11 @@ export function registerWebhookCommands(
 							type: "string",
 							describe: "Last message override",
 						})
+						.option("last-message-null", {
+							type: "boolean",
+							default: false,
+							describe: "Send explicit null for lastMessage",
+						})
 						.option("target-url", {
 							type: "string",
 							describe: "Override webhook URL",
@@ -111,6 +116,9 @@ export function registerWebhookCommands(
 						}),
 				async (argv) => {
 					const context = await buildContext(argv);
+					if (argv.lastMessage !== undefined && argv.lastMessageNull) {
+						throw new Error("Use either --last-message or --last-message-null, not both.");
+					}
 					const extra = parseExtra(argv.extra ?? []);
 					const response = await context.client.webhookTest({
 						...(argv.event ? { event: argv.event } : {}),
@@ -118,6 +126,7 @@ export function registerWebhookCommands(
 						...(argv.agentId ? { agentId: argv.agentId } : {}),
 						...(argv.provider ? { provider: argv.provider } : {}),
 						...(argv.status ? { status: argv.status } : {}),
+						...(argv.lastMessageNull ? { lastMessage: null } : {}),
 						...(argv.lastMessage ? { lastMessage: argv.lastMessage } : {}),
 						...(argv.targetUrl ? { url: argv.targetUrl } : {}),
 						...(argv.targetToken ? { token: argv.targetToken } : {}),

@@ -1,7 +1,7 @@
 import type { Argv } from "yargs";
 import { serveCommand } from "../../serve.ts";
 import type { BuildContext, GlobalOptions } from "../main.ts";
-import { printJson, printKeyValue } from "../output.ts";
+import { printJson, printKeyValue, printText } from "../output.ts";
 
 function registerHealthCommand(yargs: Argv<GlobalOptions>, buildContext: BuildContext): void {
 	yargs.command(
@@ -65,6 +65,37 @@ export function registerDaemonCommands(
 						{ key: "version", value: health.version },
 					]);
 					if (!health.tmuxAvailable) process.exitCode = 1;
+				},
+			)
+			.command(
+				"inspect",
+				"Fetch inspector HTML page",
+				(builder) => builder,
+				async (argv) => {
+					const context = await buildContext(argv);
+					const response = await context.client.rawRequest({
+						method: "GET",
+						path: "/inspect",
+					});
+					if (context.json) {
+						printJson(response);
+						if (response.status >= 400) process.exitCode = 1;
+						return;
+					}
+					if (typeof response.text === "string") {
+						printKeyValue([
+							{ key: "status", value: response.status },
+							{ key: "contentType", value: response.contentType ?? "" },
+						]);
+						printText("");
+						printText(response.text);
+					} else {
+						printKeyValue([
+							{ key: "status", value: response.status },
+							{ key: "contentType", value: response.contentType ?? "" },
+						]);
+					}
+					if (response.status >= 400) process.exitCode = 1;
 				},
 			)
 			.demandCommand(1)

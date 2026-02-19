@@ -92,6 +92,10 @@ export function registerAgentCommands(
 							demandOption: true,
 							describe: "Initial task prompt",
 						})
+						.option("name", {
+							type: "string",
+							describe: "Optional human-readable agent ID",
+						})
 						.option("model", {
 							type: "string",
 							describe: "Model override",
@@ -124,20 +128,25 @@ export function registerAgentCommands(
 				async (argv) => {
 					const context = await buildContext(argv);
 					const extra = toKeyValueRecord(argv.extra ?? []);
-					const callback = argv.callbackUrl
+					const callbackUrl = argv.callbackUrl ?? context.config.callbackUrl;
+					const callbackToken = argv.callbackToken ?? context.config.callbackToken;
+					const discordChannel = argv.discordChannel ?? context.config.discordChannel;
+					const sessionKey = argv.sessionKey ?? context.config.sessionKey;
+					const callback = callbackUrl
 						? {
-								url: argv.callbackUrl,
-								...(argv.callbackToken ? { token: argv.callbackToken } : {}),
-								...(argv.discordChannel ? { discordChannel: argv.discordChannel } : {}),
-								...(argv.sessionKey ? { sessionKey: argv.sessionKey } : {}),
+								url: callbackUrl,
+								...(callbackToken ? { token: callbackToken } : {}),
+								...(discordChannel ? { discordChannel } : {}),
+								...(sessionKey ? { sessionKey } : {}),
 								...(Object.keys(extra).length > 0 ? { extra } : {}),
 							}
 						: undefined;
 					const response = await context.client.createAgent(argv.project, {
 						provider: argv.provider,
 						task: argv.task,
-						...(argv.model ? { model: argv.model } : {}),
-						...(argv.subscription ? { subscription: argv.subscription } : {}),
+						...(argv.name !== undefined ? { name: argv.name } : {}),
+						...(argv.model !== undefined ? { model: argv.model } : {}),
+						...(argv.subscription !== undefined ? { subscription: argv.subscription } : {}),
 						...(callback ? { callback } : {}),
 					});
 					if (context.json) {
@@ -357,6 +366,34 @@ export function registerAgentCommands(
 						return;
 					}
 					printText("(no assistant message)");
+				},
+			)
+			.command(
+				"debug <project> <agentId>",
+				"Get agent debug state",
+				(builder) =>
+					builder
+						.positional("project", {
+							type: "string",
+							demandOption: true,
+							describe: "Project name",
+						})
+						.positional("agentId", {
+							type: "string",
+							demandOption: true,
+							describe: "Agent ID",
+						}),
+				async (argv) => {
+					const context = await buildContext(argv);
+					const response = await context.client.getAgentDebug(
+						argv.project,
+						agentIdFromArg(argv.agentId),
+					);
+					if (context.json) {
+						printJson(response);
+						return;
+					}
+					printJson(response);
 				},
 			)
 			.command(

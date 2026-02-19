@@ -220,6 +220,7 @@ export type CliHttpClient = {
 		options?: { limit?: number; role?: "all" | "user" | "assistant" | "system" | "developer" },
 	): Promise<AgentMessagesResponse>;
 	getAgentLastMessage(project: string, agentId: string): Promise<Record<string, unknown>>;
+	getAgentDebug(project: string, agentId: string): Promise<Record<string, unknown>>;
 	abortAgent(project: string, agentId: string): Promise<{ sent: boolean }>;
 	deleteAgent(project: string, agentId: string): Promise<void>;
 	listSubscriptions(): Promise<SubscriptionsListResponse>;
@@ -722,6 +723,18 @@ export function createHttpClient(options: ClientOptions): CliHttpClient {
 					{ timeoutMs: defaultTimeoutMs },
 				);
 			},
+		getAgentDebug(project, agentId) {
+			const encodedProject = encodeURIComponent(project);
+			const encodedAgent = encodeURIComponent(agentId);
+			return requestJson<Record<string, unknown>>(
+				baseUrl,
+				token,
+				defaultCompact,
+				"GET",
+				`/api/v1/projects/${encodedProject}/agents/${encodedAgent}/debug`,
+				{ timeoutMs: defaultTimeoutMs, compact: false },
+			);
+		},
 		abortAgent(project, agentId) {
 			const encodedProject = encodeURIComponent(project);
 			const encodedAgent = encodeURIComponent(agentId);

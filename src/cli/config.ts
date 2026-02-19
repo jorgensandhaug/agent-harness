@@ -7,6 +7,10 @@ const CliFileConfigSchema = z
 		token: z.string().min(1).optional(),
 		json: z.boolean().optional(),
 		compact: z.boolean().optional(),
+		callbackUrl: z.string().url().optional(),
+		callbackToken: z.string().min(1).optional(),
+		discordChannel: z.string().min(1).optional(),
+		sessionKey: z.string().min(1).optional(),
 	})
 	.strict();
 
@@ -24,6 +28,10 @@ export type CliRuntimeConfig = {
 	token?: string | undefined;
 	json: boolean;
 	compact: boolean;
+	callbackUrl?: string | undefined;
+	callbackToken?: string | undefined;
+	discordChannel?: string | undefined;
+	sessionKey?: string | undefined;
 	configPath: string;
 };
 
@@ -120,17 +128,33 @@ export async function resolveCliConfig(overrides: CliFlagOverrides): Promise<Cli
 	const envJson = parseBooleanEnv(process.env["AH_JSON"]);
 	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
 	const envCompact = parseBooleanEnv(process.env["AH_COMPACT"]);
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+	const envCallbackUrl = nonEmpty(process.env["AH_CALLBACK_URL"]);
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+	const envCallbackToken = nonEmpty(process.env["AH_CALLBACK_TOKEN"]);
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+	const envDiscordChannel = nonEmpty(process.env["AH_DISCORD_CHANNEL"]);
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+	const envSessionKey = nonEmpty(process.env["AH_SESSION_KEY"]);
 
 	const url = normalizeUrl(overrides.url ?? envUrl ?? fileConfig.url ?? DEFAULT_URL);
 	const token = nonEmpty(overrides.token) ?? envToken ?? fileConfig.token;
 	const json = overrides.json ?? envJson ?? fileConfig.json ?? false;
 	const compact = overrides.compact ?? envCompact ?? fileConfig.compact ?? false;
+	const callbackUrl = envCallbackUrl ?? fileConfig.callbackUrl;
+	const callbackToken = envCallbackToken ?? fileConfig.callbackToken;
+	const discordChannel = envDiscordChannel ?? fileConfig.discordChannel;
+	const sessionKey = envSessionKey ?? fileConfig.sessionKey;
 
 	return {
 		url,
 		...(token ? { token } : {}),
 		json,
 		compact,
+		...(callbackUrl ? { callbackUrl } : {}),
+		...(callbackToken ? { callbackToken } : {}),
+		...(discordChannel ? { discordChannel } : {}),
+		...(sessionKey ? { sessionKey } : {}),
 		configPath,
 	};
 }
