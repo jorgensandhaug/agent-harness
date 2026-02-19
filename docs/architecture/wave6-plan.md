@@ -59,7 +59,7 @@ Config:
 ```json
 {
   "webhook": {
-    "url": "http://100.85.245.12:7071/harness-webhook",
+    "url": "http://10.0.0.1:7071/harness-webhook",
     "token": "secret",
     "events": ["agent_completed", "agent_error", "agent_exited"]
   }
@@ -110,4 +110,4 @@ Lives in the agent-harness repo as a separate entrypoint. Compiles to its own bi
 1. 6A (CLI + binary) — no dependencies
 2. 6B (auth) — no dependencies, can parallel with 6A
 3. 6C (webhook client in harness) — after 6A/6B merged
-4. 6D (webhook receiver on jorgebot) — can parallel with 6C
+4. 6D (webhook receiver on your-host) — can parallel with 6C

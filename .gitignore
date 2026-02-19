@@ -8,3 +8,6 @@ harness.json
 harness.local.json
 webhook-receiver.json
 webhook-receiver.local.json
+
+agent-harness
+agent-harness-receiver

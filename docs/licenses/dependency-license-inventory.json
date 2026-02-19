@@ -5,8 +5,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/@biomejs/biome",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/@biomejs/biome/LICENSE-MIT",
+    "path": "node_modules/@biomejs/biome",
+    "licenseFile": "node_modules/@biomejs/biome/LICENSE-MIT",
     "licenseText": "MIT License\n\nCopyright (c) 2023 Biome Developers and Contributors.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2023 Biome Developers and Contributors."
   },
@@ -16,7 +16,7 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/@biomejs/cli-linux-arm64-musl"
+    "path": "node_modules/@biomejs/cli-linux-arm64-musl"
   },
   "@biomejs/cli-linux-arm64@1.9.4": {
     "licenses": "MIT OR Apache-2.0",
@@ -24,7 +24,7 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/@biomejs/cli-linux-arm64"
+    "path": "node_modules/@biomejs/cli-linux-arm64"
   },
   "@types/bun@1.3.9": {
     "licenses": "MIT",
@@ -32,8 +32,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/@types/bun",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/@types/bun/LICENSE",
+    "path": "node_modules/@types/bun",
+    "licenseFile": "node_modules/@types/bun/LICENSE",
     "licenseText": "MIT License\n\n    Copyright (c) Microsoft Corporation.\n\n    Permission is hereby granted, free of charge, to any person obtaining a copy\n    of this software and associated documentation files (the \"Software\"), to deal\n    in the Software without restriction, including without limitation the rights\n    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\n    copies of the Software, and to permit persons to whom the Software is\n    furnished to do so, subject to the following conditions:\n\n    The above copyright notice and this permission notice shall be included in all\n    copies or substantial portions of the Software.\n\n    THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\n    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\n    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n    SOFTWARE"
   },
   "@types/node@25.2.3": {
@@ -42,8 +42,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/@types/node",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/@types/node/LICENSE",
+    "path": "node_modules/@types/node",
+    "licenseFile": "node_modules/@types/node/LICENSE",
     "licenseText": "MIT License\n\n    Copyright (c) Microsoft Corporation.\n\n    Permission is hereby granted, free of charge, to any person obtaining a copy\n    of this software and associated documentation files (the \"Software\"), to deal\n    in the Software without restriction, including without limitation the rights\n    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\n    copies of the Software, and to permit persons to whom the Software is\n    furnished to do so, subject to the following conditions:\n\n    The above copyright notice and this permission notice shall be included in all\n    copies or substantial portions of the Software.\n\n    THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\n    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\n    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n    SOFTWARE"
   },
   "@types/yargs-parser@21.0.3": {
@@ -52,8 +52,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/@types/yargs-parser",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/@types/yargs-parser/LICENSE",
+    "path": "node_modules/@types/yargs-parser",
+    "licenseFile": "node_modules/@types/yargs-parser/LICENSE",
     "licenseText": "MIT License\n\n    Copyright (c) Microsoft Corporation.\n\n    Permission is hereby granted, free of charge, to any person obtaining a copy\n    of this software and associated documentation files (the \"Software\"), to deal\n    in the Software without restriction, including without limitation the rights\n    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\n    copies of the Software, and to permit persons to whom the Software is\n    furnished to do so, subject to the following conditions:\n\n    The above copyright notice and this permission notice shall be included in all\n    copies or substantial portions of the Software.\n\n    THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\n    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\n    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n    SOFTWARE"
   },
   "@types/yargs@17.0.35": {
@@ -62,8 +62,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/@types/yargs",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/@types/yargs/LICENSE",
+    "path": "node_modules/@types/yargs",
+    "licenseFile": "node_modules/@types/yargs/LICENSE",
     "licenseText": "MIT License\n\n    Copyright (c) Microsoft Corporation.\n\n    Permission is hereby granted, free of charge, to any person obtaining a copy\n    of this software and associated documentation files (the \"Software\"), to deal\n    in the Software without restriction, including without limitation the rights\n    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\n    copies of the Software, and to permit persons to whom the Software is\n    furnished to do so, subject to the following conditions:\n\n    The above copyright notice and this permission notice shall be included in all\n    copies or substantial portions of the Software.\n\n    THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\n    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\n    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n    SOFTWARE"
   },
   "agent-harness@0.1.0": {
@@ -72,8 +72,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness",
-    "licenseFile": "/home/jorge/repos/agent-harness/LICENSE",
+    "path": ".",
+    "licenseFile": "LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) 2026 Jorge Sandhaug\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2026 Jorge Sandhaug"
   },
@@ -83,8 +83,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/ansi-regex",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/ansi-regex/license",
+    "path": "node_modules/ansi-regex",
+    "licenseFile": "node_modules/ansi-regex/license",
     "licenseText": "MIT License\n\nCopyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
   },
@@ -94,8 +94,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/ansi-styles",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/ansi-styles/license",
+    "path": "node_modules/ansi-styles",
+    "licenseFile": "node_modules/ansi-styles/license",
     "licenseText": "MIT License\n\nCopyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
   },
@@ -105,8 +105,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/bun-types",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/bun-types/README.md",
+    "path": "node_modules/bun-types",
+    "licenseFile": "node_modules/bun-types/README.md",
     "licenseText": "# TypeScript types for Bun\n\n<p align=\"center\">\n  <a href=\"https://bun.com\"><img src=\"https://bun.com/logo@2x.png\" alt=\"Logo\"></a>\n</p>\n\nThese are the type definitions for Bun's JavaScript runtime APIs.\n\n# Installation\n\nInstall the `@types/bun` npm package:\n\n```bash\n# yarn/npm/pnpm work too\n# @types/bun is an ordinary npm package\nbun add -D @types/bun\n```\n\nThat's it! VS Code and TypeScript automatically load `@types/*` packages into your project, so the `Bun` global and all `bun:*` modules should be available immediately.\n\n# Contributing\n\nThe `@types/bun` package is a shim that loads `bun-types`. The `bun-types` package lives in the Bun repo under `packages/bun-types`.\n\nTo add a new file, add it under `packages/bun-types`. Then add a [triple-slash directive](https://www.typescriptlang.org/docs/handbook/triple-slash-directives.html) pointing to it inside [./index.d.ts](./index.d.ts).\n\n```diff\n+ /// <reference path=\"./newfile.d.ts\" />\n```\n\n```bash\nbun build\n```"
   },
   "call-bind-apply-helpers@1.0.2": {
@@ -115,8 +115,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/call-bind-apply-helpers",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/call-bind-apply-helpers/LICENSE",
+    "path": "node_modules/call-bind-apply-helpers",
+    "licenseFile": "node_modules/call-bind-apply-helpers/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) 2024 Jordan Harband\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2024 Jordan Harband"
   },
@@ -126,8 +126,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/call-bound",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/call-bound/LICENSE",
+    "path": "node_modules/call-bound",
+    "licenseFile": "node_modules/call-bound/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) 2024 Jordan Harband\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2024 Jordan Harband"
   },
@@ -137,8 +137,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/cliui",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/cliui/LICENSE.txt",
+    "path": "node_modules/cliui",
+    "licenseFile": "node_modules/cliui/LICENSE.txt",
     "licenseText": "Copyright (c) 2015, Contributors\n\nPermission to use, copy, modify, and/or distribute this software\nfor any purpose with or without fee is hereby granted, provided\nthat the above copyright notice and this permission notice\nappear in all copies.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES\nWITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES\nOF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE\nLIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES\nOR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,\nWHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,\nARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.",
     "copyright": "Copyright (c) 2015, Contributors"
   },
@@ -148,8 +148,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/commander",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/commander/Readme.md",
+    "path": "node_modules/commander",
+    "licenseFile": "node_modules/commander/Readme.md",
     "licenseText": "# Commander.js\n\n  The complete solution for [node.js](http://nodejs.org) command-line interfaces, inspired by Ruby's [commander](https://github.com/visionmedia/commander).\n\n [![Build Status](https://secure.travis-ci.org/visionmedia/commander.js.png)](http://travis-ci.org/visionmedia/commander.js)\n\n## Installation\n\n    $ npm install commander\n\n## Option parsing\n\n Options with commander are defined with the `.option()` method, also serving as documentation for the options. The example below parses args and options from `process.argv`, leaving remaining args as the `program.args` array which were not consumed by options.\n\n```js\n#!/usr/bin/env node\n\n/**\n * Module dependencies.\n */\n\nvar program = require('commander');\n\nprogram\n  .version('0.0.1')\n  .option('-p, --peppers', 'Add peppers')\n  .option('-P, --pineapple', 'Add pineapple')\n  .option('-b, --bbq', 'Add bbq sauce')\n  .option('-c, --cheese [type]', 'Add the specified type of cheese [marble]', 'marble')\n  .parse(process.argv);\n\nconsole.log('you ordered a pizza with:');\nif (program.peppers) console.log('  - peppers');\nif (program.pineapple) console.log('  - pineappe');\nif (program.bbq) console.log('  - bbq');\nconsole.log('  - %s cheese', program.cheese);\n```\n\n Short flags may be passed as a single arg, for example `-abc` is equivalent to `-a -b -c`. Multi-word options such as \"--template-engine\" are camel-cased, becoming `program.templateEngine` etc.\n\n## Automated --help\n\n The help information is auto-generated based on the information commander already knows about your program, so the following `--help` info is for free:\n\n```  \n $ ./examples/pizza --help\n\n   Usage: pizza [options]\n\n   Options:\n\n     -V, --version        output the version number\n     -p, --peppers        Add peppers\n     -P, --pineapple      Add pineappe\n     -b, --bbq            Add bbq sauce\n     -c, --cheese <type>  Add the specified type of cheese [marble]\n     -h, --help           output usage information\n\n```\n\n## Coercion\n\n```js\nfunction range(val) {\n  return val.split('..').map(Number);\n}\n\nfunction list(val) {\n  return val.split(',');\n}\n\nprogram\n  .version('0.0.1')\n  .usage('[options] <file ...>')\n  .option('-i, --integer <n>', 'An integer argument', parseInt)\n  .option('-f, --float <n>', 'A float argument', parseFloat)\n  .option('-r, --range <a>..<b>', 'A range', range)\n  .option('-l, --list <items>', 'A list', list)\n  .option('-o, --optional [value]', 'An optional value')\n  .parse(process.argv);\n\nconsole.log(' int: %j', program.integer);\nconsole.log(' float: %j', program.float);\nconsole.log(' optional: %j', program.optional);\nprogram.range = program.range || [];\nconsole.log(' range: %j..%j', program.range[0], program.range[1]);\nconsole.log(' list: %j', program.list);\nconsole.log(' args: %j', program.args);\n```\n\n## Custom help\n\n You can display arbitrary `-h, --help` information\n by listening for \"--help\". Commander will automatically\n exit once you are done so that the remainder of your program\n does not execute causing undesired behaviours, for example\n in the following executable \"stuff\" will not output when\n `--help` is used.\n\n```js\n#!/usr/bin/env node\n\n/**\n * Module dependencies.\n */\n\nvar program = require('../');\n\nfunction list(val) {\n  return val.split(',').map(Number);\n}\n\nprogram\n  .version('0.0.1')\n  .option('-f, --foo', 'enable some foo')\n  .option('-b, --bar', 'enable some bar')\n  .option('-B, --baz', 'enable some baz');\n\n// must be before .parse() since\n// node's emit() is immediate\n\nprogram.on('--help', function(){\n  console.log('  Examples:');\n  console.log('');\n  console.log('    $ custom-help --help');\n  console.log('    $ custom-help -h');\n  console.log('');\n});\n\nprogram.parse(process.argv);\n\nconsole.log('stuff');\n```\n\nyielding the following help output:\n\n```\n\nUsage: custom-help [options]\n\nOptions:\n\n  -h, --help     output usage information\n  -V, --version  output the version number\n  -f, --foo      enable some foo\n  -b, --bar      enable some bar\n  -B, --baz      enable some baz\n\nExamples:\n\n  $ custom-help --help\n  $ custom-help -h\n\n```\n\n## .prompt(msg, fn)\n\n Single-line prompt:\n\n```js\nprogram.prompt('name: ', function(name){\n  console.log('hi %s', name);\n});\n```\n\n Multi-line prompt:\n\n```js\nprogram.prompt('description:', function(name){\n  console.log('hi %s', name);\n});\n```\n\n Coercion:\n\n```js\nprogram.prompt('Age: ', Number, function(age){\n  console.log('age: %j', age);\n});\n```\n\n```js\nprogram.prompt('Birthdate: ', Date, function(date){\n  console.log('date: %s', date);\n});\n```\n\n## .password(msg[, mask], fn)\n\nPrompt for password without echoing:\n\n```js\nprogram.password('Password: ', function(pass){\n  console.log('got \"%s\"', pass);\n  process.stdin.destroy();\n});\n```\n\nPrompt for password with mask char \"*\":\n\n```js\nprogram.password('Password: ', '*', function(pass){\n  console.log('got \"%s\"', pass);\n  process.stdin.destroy();\n});\n```\n\n## .confirm(msg, fn)\n\n Confirm with the given `msg`:\n\n```js\nprogram.confirm('continue? ', function(ok){\n  console.log(' got %j', ok);\n});\n```\n\n## .choose(list, fn)\n\n Let the user choose from a `list`:\n\n```js\nvar list = ['tobi', 'loki', 'jane', 'manny', 'luna'];\n\nconsole.log('Choose the coolest pet:');\nprogram.choose(list, function(i){\n  console.log('you chose %d \"%s\"', i, list[i]);\n});\n```\n\n## Links\n\n - [API documentation](http://visionmedia.github.com/commander.js/)\n - [ascii tables](https://github.com/LearnBoost/cli-table)\n - [progress bars](https://github.com/visionmedia/node-progress)\n - [more progress bars](https://github.com/substack/node-multimeter)\n - [examples](https://github.com/visionmedia/commander.js/tree/master/examples)\n\n## License \n\n(The MIT License)\n\nCopyright (c) 2011 TJ Holowaychuk &lt;tj@vision-media.ca&gt;\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n'Software'), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright (c) 2011 TJ Holowaychuk &lt;tj@vision-media.ca&gt;"
   },
@@ -159,8 +159,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/highlight.js/node_modules/commander",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/highlight.js/node_modules/commander/LICENSE",
+    "path": "node_modules/highlight.js/node_modules/commander",
+    "licenseFile": "node_modules/highlight.js/node_modules/commander/LICENSE",
     "licenseText": "(The MIT License)\n\nCopyright (c) 2011 TJ Holowaychuk <tj@vision-media.ca>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n'Software'), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright (c) 2011 TJ Holowaychuk <tj@vision-media.ca>"
   },
@@ -170,8 +170,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/ws/node_modules/commander",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/ws/node_modules/commander/Readme.md",
+    "path": "node_modules/ws/node_modules/commander",
+    "licenseFile": "node_modules/ws/node_modules/commander/Readme.md",
     "licenseText": "# Commander.js\n\n  The complete solution for [node.js](http://nodejs.org) command-line interfaces, inspired by Ruby's [commander](https://github.com/visionmedia/commander).\n\n [![Build Status](https://secure.travis-ci.org/visionmedia/commander.js.png)](http://travis-ci.org/visionmedia/commander.js)\n\n## Installation\n\n    $ npm install commander\n\n## Option parsing\n\n Options with commander are defined with the `.option()` method, also serving as documentation for the options. The example below parses args and options from `process.argv`, leaving remaining args as the `program.args` array which were not consumed by options.\n\n```js\n#!/usr/bin/env node\n\n/**\n * Module dependencies.\n */\n\nvar program = require('commander');\n\nprogram\n  .version('0.0.1')\n  .option('-p, --peppers', 'Add peppers')\n  .option('-P, --pineapple', 'Add pineapple')\n  .option('-b, --bbq', 'Add bbq sauce')\n  .option('-c, --cheese [type]', 'Add the specified type of cheese [marble]', 'marble')\n  .parse(process.argv);\n\nconsole.log('you ordered a pizza with:');\nif (program.peppers) console.log('  - peppers');\nif (program.pineapple) console.log('  - pineapple');\nif (program.bbq) console.log('  - bbq');\nconsole.log('  - %s cheese', program.cheese);\n```\n\n Short flags may be passed as a single arg, for example `-abc` is equivalent to `-a -b -c`. Multi-word options such as \"--template-engine\" are camel-cased, becoming `program.templateEngine` etc.\n\n## Automated --help\n\n The help information is auto-generated based on the information commander already knows about your program, so the following `--help` info is for free:\n\n```  \n $ ./examples/pizza --help\n\n   Usage: pizza [options]\n\n   Options:\n\n     -V, --version        output the version number\n     -p, --peppers        Add peppers\n     -P, --pineapple      Add pineapple\n     -b, --bbq            Add bbq sauce\n     -c, --cheese <type>  Add the specified type of cheese [marble]\n     -h, --help           output usage information\n\n```\n\n## Coercion\n\n```js\nfunction range(val) {\n  return val.split('..').map(Number);\n}\n\nfunction list(val) {\n  return val.split(',');\n}\n\nprogram\n  .version('0.0.1')\n  .usage('[options] <file ...>')\n  .option('-i, --integer <n>', 'An integer argument', parseInt)\n  .option('-f, --float <n>', 'A float argument', parseFloat)\n  .option('-r, --range <a>..<b>', 'A range', range)\n  .option('-l, --list <items>', 'A list', list)\n  .option('-o, --optional [value]', 'An optional value')\n  .parse(process.argv);\n\nconsole.log(' int: %j', program.integer);\nconsole.log(' float: %j', program.float);\nconsole.log(' optional: %j', program.optional);\nprogram.range = program.range || [];\nconsole.log(' range: %j..%j', program.range[0], program.range[1]);\nconsole.log(' list: %j', program.list);\nconsole.log(' args: %j', program.args);\n```\n\n## Custom help\n\n You can display arbitrary `-h, --help` information\n by listening for \"--help\". Commander will automatically\n exit once you are done so that the remainder of your program\n does not execute causing undesired behaviours, for example\n in the following executable \"stuff\" will not output when\n `--help` is used.\n\n```js\n#!/usr/bin/env node\n\n/**\n * Module dependencies.\n */\n\nvar program = require('../');\n\nfunction list(val) {\n  return val.split(',').map(Number);\n}\n\nprogram\n  .version('0.0.1')\n  .option('-f, --foo', 'enable some foo')\n  .option('-b, --bar', 'enable some bar')\n  .option('-B, --baz', 'enable some baz');\n\n// must be before .parse() since\n// node's emit() is immediate\n\nprogram.on('--help', function(){\n  console.log('  Examples:');\n  console.log('');\n  console.log('    $ custom-help --help');\n  console.log('    $ custom-help -h');\n  console.log('');\n});\n\nprogram.parse(process.argv);\n\nconsole.log('stuff');\n```\n\nyielding the following help output:\n\n```\n\nUsage: custom-help [options]\n\nOptions:\n\n  -h, --help     output usage information\n  -V, --version  output the version number\n  -f, --foo      enable some foo\n  -b, --bar      enable some bar\n  -B, --baz      enable some baz\n\nExamples:\n\n  $ custom-help --help\n  $ custom-help -h\n\n```\n\n## .outputHelp()\n\n  Output help information without exiting.\n\n## .help()\n\n  Output help information and exit immediately.\n\n## Links\n\n - [API documentation](http://visionmedia.github.com/commander.js/)\n - [ascii tables](https://github.com/LearnBoost/cli-table)\n - [progress bars](https://github.com/visionmedia/node-progress)\n - [more progress bars](https://github.com/substack/node-multimeter)\n - [examples](https://github.com/visionmedia/commander.js/tree/master/examples)\n\n## License \n\n(The MIT License)\n\nCopyright (c) 2011 TJ Holowaychuk &lt;tj@vision-media.ca&gt;\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n'Software'), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright (c) 2011 TJ Holowaychuk &lt;tj@vision-media.ca&gt;"
   },
@@ -181,8 +181,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/connect",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/connect/LICENSE",
+    "path": "node_modules/connect",
+    "licenseFile": "node_modules/connect/LICENSE",
     "licenseText": "(The MIT License)\n\nCopyright (c) 2010 Sencha Inc.\nCopyright (c) 2011 LearnBoost\nCopyright (c) 2011 TJ Holowaychuk\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n'Software'), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright (c) 2010 Sencha Inc.. Copyright (c) 2011 LearnBoost. Copyright (c) 2011 TJ Holowaychuk"
   },
@@ -192,8 +192,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/cssom",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/cssom/README.mdown",
+    "path": "node_modules/cssom",
+    "licenseFile": "node_modules/cssom/README.mdown",
     "licenseText": "# CSSOM\n\nCSSOM.js is a CSS parser written in pure JavaScript. It also a partial implementation of [CSS Object Model](http://dev.w3.org/csswg/cssom/). \n\n    CSSOM.parse(\"body {color: black}\")\n    -> {\n      cssRules: [\n        {\n          selectorText: \"body\",\n          style: {\n            0: \"color\",\n            color: \"black\",\n            length: 1\n          }\n        }\n      ]\n    }\n\n\n## [Parser demo](http://nv.github.com/CSSOM/docs/parse.html)\n\nWorks well in Google Chrome 6+, Safari 5+, Firefox 3.6+, Opera 10.63+.\nDoesn't work in IE < 9 because of unsupported getters/setters.\n\nTo use CSSOM.js in the browser you might want to build a one-file version with [Jake](http://github.com/mde/node-jake):\n\n    ➤ jake\n    build/CSSOM.js is done\n\nTo use it with Node.js:\n\n    npm install cssom\n\n## [Specs](http://nv.github.com/CSSOM/spec/)"
   },
   "debug@4.4.3": {
@@ -202,8 +202,8 @@
     "publisher": "",
     "url": "",
     "email": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/debug",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/debug/LICENSE",
+    "path": "node_modules/debug",
+    "licenseFile": "node_modules/debug/LICENSE",
     "licenseText": "(The MIT License)\n\nCopyright (c) 2014-2017 TJ Holowaychuk <tj@vision-media.ca>\nCopyright (c) 2018-2021 Josh Junon\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software\nand associated documentation files (the 'Software'), to deal in the Software without restriction,\nincluding without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,\nand/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so,\nsubject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial\nportions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT\nLIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,\nWHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright (c) 2014-2017 TJ Holowaychuk <tj@vision-media.ca>. Copyright (c) 2018-2021 Josh Junon"
   },
@@ -213,8 +213,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/dox",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/dox/Readme.md",
+    "path": "node_modules/dox",
+    "licenseFile": "node_modules/dox/Readme.md",
     "licenseText": "# Dox\n\n Dox is a JavaScript documentation generator written with [node](http://nodejs.org). Dox no longer generates an opinionated structure or style for your docs, it simply gives you a JSON representation, allowing you to use _markdown_ and _JSDoc_-style tags.\n\n## Installation\n\nInstall from npm:\n\n    $ npm install -g dox\n\n## Usage Examples\n\n`dox(1)` operates over stdio:\n\n    $ dox < utils.js\n    ...JSON... \n\n to inspect the generated data you can use the `--debug` flag, which is easier to read than the JSON output:\n \n     $ dox --debug < utils.js \n\nutils.js:\n\n```js\n/**\n * Escape the given `html`.\n *\n * Examples:\n *\n *     utils.escape('<script></script>')\n *     // => '&lt;script&gt;&lt;/script&gt;'\n *\n * @param {String} html string to be escaped\n * @return {String} escaped html\n * @api public\n */\n\nexports.escape = function(html){\n  return String(html)\n    .replace(/&(?!\\w+;)/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;');\n};\n```\n\noutput:\n\n```json\n[\n  {\n    \"tags\": [\n      {\n        \"type\": \"param\",\n        \"types\": [\n          \"String\"\n        ],\n        \"name\": \"html\",\n        \"description\": \"string to be escaped\"\n      },\n      {\n        \"type\": \"return\",\n        \"types\": [\n          \"String\"\n        ],\n        \"description\": \"escaped html\"\n      },\n      {\n        \"type\": \"api\",\n        \"visibility\": \"public\"\n      }\n    ],\n    \"description\": {\n      \"full\": \"<p>Escape the given <code>html</code>.</p>\\n\\n<h2>Examples</h2>\\n\\n<pre><code>utils.escape('&amp;lt;script&amp;gt;&amp;lt;/script&amp;gt;')\\n// =&amp;gt; '&amp;lt;script&amp;gt;&amp;lt;/script&amp;gt;'\\n</code></pre>\",\n      \"summary\": \"<p>Escape the given <code>html</code>.</p>\",\n      \"body\": \"<h2>Examples</h2>\\n\\n<pre><code>utils.escape('&amp;lt;script&amp;gt;&amp;lt;/script&amp;gt;')\\n// =&amp;gt; '&amp;lt;script&amp;gt;&amp;lt;/script&amp;gt;'\\n</code></pre>\"\n    },\n    \"isPrivate\": false,\n    \"ignore\": false,\n    \"code\": \"exports.escape = function(html){\\n  return String(html)\\n    .replace(/&(?!\\\\w+;)/g, '&amp;')\\n    .replace(/</g, '&lt;')\\n    .replace(/>/g, '&gt;');\\n};\",\n    \"ctx\": {\n      \"type\": \"method\",\n      \"receiver\": \"exports\",\n      \"name\": \"escape\",\n      \"string\": \"exports.escape()\"\n    }\n  }\n]\n```\n\nThis output can then be passed to a template for rendering. Look below at the \"Properties\" section for details.\n\n## Usage\n\n```\n\nUsage: dox [options]\n\nOptions:\n\n  -h, --help     output usage information\n  -v, --version  output the version number\n  -d, --debug    output parsed comments for debugging\n\nExamples:\n\n  # stdin\n  $ dox > myfile.json\n\n  # operates over stdio\n  $ dox < myfile.js > myfile.json\n\n```\n\n## Properties\n\n  A \"comment\" is comprised of the following detailed properties:\n  \n    - tags\n    - description\n    - isPrivate\n    - ignore\n    - code\n    - ctx\n\n### Description\n\n  A dox description is comprised of three parts, the \"full\" description,\n  the \"summary\", and the \"body\". The following example has only a \"summary\",\n  as it consists of a single paragraph only, therefore the \"full\" property has\n  only this value as well.\n\n```js\n/**\n * Output the given `str` to _stdout_.\n */\n\nexports.write = function(str) {\n  process.stdout.write(str);\n};\n````\nyields:\n\n```js\ndescription: \n     { full: '<p>Output the given <code>str</code> to <em>stdout</em>.</p>',\n       summary: '<p>Output the given <code>str</code> to <em>stdout</em>.</p>',\n       body: '' },\n```\n\n  Large descriptions might look something like the following, where the \"summary\" is still the first paragraph, the remaining description becomes the \"body\". Keep in mind this _is_ markdown, so you can indent code, use lists, links, etc. Dox also augments markdown, allowing \"Some Title:\\n\" to form a header.\n\n```js\n/**\n * Output the given `str` to _stdout_\n * or the stream specified by `options`.\n * \n * Options:\n * \n *   - `stream` defaulting to _stdout_\n * \n * Examples:\n * \n *     mymodule.write('foo')\n *     mymodule.write('foo', { stream: process.stderr })\n * \n */\n\nexports.write = function(str, options) {\n  options = options || {};\n  (options.stream || process.stdout).write(str);\n};\n```\n\nyields:\n\n```js\ndescription: \n     { full: '<p>Output the given <code>str</code> to <em>stdout</em><br />or the stream specified by <code>options</code>.</p>\\n\\n<h2>Options</h2>\\n\\n<ul>\\n<li><code>stream</code> defaulting to <em>stdout</em></li>\\n</ul>\\n\\n<h2>Examples</h2>\\n\\n<pre><code>mymodule.write(\\'foo\\')\\nmymodule.write(\\'foo\\', { stream: process.stderr })\\n</code></pre>',\n       summary: '<p>Output the given <code>str</code> to <em>stdout</em><br />or the stream specified by <code>options</code>.</p>',\n       body: '<h2>Options</h2>\\n\\n<ul>\\n<li><code>stream</code> defaulting to <em>stdout</em></li>\\n</ul>\\n\\n<h2>Examples</h2>\\n\\n<pre><code>mymodule.write(\\'foo\\')\\nmymodule.write(\\'foo\\', { stream: process.stderr })\\n</code></pre>' }\n```\n\n### Tags\n\n  Dox also supports JSdoc-style tags. Currently only __@api__ is special-cased, providing the `comment.isPrivate` boolean so you may omit \"private\" utilities etc.\n\n```js\n\n/**\n * Output the given `str` to _stdout_\n * or the stream specified by `options`.\n * \n * @param {String} str\n * @param {Object} options\n * @return {Object} exports for chaining\n */\n\nexports.write = function(str, options) {\n  options = options || {};\n  (options.stream || process.stdout).write(str);\n  return this;\n};\n```\n\nyields:\n\n```js\ntags: \n   [ { type: 'param',\n       types: [ 'String' ],\n       name: 'str',\n       description: '' },\n     { type: 'param',\n       types: [ 'Object' ],\n       name: 'options',\n       description: '' },\n     { type: 'return',\n       types: [ 'Object' ],\n       description: 'exports for chaining' },\n     { type: 'api',\n       visibility: 'public' } ]\n```\n\n### Code\n\n The `.code` property is the code following the comment block, in our previous examples:\n\n```js\nexports.write = function(str, options) {\n  options = options || {};\n  (options.stream || process.stdout).write(str);\n  return this;\n};\n```\n\n### Ctx\n\n  The `.ctx` object indicates the context of the code block, is it a method, a function, a variable etc. Below are some examples:\n\n```js\nexports.write = function(str, options) {\n};\n```\n\nyields:\n\n```js\nctx: \n { type: 'method',\n   receiver: 'exports',\n   name: 'write',\n   string: 'exports.write()' } }\n```\n\n```js\nvar foo = 'bar';\n```\n\nyields:\n\n```js\nctx: \n { type: 'declaration',\n   name: 'foo',\n   value: '\\'bar\\'',\n   string: 'foo' }\n```\n\n```js\nfunction User() {\n  \n}\n```\n\nyields:\n\n```js\nctx: \n { type: 'function',\n   name: 'User',\n   string: 'User()' } }\n```\n\n### Ignore\n\nComments and their associated bodies of code may be flagged with \"!\" to be considered worth ignoring, these are typically things like file comments containing copyright etc, however you of course can output them in your templates if you want.\n\n```\n/**\n * Not ignored.\n */\n```\n\nvs\n\n```\n/*!\n * Ignored.\n */\n```\n\n### Running tests\n\n Install dev dependencies and execute `make test`:\n \n     $ npm install -d\n     $ make test\n\n## License \n\n(The MIT License)\n\nCopyright (c) 2011 TJ Holowaychuk &lt;tj@vision-media.ca&gt;\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n'Software'), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright (c) 2011 TJ Holowaychuk &lt;tj@vision-media.ca&gt;"
   },
@@ -224,8 +224,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/drip",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/drip/README.md",
+    "path": "node_modules/drip",
+    "licenseFile": "node_modules/drip/README.md",
     "licenseText": "[![Build Status](https://secure.travis-ci.org/logicalparadox/drip.png)](http://travis-ci.org/logicalparadox/drip)\n\n# Drip\n\nAn EventEmitter alternative for nodejs and the browser that supports namespaces and wildcards.\n\n* See the [documentation](http://logicalparadox.github.com/drip).\n\n## Browser Usage\n\nThe browser builds are in the `dist` folder. If you are working on changes in a fork,\nplease make your changes to `lib/drip.js` and the run `make` to build a browser version.\n\n## License\n\n(The MIT License)\n\nCopyright (c) 2011 Jake Luer <jake@alogicalparadox.com>\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE.",
     "copyright": "Copyright (c) 2011 Jake Luer <jake@alogicalparadox.com>"
   },
@@ -235,8 +235,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/dunder-proto",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/dunder-proto/LICENSE",
+    "path": "node_modules/dunder-proto",
+    "licenseFile": "node_modules/dunder-proto/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) 2024 ECMAScript Shims\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2024 ECMAScript Shims"
   },
@@ -246,8 +246,8 @@
     "publisher": "",
     "url": "",
     "email": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/emoji-regex",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/emoji-regex/LICENSE-MIT.txt",
+    "path": "node_modules/emoji-regex",
+    "licenseFile": "node_modules/emoji-regex/LICENSE-MIT.txt",
     "licenseText": "Copyright Mathias Bynens <https://mathiasbynens.be/>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND\nNONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE\nLIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION\nOF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION\nWITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright Mathias Bynens <https://mathiasbynens.be/>"
   },
@@ -257,8 +257,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/es-define-property",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/es-define-property/LICENSE",
+    "path": "node_modules/es-define-property",
+    "licenseFile": "node_modules/es-define-property/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) 2024 Jordan Harband\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2024 Jordan Harband"
   },
@@ -268,8 +268,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/es-errors",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/es-errors/LICENSE",
+    "path": "node_modules/es-errors",
+    "licenseFile": "node_modules/es-errors/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) 2024 Jordan Harband\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2024 Jordan Harband"
   },
@@ -279,8 +279,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/es-object-atoms",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/es-object-atoms/LICENSE",
+    "path": "node_modules/es-object-atoms",
+    "licenseFile": "node_modules/es-object-atoms/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) 2024 Jordan Harband\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2024 Jordan Harband"
   },
@@ -290,8 +290,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/escalade",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/escalade/license",
+    "path": "node_modules/escalade",
+    "licenseFile": "node_modules/escalade/license",
     "licenseText": "MIT License\n\nCopyright (c) Luke Edwards <luke.edwards05@gmail.com> (lukeed.com)\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright (c) Luke Edwards <luke.edwards05@gmail.com> (lukeed.com)"
   },
@@ -301,8 +301,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/fez",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/fez/README.md",
+    "path": "node_modules/fez",
+    "licenseFile": "node_modules/fez/README.md",
     "licenseText": "# Fez\n\nHere, have a fez. It will brighten up your day.\n\nNote, however, this fez is rather incomplete. Please hold.\n\n## Usage\n\nFor use with `stylus`, requires `nib` (which your probably using anyway).\n\n## License\n\n(The MIT License)\n\nCopyright (c) 2011 Jake Luer\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE.",
     "copyright": "Copyright (c) 2011 Jake Luer"
   },
@@ -312,8 +312,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/formidable",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/formidable/LICENSE",
+    "path": "node_modules/formidable",
+    "licenseFile": "node_modules/formidable/LICENSE",
     "licenseText": "Copyright (C) 2011 Felix Geisendörfer\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright (C) 2011 Felix Geisendörfer"
   },
@@ -323,8 +323,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/function-bind",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/function-bind/LICENSE",
+    "path": "node_modules/function-bind",
+    "licenseFile": "node_modules/function-bind/LICENSE",
     "licenseText": "Copyright (c) 2013 Raynos.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE.",
     "copyright": "Copyright (c) 2013 Raynos."
   },
@@ -334,8 +334,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/get-caller-file",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/get-caller-file/LICENSE.md",
+    "path": "node_modules/get-caller-file",
+    "licenseFile": "node_modules/get-caller-file/LICENSE.md",
     "licenseText": "ISC License (ISC)\nCopyright 2018 Stefan Penner\n\nPermission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE."
   },
   "get-east-asian-width@1.5.0": {
@@ -344,8 +344,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/get-east-asian-width",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/get-east-asian-width/license",
+    "path": "node_modules/get-east-asian-width",
+    "licenseFile": "node_modules/get-east-asian-width/license",
     "licenseText": "MIT License\n\nCopyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
   },
@@ -355,8 +355,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/get-intrinsic",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/get-intrinsic/LICENSE",
+    "path": "node_modules/get-intrinsic",
+    "licenseFile": "node_modules/get-intrinsic/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) 2020 Jordan Harband\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2020 Jordan Harband"
   },
@@ -366,8 +366,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/get-proto",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/get-proto/LICENSE",
+    "path": "node_modules/get-proto",
+    "licenseFile": "node_modules/get-proto/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) 2025 Jordan Harband\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2025 Jordan Harband"
   },
@@ -377,8 +377,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/github-flavored-markdown",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/github-flavored-markdown/README.md",
+    "path": "node_modules/github-flavored-markdown",
+    "licenseFile": "node_modules/github-flavored-markdown/README.md",
     "licenseText": "See:\n[github-flavored-markdown](http://github.github.com/github-flavored-markdown/)\n\nAs an npm package:\n\n    npm install github-flavored-markdown\n\nAnd then in your node program:\n\n    var ghm = require(\"github-flavored-markdown\")\n    ghm.parse(\"I **love** GHM.\\n\\n#2\", \"isaacs/npm\")\n    // returns:\n    // '<p>I <strong>love</strong> GHM.  '+\n    // '<a href=\\'http://github.com/isaacs/npm/issues/#issue/2\\'>#2</a></p>'\n\nTo get the sha/issue/fork links, pass in a second argument specifying\nthe current project that things should be relative to."
   },
   "gopd@1.2.0": {
@@ -387,8 +387,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/gopd",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/gopd/LICENSE",
+    "path": "node_modules/gopd",
+    "licenseFile": "node_modules/gopd/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) 2022 Jordan Harband\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2022 Jordan Harband"
   },
@@ -398,8 +398,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/graceful-fs",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/graceful-fs/LICENSE",
+    "path": "node_modules/graceful-fs",
+    "licenseFile": "node_modules/graceful-fs/LICENSE",
     "licenseText": "Copyright 2009, 2010, 2011 Isaac Z. Schlueter.\nAll rights reserved.\n\nPermission is hereby granted, free of charge, to any person\nobtaining a copy of this software and associated documentation\nfiles (the \"Software\"), to deal in the Software without\nrestriction, including without limitation the rights to use,\ncopy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the\nSoftware is furnished to do so, subject to the following\nconditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES\nOF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND\nNONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT\nHOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,\nWHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING\nFROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR\nOTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright 2009, 2010, 2011 Isaac Z. Schlueter.. All rights reserved."
   },
@@ -409,8 +409,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/has-symbols",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/has-symbols/LICENSE",
+    "path": "node_modules/has-symbols",
+    "licenseFile": "node_modules/has-symbols/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) 2016 Jordan Harband\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2016 Jordan Harband"
   },
@@ -420,8 +420,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/hasown",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/hasown/LICENSE",
+    "path": "node_modules/hasown",
+    "licenseFile": "node_modules/hasown/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) Jordan Harband and contributors\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) Jordan Harband and contributors"
   },
@@ -431,8 +431,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/highlight.js",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/highlight.js/LICENSE",
+    "path": "node_modules/highlight.js",
+    "licenseFile": "node_modules/highlight.js/LICENSE",
     "licenseText": "Copyright (c) 2006, Ivan Sagalaev\nAll rights reserved.\nRedistribution and use in source and binary forms, with or without\nmodification, are permitted provided that the following conditions are met:\n\n    * Redistributions of source code must retain the above copyright\n      notice, this list of conditions and the following disclaimer.\n    * Redistributions in binary form must reproduce the above copyright\n      notice, this list of conditions and the following disclaimer in the\n      documentation and/or other materials provided with the distribution.\n    * Neither the name of highlight.js nor the names of its contributors \n      may be used to endorse or promote products derived from this software \n      without specific prior written permission.\n\nTHIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND ANY\nEXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED\nWARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE\nDISCLAIMED. IN NO EVENT SHALL THE REGENTS AND CONTRIBUTORS BE LIABLE FOR ANY\nDIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES\n(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;\nLOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND\nON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT\n(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS\nSOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.",
     "copyright": "Copyright (c) 2006, Ivan Sagalaev. All rights reserved.. Redistribution and use in source and binary forms, with or without. modification, are permitted provided that the following conditions are met:"
   },
@@ -442,8 +442,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/hono",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/hono/LICENSE",
+    "path": "node_modules/hono",
+    "licenseFile": "node_modules/hono/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) 2021 - present, Yusuke Wada and Hono contributors\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2021 - present, Yusuke Wada and Hono contributors"
   },
@@ -453,8 +453,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/jade",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/jade/LICENSE",
+    "path": "node_modules/jade",
+    "licenseFile": "node_modules/jade/LICENSE",
     "licenseText": "(The MIT License)\n\nCopyright (c) 2009-2010 TJ Holowaychuk <tj@vision-media.ca>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n'Software'), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright (c) 2009-2010 TJ Holowaychuk <tj@vision-media.ca>"
   },
@@ -464,8 +464,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/marked",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/marked/LICENSE",
+    "path": "node_modules/marked",
+    "licenseFile": "node_modules/marked/LICENSE",
     "licenseText": "Copyright (c) 2011-2013, Christopher Jeffrey (https://github.com/chjj/)\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE.",
     "copyright": "Copyright (c) 2011-2013, Christopher Jeffrey (https://github.com/chjj/)"
   },
@@ -475,8 +475,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/math-intrinsics",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/math-intrinsics/LICENSE",
+    "path": "node_modules/math-intrinsics",
+    "licenseFile": "node_modules/math-intrinsics/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) 2024 ECMAScript Shims\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2024 ECMAScript Shims"
   },
@@ -486,8 +486,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/mime",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/mime/LICENSE",
+    "path": "node_modules/mime",
+    "licenseFile": "node_modules/mime/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) 2023 Robert Kieffer\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2023 Robert Kieffer"
   },
@@ -497,8 +497,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/mkdirp",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/mkdirp/LICENSE",
+    "path": "node_modules/mkdirp",
+    "licenseFile": "node_modules/mkdirp/LICENSE",
     "licenseText": "Copyright 2010 James Halliday (mail@substack.net)\n\nThis project is free software released under the MIT/X11 license:\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE.",
     "copyright": "Copyright 2010 James Halliday (mail@substack.net)"
   },
@@ -508,8 +508,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/stylus/node_modules/mkdirp",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/stylus/node_modules/mkdirp/LICENSE",
+    "path": "node_modules/stylus/node_modules/mkdirp",
+    "licenseFile": "node_modules/stylus/node_modules/mkdirp/LICENSE",
     "licenseText": "Copyright 2010 James Halliday (mail@substack.net)\n\nThis project is free software released under the MIT/X11 license:\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE.",
     "copyright": "Copyright 2010 James Halliday (mail@substack.net)"
   },
@@ -519,8 +519,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/ms",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/ms/license.md",
+    "path": "node_modules/ms",
+    "licenseFile": "node_modules/ms/license.md",
     "licenseText": "The MIT License (MIT)\n\nCopyright (c) 2020 Vercel, Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2020 Vercel, Inc."
   },
@@ -530,8 +530,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/nan",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/nan/LICENSE",
+    "path": "node_modules/nan",
+    "licenseFile": "node_modules/nan/LICENSE",
     "licenseText": "Copyright 2013, NAN contributors:\n  - Rod Vagg <https://github.com/rvagg>\n  - Benjamin Byholm <https://github.com/kkoopa>\n  - Trevor Norris <https://github.com/trevnorris>\n  - Nathan Rajlich <https://github.com/TooTallNate>\n  - Brett Lawson <https://github.com/brett19>\n  - Ben Noordhuis <https://github.com/bnoordhuis>\n(the \"Original Author\")\nAll rights reserved.\n\nMIT +no-false-attribs License\n\nPermission is hereby granted, free of charge, to any person\nobtaining a copy of this software and associated documentation\nfiles (the \"Software\"), to deal in the Software without\nrestriction, including without limitation the rights to use,\ncopy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the\nSoftware is furnished to do so, subject to the following\nconditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nDistributions of all or part of the Software intended to be used\nby the recipients as they would use the unmodified Software,\ncontaining modifications that substantially alter, remove, or\ndisable functionality of the Software, outside of the documented\nconfiguration mechanisms provided by the Software, shall be\nmodified such that the Original Author's bug reporting email\naddresses and urls are either replaced with the contact information\nof the parties responsible for the changes, or removed entirely.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES\nOF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND\nNONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT\nHOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,\nWHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING\nFROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR\nOTHER DEALINGS IN THE SOFTWARE.\n\n\nExcept where noted, this license applies to any and all software\nprograms and associated documentation files created by the\nOriginal Author, when distributed with the Software.",
     "copyright": "Copyright 2013, NAN contributors:.   - Rod Vagg <https://github.com/rvagg>.   - Benjamin Byholm <https://github.com/kkoopa>.   - Trevor Norris <https://github.com/trevnorris>.   - Nathan Rajlich <https://github.com/TooTallNate>.   - Brett Lawson <https://github.com/brett19>.   - Ben Noordhuis <https://github.com/bnoordhuis>. (the \"Original Author\"). All rights reserved."
   },
@@ -541,8 +541,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/ncp",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/ncp/LICENSE.md",
+    "path": "node_modules/ncp",
+    "licenseFile": "node_modules/ncp/LICENSE.md",
     "licenseText": "# MIT License\n\n###Copyright (C) 2011 by Charlie McConnell\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE."
   },
   "nib@0.4.1": {
@@ -551,8 +551,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/nib",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/nib/Readme.md",
+    "path": "node_modules/nib",
+    "licenseFile": "node_modules/nib/Readme.md",
     "licenseText": "# Nib\n\n  Stylus mixins, utilities, components, and gradient image generation. Don't forget to check out the [documentation](http://visionmedia.github.com/nib/).\n\n## Installation\n\n```bash\n$ npm install nib\n```\n\n If the image generation features of Nib are desired, such as generating the linear gradient images, install [node-canvas](http://github.com/learnboost/node-canvas):\n \n```bash \n$ npm install canvas\n```\n\n## JavaScript API\n\n Below is an example of how to utilize nib and stylus with the connect framework (or express).\n\n```javascript\nvar connect = require('connect')\n  , stylus = require('stylus')\n  , nib = require('nib');\n\nvar server = connect();\n\nfunction compile(str, path) {\n  return stylus(str)\n\t.set('filename', path)\n\t.set('compress', true)\n\t.use(nib());\n}\n\nserver.use(stylus.middleware({\n\tsrc: __dirname\n  , compile: compile\n}));\n```\n\n## Stylus API\n\n  To gain access to everything nib has to offer, simply add:\n\n  ```css\n  @import 'nib'\n  ```\n  \n  Or you may also pick and choose based on the directory structure in `./lib`, for example:\n  \n  ```css\n  @import 'nib/gradients'\n  @import 'nib/overflow'\n  ```\n  \nto be continued....\n\n## More Information\n\n  - Introduction [screencast](http://www.screenr.com/M6a)\n\n## Testing\n\n You will first need to install the dependencies:\n \n ```bash\n    $ npm install -d\n ```\n \n Run the automated test cases:\n \n ```bash\n    $ make test\n ```\n \n For visual testing run the test server:\n \n ```bash\n    $ make test-server\n ```\n \n Then visit `localhost:3000` in your browser.\n\n## Contributors\n\n  - TJ Holowaychuk\n  - Isaac Johnston\n\n## License \n\n(The MIT License)\n\nCopyright (c) 2011 TJ Holowaychuk &lt;tj@vision-media.ca&gt;\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n'Software'), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright (c) 2011 TJ Holowaychuk &lt;tj@vision-media.ca&gt;"
   },
@@ -562,8 +562,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/oath",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/oath/README.md",
+    "path": "node_modules/oath",
+    "licenseFile": "node_modules/oath/README.md",
     "licenseText": "[![Build Status](https://secure.travis-ci.org/logicalparadox/oath.png)](http://travis-ci.org/logicalparadox/oath)\n\n# Oath\n\nOath is a tiny javascript library for [node](http://nodejs.org) and the browser that makes\nit easy to build and interact with promise/future based APIs.\n\n## What is a future/promise anyway?\n\nA future (or promise), is an alternative method to callbacks when working with asyncronous\ncode. For more information check out the very information Wikipedia article\non [Futures and Promises](http://en.wikipedia.org/wiki/Futures_and_promises).\n\n## About version 0.2.x\n\nVersion 0.2.x and the master branch represent a shift in oath's core fucus. Instead of providing helper\nfunctions for manipulating the result set and deep chaining, this version allows you to manipulate the\nresult set directly, and provides helpers if this is to be done asyncronously. Docs coming shortly.\n\n## Installation\n\nOath is available for both server-side and the browser.\n\n### Node.js\n\nPackage is available through [npm](http://npmjs.org):\n\n    npm install oath\n\n### Browser\n\nDownload the package and include either the normal or minimized build in your HTML header.\n\n    <script src=\"/public/js/oath.js\" type=\"text/javascript\"></script>\n    <script src=\"/public/js/oath.min.js\" type=\"text/javascript\"></script>\n\n## Help, resources, and issues?\n\n* The annotated source / full API documentation for versions 0.1.x is available at [alogicalparadox.com/oath](http://alogicalparadox.com/oath/).\n* If you have questions or issues, please use this projects [Github Issues](https://github.com/logicalparadox/oath/issues).\n\n## Contributors\n\nInterested in contributing? Fork to get started. Contact [@logicalparadox](http://github.com/logicalparadox) if you are interested in being a regular contributor.\n\n* Jake Luer [[Github: @logicalparadox](http://github.com/logicalparadox)] [[Twitter: @jakeluer](http://twitter.com/jakeluer)] [[Website](http://alogicalparadox.com)]\n\n## License\n\n(The MIT License)\n\nCopyright (c) 2011 Jake Luer <jake@alogicalparadox.com>\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE.",
     "copyright": "Copyright (c) 2011 Jake Luer <jake@alogicalparadox.com>"
   },
@@ -573,8 +573,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/object-inspect",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/object-inspect/LICENSE",
+    "path": "node_modules/object-inspect",
+    "licenseFile": "node_modules/object-inspect/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) 2013 James Halliday\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2013 James Halliday"
   },
@@ -584,8 +584,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/optimist",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/optimist/LICENSE",
+    "path": "node_modules/optimist",
+    "licenseFile": "node_modules/optimist/LICENSE",
     "licenseText": "Copyright 2010 James Halliday (mail@substack.net)\n\nThis project is free software released under the MIT/X11 license:\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE.",
     "copyright": "Copyright 2010 James Halliday (mail@substack.net)"
   },
@@ -595,8 +595,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/options",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/options/README.md",
+    "path": "node_modules/options",
+    "licenseFile": "node_modules/options/README.md",
     "licenseText": "# options.js #\n\nA very light-weight in-code option parsers for node.js.\n\n## Usage ##\n\n``` js\nvar Options = require(\"options\");\n\n// Create an Options object\nfunction foo(options) {\n        var default_options = {\n                foo : \"bar\"\n        };\n        \n        // Create an option object with default value\n        var opts = new Options(default_options);\n        \n        // Merge options\n        opts = opts.merge(options);\n        \n        // Reset to default value\n        opts.reset();\n        \n        // Copy selected attributes out\n        var seled_att = opts.copy(\"foo\");\n        \n        // Read json options from a file. \n        opts.read(\"options.file\"); // Sync\n        opts.read(\"options.file\", function(err){ // Async\n                if(err){ // If error occurs\n                        console.log(\"File error.\");\n                }else{\n                        // No error\n                }\n        });\n        \n        // Attributes defined or not\n        opts.isDefinedAndNonNull(\"foobar\");\n        opts.isDefined(\"foobar\");\n}\n\n```\n\n\n## License ##\n\n(The MIT License)\n\nCopyright (c) 2012 Einar Otto Stangvik &lt;einaros@gmail.com&gt;\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n'Software'), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright (c) 2012 Einar Otto Stangvik &lt;einaros@gmail.com&gt;"
   },
@@ -606,8 +606,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/orchid",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/orchid/README.md",
+    "path": "node_modules/orchid",
+    "licenseFile": "node_modules/orchid/README.md",
     "licenseText": ""
   },
   "qs@6.15.0": {
@@ -616,8 +616,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/qs",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/qs/LICENSE.md",
+    "path": "node_modules/qs",
+    "licenseFile": "node_modules/qs/LICENSE.md",
     "licenseText": "BSD 3-Clause License\n\nCopyright (c) 2014, Nathan LaFreniere and other [contributors](https://github.com/ljharb/qs/graphs/contributors)\nAll rights reserved.\n\nRedistribution and use in source and binary forms, with or without\nmodification, are permitted provided that the following conditions are met:\n\n1. Redistributions of source code must retain the above copyright notice, this\n   list of conditions and the following disclaimer.\n\n2. Redistributions in binary form must reproduce the above copyright notice,\n   this list of conditions and the following disclaimer in the documentation\n   and/or other materials provided with the distribution.\n\n3. Neither the name of the copyright holder nor the names of its\n   contributors may be used to endorse or promote products derived from\n   this software without specific prior written permission.\n\nTHIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\"\nAND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE\nIMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE\nDISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE\nFOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL\nDAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR\nSERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER\nCAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,\nOR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE\nOF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.",
     "copyright": "Copyright (c) 2014, Nathan LaFreniere and other [contributors](https://github.com/ljharb/qs/graphs/contributors). All rights reserved."
   },
@@ -627,8 +627,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/rimraf",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/rimraf/LICENSE",
+    "path": "node_modules/rimraf",
+    "licenseFile": "node_modules/rimraf/LICENSE",
     "licenseText": "Copyright 2009, 2010, 2011 Isaac Z. Schlueter.\nAll rights reserved.\n\nPermission is hereby granted, free of charge, to any person\nobtaining a copy of this software and associated documentation\nfiles (the \"Software\"), to deal in the Software without\nrestriction, including without limitation the rights to use,\ncopy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the\nSoftware is furnished to do so, subject to the following\nconditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES\nOF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND\nNONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT\nHOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,\nWHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING\nFROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR\nOTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright 2009, 2010, 2011 Isaac Z. Schlueter.. All rights reserved."
   },
@@ -638,8 +638,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/side-channel-list",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/side-channel-list/LICENSE",
+    "path": "node_modules/side-channel-list",
+    "licenseFile": "node_modules/side-channel-list/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) 2024 Jordan Harband\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2024 Jordan Harband"
   },
@@ -649,8 +649,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/side-channel-map",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/side-channel-map/LICENSE",
+    "path": "node_modules/side-channel-map",
+    "licenseFile": "node_modules/side-channel-map/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) 2024 Jordan Harband\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2024 Jordan Harband"
   },
@@ -660,8 +660,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/side-channel-weakmap",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/side-channel-weakmap/LICENSE",
+    "path": "node_modules/side-channel-weakmap",
+    "licenseFile": "node_modules/side-channel-weakmap/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) 2019 Jordan Harband\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2019 Jordan Harband"
   },
@@ -671,8 +671,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/side-channel",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/side-channel/LICENSE",
+    "path": "node_modules/side-channel",
+    "licenseFile": "node_modules/side-channel/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) 2019 Jordan Harband\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2019 Jordan Harband"
   },
@@ -682,8 +682,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/string-width",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/string-width/license",
+    "path": "node_modules/string-width",
+    "licenseFile": "node_modules/string-width/license",
     "licenseText": "MIT License\n\nCopyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
   },
@@ -693,8 +693,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/strip-ansi",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/strip-ansi/license",
+    "path": "node_modules/strip-ansi",
+    "licenseFile": "node_modules/strip-ansi/license",
     "licenseText": "MIT License\n\nCopyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
   },
@@ -704,8 +704,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/stylus",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/stylus/LICENSE",
+    "path": "node_modules/stylus",
+    "licenseFile": "node_modules/stylus/LICENSE",
     "licenseText": "(The MIT License)\n\nCopyright (c) 2010 LearnBoost <dev@learnboost.com>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n'Software'), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright (c) 2010 LearnBoost <dev@learnboost.com>"
   },
@@ -715,8 +715,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/tea",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/tea/README.md",
+    "path": "node_modules/tea",
+    "licenseFile": "node_modules/tea/README.md",
     "licenseText": "# Tea\n\n### Simple. Tiny. Logging.\n\nThis package is still under construction, but if you want to use it check out the examples folder.\n\n## Installation\n\nTea is available through [npm](http://npmjs.org).\n\n      npm install tea\n\n## Components\n\n### Levels\n\nLevels are defined by a string to numerical reference. Each level should also have a color associated\nwith it for use with a reporter that supports colorful output.\n\n* Syslog\n\n### Transports\n\nTransports are used to change where the logs are written to. Console and file are\nsupported by default and multiple transports per logger are permitted.\n\n* Console\n* File (Uses the json reporter by default)\n\n### Reporters\n\nReporters are used to change how the output is displayed and are defined on a per\ntransport basis. Each transport can also specify a default reporter.\n\n* Default\n* NPM\n* JSON\n\n## License\n\n(The MIT License)\n\nCopyright (c) 2012 Jake Luer <jake@alogicalparadox.com>\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE.",
     "copyright": "Copyright (c) 2012 Jake Luer <jake@alogicalparadox.com>"
   },
@@ -726,8 +726,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/tinycolor",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/tinycolor/README.md",
+    "path": "node_modules/tinycolor",
+    "licenseFile": "node_modules/tinycolor/README.md",
     "licenseText": "# tinycolor #\n\nThis is a no-fuzz, barebone, zero muppetry color module for node.js."
   },
   "typescript@5.9.3": {
@@ -736,8 +736,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/typescript",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/typescript/LICENSE.txt",
+    "path": "node_modules/typescript",
+    "licenseFile": "node_modules/typescript/LICENSE.txt",
     "licenseText": "Apache License\r\n\r\nVersion 2.0, January 2004\r\n\r\nhttp://www.apache.org/licenses/ \r\n\r\nTERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\r\n\r\n1. Definitions.\r\n\r\n\"License\" shall mean the terms and conditions for use, reproduction, and distribution as defined by Sections 1 through 9 of this document.\r\n\r\n\"Licensor\" shall mean the copyright owner or entity authorized by the copyright owner that is granting the License.\r\n\r\n\"Legal Entity\" shall mean the union of the acting entity and all other entities that control, are controlled by, or are under common control with that entity. For the purposes of this definition, \"control\" means (i) the power, direct or indirect, to cause the direction or management of such entity, whether by contract or otherwise, or (ii) ownership of fifty percent (50%) or more of the outstanding shares, or (iii) beneficial ownership of such entity.\r\n\r\n\"You\" (or \"Your\") shall mean an individual or Legal Entity exercising permissions granted by this License.\r\n\r\n\"Source\" form shall mean the preferred form for making modifications, including but not limited to software source code, documentation source, and configuration files.\r\n\r\n\"Object\" form shall mean any form resulting from mechanical transformation or translation of a Source form, including but not limited to compiled object code, generated documentation, and conversions to other media types.\r\n\r\n\"Work\" shall mean the work of authorship, whether in Source or Object form, made available under the License, as indicated by a copyright notice that is included in or attached to the work (an example is provided in the Appendix below).\r\n\r\n\"Derivative Works\" shall mean any work, whether in Source or Object form, that is based on (or derived from) the Work and for which the editorial revisions, annotations, elaborations, or other modifications represent, as a whole, an original work of authorship. For the purposes of this License, Derivative Works shall not include works that remain separable from, or merely link (or bind by name) to the interfaces of, the Work and Derivative Works thereof.\r\n\r\n\"Contribution\" shall mean any work of authorship, including the original version of the Work and any modifications or additions to that Work or Derivative Works thereof, that is intentionally submitted to Licensor for inclusion in the Work by the copyright owner or by an individual or Legal Entity authorized to submit on behalf of the copyright owner. For the purposes of this definition, \"submitted\" means any form of electronic, verbal, or written communication sent to the Licensor or its representatives, including but not limited to communication on electronic mailing lists, source code control systems, and issue tracking systems that are managed by, or on behalf of, the Licensor for the purpose of discussing and improving the Work, but excluding communication that is conspicuously marked or otherwise designated in writing by the copyright owner as \"Not a Contribution.\"\r\n\r\n\"Contributor\" shall mean Licensor and any individual or Legal Entity on behalf of whom a Contribution has been received by Licensor and subsequently incorporated within the Work.\r\n\r\n2. Grant of Copyright License. Subject to the terms and conditions of this License, each Contributor hereby grants to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license to reproduce, prepare Derivative Works of, publicly display, publicly perform, sublicense, and distribute the Work and such Derivative Works in Source or Object form.\r\n\r\n3. Grant of Patent License. Subject to the terms and conditions of this License, each Contributor hereby grants to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable (except as stated in this section) patent license to make, have made, use, offer to sell, sell, import, and otherwise transfer the Work, where such license applies only to those patent claims licensable by such Contributor that are necessarily infringed by their Contribution(s) alone or by combination of their Contribution(s) with the Work to which such Contribution(s) was submitted. If You institute patent litigation against any entity (including a cross-claim or counterclaim in a lawsuit) alleging that the Work or a Contribution incorporated within the Work constitutes direct or contributory patent infringement, then any patent licenses granted to You under this License for that Work shall terminate as of the date such litigation is filed.\r\n\r\n4. Redistribution. You may reproduce and distribute copies of the Work or Derivative Works thereof in any medium, with or without modifications, and in Source or Object form, provided that You meet the following conditions:\r\n\r\nYou must give any other recipients of the Work or Derivative Works a copy of this License; and\r\n\r\nYou must cause any modified files to carry prominent notices stating that You changed the files; and\r\n\r\nYou must retain, in the Source form of any Derivative Works that You distribute, all copyright, patent, trademark, and attribution notices from the Source form of the Work, excluding those notices that do not pertain to any part of the Derivative Works; and\r\n\r\nIf the Work includes a \"NOTICE\" text file as part of its distribution, then any Derivative Works that You distribute must include a readable copy of the attribution notices contained within such NOTICE file, excluding those notices that do not pertain to any part of the Derivative Works, in at least one of the following places: within a NOTICE text file distributed as part of the Derivative Works; within the Source form or documentation, if provided along with the Derivative Works; or, within a display generated by the Derivative Works, if and wherever such third-party notices normally appear. The contents of the NOTICE file are for informational purposes only and do not modify the License. You may add Your own attribution notices within Derivative Works that You distribute, alongside or as an addendum to the NOTICE text from the Work, provided that such additional attribution notices cannot be construed as modifying the License. You may add Your own copyright statement to Your modifications and may provide additional or different license terms and conditions for use, reproduction, or distribution of Your modifications, or for any such Derivative Works as a whole, provided Your use, reproduction, and distribution of the Work otherwise complies with the conditions stated in this License.\r\n\r\n5. Submission of Contributions. Unless You explicitly state otherwise, any Contribution intentionally submitted for inclusion in the Work by You to the Licensor shall be under the terms and conditions of this License, without any additional terms or conditions. Notwithstanding the above, nothing herein shall supersede or modify the terms of any separate license agreement you may have executed with Licensor regarding such Contributions.\r\n\r\n6. Trademarks. This License does not grant permission to use the trade names, trademarks, service marks, or product names of the Licensor, except as required for reasonable and customary use in describing the origin of the Work and reproducing the content of the NOTICE file.\r\n\r\n7. Disclaimer of Warranty. Unless required by applicable law or agreed to in writing, Licensor provides the Work (and each Contributor provides its Contributions) on an \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied, including, without limitation, any warranties or conditions of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A PARTICULAR PURPOSE. You are solely responsible for determining the appropriateness of using or redistributing the Work and assume any risks associated with Your exercise of permissions under this License.\r\n\r\n8. Limitation of Liability. In no event and under no legal theory, whether in tort (including negligence), contract, or otherwise, unless required by applicable law (such as deliberate and grossly negligent acts) or agreed to in writing, shall any Contributor be liable to You for damages, including any direct, indirect, special, incidental, or consequential damages of any character arising as a result of this License or out of the use or inability to use the Work (including but not limited to damages for loss of goodwill, work stoppage, computer failure or malfunction, or any and all other commercial damages or losses), even if such Contributor has been advised of the possibility of such damages.\r\n\r\n9. Accepting Warranty or Additional Liability. While redistributing the Work or Derivative Works thereof, You may choose to offer, and charge a fee for, acceptance of support, warranty, indemnity, or other liability obligations and/or rights consistent with this License. However, in accepting such obligations, You may act only on Your own behalf and on Your sole responsibility, not on behalf of any other Contributor, and only if You agree to indemnify, defend, and hold each Contributor harmless for any liability incurred by, or claims asserted against, such Contributor by reason of your accepting any such warranty or additional liability.\r\n\r\nEND OF TERMS AND CONDITIONS"
   },
   "undici-types@7.16.0": {
@@ -746,8 +746,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/undici-types",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/undici-types/LICENSE",
+    "path": "node_modules/undici-types",
+    "licenseFile": "node_modules/undici-types/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) Matteo Collina and Undici contributors\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) Matteo Collina and Undici contributors"
   },
@@ -757,8 +757,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/wordwrap",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/wordwrap/LICENSE",
+    "path": "node_modules/wordwrap",
+    "licenseFile": "node_modules/wordwrap/LICENSE",
     "licenseText": "This software is released under the MIT license:\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of\nthis software and associated documentation files (the \"Software\"), to deal in\nthe Software without restriction, including without limitation the rights to\nuse, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of\nthe Software, and to permit persons to whom the Software is furnished to do so,\nsubject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS\nFOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR\nCOPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER\nIN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN\nCONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE."
   },
   "wrap-ansi@9.0.2": {
@@ -767,8 +767,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/wrap-ansi",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/wrap-ansi/license",
+    "path": "node_modules/wrap-ansi",
+    "licenseFile": "node_modules/wrap-ansi/license",
     "licenseText": "MIT License\n\nCopyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
   },
@@ -778,8 +778,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/ws",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/ws/README.md",
+    "path": "node_modules/ws",
+    "licenseFile": "node_modules/ws/README.md",
     "licenseText": "[![Build Status](https://secure.travis-ci.org/einaros/ws.png)](http://travis-ci.org/einaros/ws)\n\n# ws: a node.js websocket library #\n\n`ws` is a simple to use websocket implementation, up-to-date against RFC-6455, and [probably the fastest WebSocket library for node.js](http://web.archive.org/web/20130314230536/http://hobbycoding.posterous.com/the-fastest-websocket-module-for-nodejs).\n\nPasses the quite extensive Autobahn test suite. See http://einaros.github.com/ws for the full reports.\n\nComes with a command line utility, `wscat`, which can either act as a server (--listen), or client (--connect); Use it to debug simple websocket services.\n\n## Protocol support ##\n\n* **Hixie draft 76** (Old and deprecated, but still in use by Safari and Opera. Added to ws version 0.4.2, but server only. Can be disabled by setting the `disableHixie` option to true.)\n* **HyBi drafts 07-12** (Use the option `protocolVersion: 8`, or argument `-p 8` for wscat)\n* **HyBi drafts 13-17** (Current default, alternatively option `protocolVersion: 13`, or argument `-p 13` for wscat)\n\n_See the echo.websocket.org example below for how to use the `protocolVersion` option._\n\n## Usage ##\n\n### Installing ###\n\n`npm install ws`\n\n### Sending and receiving text data ###\n\n```js\nvar WebSocket = require('ws');\nvar ws = new WebSocket('ws://www.host.com/path');\nws.on('open', function() {\n    ws.send('something');\n});\nws.on('message', function(data, flags) {\n    // flags.binary will be set if a binary data is received\n    // flags.masked will be set if the data was masked\n});\n```\n\n### Sending binary data ###\n\n```js\nvar WebSocket = require('ws');\nvar ws = new WebSocket('ws://www.host.com/path');\nws.on('open', function() {\n    var array = new Float32Array(5);\n    for (var i = 0; i < array.length; ++i) array[i] = i / 2;\n    ws.send(array, {binary: true, mask: true});\n});\n```\n\nSetting `mask`, as done for the send options above, will cause the data to be masked according to the websocket protocol. The same option applies for text data.\n\n### Server example ###\n\n```js\nvar WebSocketServer = require('ws').Server\n  , wss = new WebSocketServer({port: 8080});\nwss.on('connection', function(ws) {\n    ws.on('message', function(message) {\n        console.log('received: %s', message);\n    });\n    ws.send('something');\n});\n```\n\n### Server sending broadcast data ###\n\n```js\nvar WebSocketServer = require('ws').Server\n  , wss = new WebSocketServer({port: 8080});\n  \nwss.broadcast = function(data) {\n\tfor(var i in this.clients)\n\t\tthis.clients[i].send(data);\n};\n```\n\n### Error handling best practices ###\n\n```js\n// If the WebSocket is closed before the following send is attempted\nws.send('something');\n\n// Errors (both immediate and async write errors) can be detected in an optional callback.\n// The callback is also the only way of being notified that data has actually been sent.\nws.send('something', function(error) {\n    // if error is null, the send has been completed,\n    // otherwise the error object will indicate what failed.\n});\n\n// Immediate errors can also be handled with try/catch-blocks, but **note**\n// that since sends are inherently asynchronous, socket write failures will *not*\n// be captured when this technique is used.\ntry {\n    ws.send('something');\n}\ncatch (e) {\n    // handle error\n}\n```\n\n### echo.websocket.org demo ###\n\n```js\nvar WebSocket = require('ws');\nvar ws = new WebSocket('ws://echo.websocket.org/', {protocolVersion: 8, origin: 'http://websocket.org'});\nws.on('open', function() {\n    console.log('connected');\n    ws.send(Date.now().toString(), {mask: true});\n});\nws.on('close', function() {\n    console.log('disconnected');\n});\nws.on('message', function(data, flags) {\n    console.log('Roundtrip time: ' + (Date.now() - parseInt(data)) + 'ms', flags);\n    setTimeout(function() {\n        ws.send(Date.now().toString(), {mask: true});\n    }, 500);\n});\n```\n\n### wscat against echo.websocket.org ###\n\n    $ npm install -g ws\n    $ wscat -c ws://echo.websocket.org \n    connected (press CTRL+C to quit)\n    > hi there\n    < hi there\n    > are you a happy parrot?\n    < are you a happy parrot?\n\n### Other examples ###\n\nFor a full example with a browser client communicating with a ws server, see the examples folder.\n\nNote that the usage together with Express 3.0 is quite different from Express 2.x. The difference is expressed in the two different serverstats-examples.\n\nOtherwise, see the test cases.\n\n### Running the tests ###\n\n`make test`\n\n## API Docs ##\n\nSee the doc/ directory for Node.js-like docs for the ws classes.\n\n## License ##\n\n(The MIT License)\n\nCopyright (c) 2011 Einar Otto Stangvik &lt;einaros@gmail.com&gt;\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n'Software'), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright (c) 2011 Einar Otto Stangvik &lt;einaros@gmail.com&gt;"
   },
@@ -789,8 +789,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/y18n",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/y18n/LICENSE",
+    "path": "node_modules/y18n",
+    "licenseFile": "node_modules/y18n/LICENSE",
     "licenseText": "Copyright (c) 2015, Contributors\n\nPermission to use, copy, modify, and/or distribute this software for any purpose\nwith or without fee is hereby granted, provided that the above copyright notice\nand this permission notice appear in all copies.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH\nREGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND\nFITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,\nINDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS\nOF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER\nTORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF\nTHIS SOFTWARE.",
     "copyright": "Copyright (c) 2015, Contributors"
   },
@@ -800,8 +800,8 @@
     "email": "",
     "repository": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/yaml",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/yaml/Readme.md",
+    "path": "node_modules/yaml",
+    "licenseFile": "node_modules/yaml/Readme.md",
     "licenseText": "# YAML\n\nCommonJS JavaScript YAML parser, fast and tiny. Although this implementation\ndoes not currently support the entire YAML specification, feel free to\nfork the project and submit a patch :) \n\n# Usage\n\n    require('yaml').eval(string_of_yaml)\n    \n# Currently Supports\n\n  * Comments\n  * Sequences (arrays)\n  * Maps (hashes)\n  * Inline sequences\n  * Inline maps\n  * Nesting\n  * Primitive scalars (integers, floats, booleans, etc)\n  * Extended bools (enabled, disabled, yes, no, on, off, true, false)\n  \n## Installation\n\n    $ npm install yaml\n    \n# Testing\n\nUpdate git submodules and run:\n\n    $ make test\n\n# License \n\n(The MIT License)\n\nCopyright (c) 2009 TJ Holowaychuk <tj@vision-media.ca>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n'Software'), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "copyright": "Copyright (c) 2009 TJ Holowaychuk <tj@vision-media.ca>"
   },
@@ -811,8 +811,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/yargs-parser",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/yargs-parser/LICENSE.txt",
+    "path": "node_modules/yargs-parser",
+    "licenseFile": "node_modules/yargs-parser/LICENSE.txt",
     "licenseText": "Copyright (c) 2016, Contributors\n\nPermission to use, copy, modify, and/or distribute this software\nfor any purpose with or without fee is hereby granted, provided\nthat the above copyright notice and this permission notice\nappear in all copies.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES\nWITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES\nOF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE\nLIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES\nOR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,\nWHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,\nARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.",
     "copyright": "Copyright (c) 2016, Contributors"
   },
@@ -822,8 +822,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/yargs",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/yargs/LICENSE",
+    "path": "node_modules/yargs",
+    "licenseFile": "node_modules/yargs/LICENSE",
     "licenseText": "MIT License\n\nCopyright 2010 James Halliday (mail@substack.net); Modified work Copyright 2014 Contributors (ben@npmjs.com)\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE.",
     "copyright": "Copyright 2010 James Halliday (mail@substack.net); Modified work Copyright 2014 Contributors (ben@npmjs.com)"
   },
@@ -833,8 +833,8 @@
     "publisher": "",
     "email": "",
     "url": "",
-    "path": "/home/jorge/repos/agent-harness/node_modules/zod",
-    "licenseFile": "/home/jorge/repos/agent-harness/node_modules/zod/LICENSE",
+    "path": "node_modules/zod",
+    "licenseFile": "node_modules/zod/LICENSE",
     "licenseText": "MIT License\n\nCopyright (c) 2025 Colin McDonnell\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
     "copyright": "Copyright (c) 2025 Colin McDonnell"
   }

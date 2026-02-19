@@ -136,7 +136,7 @@ When webhook receiver is available:
 
 ### Sequence 1: create + run + read result
 1. `POST /projects`
-- request: `{ "name": "wave6-docs", "cwd": "/home/jorge/repos/agent-harness" }`
+- request: `{ "name": "wave6-docs", "cwd": "/home/user/repos/agent-harness" }`
 - success: `201 { "project": {...} }`
 2. `POST /projects/wave6-docs/agents`
 - request: `{ "provider": "codex", "task": "Summarize X", "model": "..." }`

@@ -1,0 +1,18 @@
+*
+!src/
+!src/**
+!dist/
+!dist/**
+!package.json
+!README.md
+!LICENSE
+
+# Explicit exclusions requested
+docs/
+test/
+.beads/
+.git/
+**/*.test.ts
+agent-harness
+agent-harness-receiver
+research/

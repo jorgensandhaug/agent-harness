@@ -190,7 +190,7 @@ Base path: `/api/v1/projects/:name/agents`
   "model": "gpt-5",
   "subscription": "sub-id",
   "callback": {
-    "url": "https://receiver/harness-webhook",
+    "url": "https://your-host/harness-webhook",
     "token": "optional-write-only",
     "discordChannel": "alerts",
     "sessionKey": "session-main",
@@ -460,7 +460,7 @@ Errors:
     "enabled": true,
     "startedAt": "2026-02-18T00:00:00.000Z",
     "config": {
-      "url": "http://receiver/harness-webhook",
+      "url": "http://your-host/harness-webhook",
       "tokenConfigured": true,
       "events": ["agent_completed", "agent_error", "agent_exited"],
       "safetyNet": {
@@ -532,16 +532,16 @@ Errors:
 
 ```json
 {
-  "baseUrl": "http://receiver.test",
+  "baseUrl": "http://your-host.test",
   "health": {
-    "url": "http://receiver.test/health",
+    "url": "http://your-host.test/health",
     "ok": true,
     "status": 200,
     "bodySnippet": "{\"ok\":true}",
     "error": null
   },
   "harnessWebhook": {
-    "url": "http://receiver.test/harness-webhook",
+    "url": "http://your-host.test/harness-webhook",
     "ok": false,
     "status": 400,
     "bodySnippet": "{\"error\":\"invalid_payload\"}",

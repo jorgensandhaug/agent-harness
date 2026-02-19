@@ -756,7 +756,7 @@ requestLogger.info("Processing request");
 ```
 Frontend → Main Backend (Orchestrator) → Local Agent 1 (localhost:8081)
                                       → Local Agent 2 (localhost:8082)
-                                      → Remote Agent 3 (mac-mini.local:8081)
+                                      → Remote Agent 3 (your-host.local:8081)
 ```
 
 **Key ideas:**

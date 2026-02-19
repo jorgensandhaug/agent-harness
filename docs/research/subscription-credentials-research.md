@@ -15,8 +15,8 @@ Primary inputs merged:
 - `src/config.ts`
 - `src/session/manager.ts`
 - `src/tmux/client.ts`
-- `~/repos/ai-quota/src/providers/claude.ts`
-- `~/repos/ai-quota/src/providers/codex.ts`
+- `/home/user/repos/ai-quota/src/providers/claude.ts`
+- `/home/user/repos/ai-quota/src/providers/codex.ts`
 
 Goal: define reliable multi-subscription credential routing for harness agent creation.
 
@@ -226,25 +226,25 @@ Add top-level `subscriptions` map with provider-specific entries.
 ```json
 {
   "subscriptions": {
-    "claude-max-jorge": {
+    "claude-max-user": {
       "provider": "claude-code",
       "mode": "oauth",
-      "sourceDir": "/home/jorge/.claude-jorge",
+      "sourceDir": "/home/user/.claude-user",
       "expected": {
         "subscriptionType": "max"
       }
     },
-    "codex-plus-jorge": {
+    "codex-plus-user": {
       "provider": "codex",
       "mode": "chatgpt",
-      "sourceDir": "/home/jorge/.codex-jorge",
+      "sourceDir": "/home/user/.codex-user",
       "workspaceId": "c5191700-5593-423b-88dc-204344f3af07",
       "enforceWorkspace": true
     },
     "codex-api-ci": {
       "provider": "codex",
       "mode": "apikey",
-      "sourceDir": "/home/jorge/.codex-ci"
+      "sourceDir": "/home/user/.codex-ci"
     }
   }
 }
@@ -264,7 +264,7 @@ Validation rules:
   "provider": "codex",
   "task": "Implement X",
   "model": "gpt-5.3-codex",
-  "subscription": "codex-plus-jorge"
+  "subscription": "codex-plus-user"
 }
 ```
 

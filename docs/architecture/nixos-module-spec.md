@@ -11,9 +11,9 @@ Define one NixOS module that runs two binaries from `agent-harness` repo as syst
 No implementation in this doc. Spec only.
 
 ## References (patterns to copy)
-- `~/dotfiles/nixos/modules/ai-quota.nix`
-- `~/dotfiles/nixos/roles/openclaw.nix`
-- `~/dotfiles/nixos/roles/agentboard.nix`
+- `/home/user/dotfiles/nixos/modules/ai-quota.nix`
+- `/home/user/dotfiles/nixos/roles/openclaw.nix`
+- `/home/user/dotfiles/nixos/roles/agentboard.nix`
 
 Pattern highlights to reuse:
 - option-driven config
@@ -24,9 +24,9 @@ Pattern highlights to reuse:
 - optional watchdog timer for never-down behavior
 
 ## Module placement and option root
-- File target: `~/dotfiles/nixos/roles/agent-harness.nix`
+- File target: `/home/user/dotfiles/nixos/roles/agent-harness.nix`
 - Option root: `dotfiles.roles.agentHarness`
-- Imported by host files in `~/dotfiles/nixos/hosts/<host>/default.nix`
+- Imported by host files in `/home/user/dotfiles/nixos/hosts/<host>/default.nix`
 
 ## Option schema
 
