@@ -3,7 +3,6 @@ import { chmod, mkdir, readdir, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import type {
-	DiscoveryProfileConfig,
 	DiscoverySourceConfig,
 	SubscriptionConfig,
 	SubscriptionDiscoveryConfig,
@@ -192,7 +191,9 @@ function collectCandidateDirs(
 	})();
 }
 
-async function collectClaudeTokenFiles(extraPaths: readonly string[]): Promise<readonly PathCandidate[]> {
+async function collectClaudeTokenFiles(
+	extraPaths: readonly string[],
+): Promise<readonly PathCandidate[]> {
 	const candidates = new Map<string, Set<string>>();
 
 	for (const value of extraPaths) {
@@ -208,7 +209,11 @@ async function collectClaudeTokenFiles(extraPaths: readonly string[]): Promise<r
 		if (entries.length > 0) {
 			for (const entry of entries) {
 				if (!entry.isFile() || !entry.name.endsWith(".token")) continue;
-				addReason(candidates, normalizePath(join(normalized, entry.name)), "explicit_token_dir_scan");
+				addReason(
+					candidates,
+					normalizePath(join(normalized, entry.name)),
+					"explicit_token_dir_scan",
+				);
 			}
 			continue;
 		}
@@ -591,10 +596,7 @@ export async function discoverSubscriptions(
 		const baseReasons = [`profile:${profile.source}`];
 		if (profile.provider === "claude-code") {
 			const mode = profile.mode ?? "oauth";
-			const label =
-				profile.label ??
-				sanitizeIdSegment(profile.source) ??
-				"profile";
+			const label = profile.label ?? sanitizeIdSegment(profile.source) ?? "profile";
 
 			if (profile.valueType === "sourceDir") {
 				const dir = normalizePath(expandHomePath(resolvedSource.value));

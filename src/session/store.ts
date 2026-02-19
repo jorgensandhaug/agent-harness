@@ -54,7 +54,12 @@ export function createStore() {
 	function updateProjectCallback(name: ProjectName, callback?: AgentCallback): void {
 		const project = projects.get(name);
 		if (!project) return;
-		project.callback = callback;
+		if (callback) {
+			project.callback = callback;
+			return;
+		}
+		const { callback: _omitted, ...rest } = project;
+		projects.set(name, rest);
 	}
 
 	// --- Agents ---

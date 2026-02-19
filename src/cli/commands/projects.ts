@@ -3,10 +3,10 @@ import type { BuildContext, GlobalOptions } from "../main.ts";
 import { printJson, printKeyValue, printTable, printText } from "../output.ts";
 
 type ProjectCallbackArgv = {
-	callbackUrl?: string;
-	callbackToken?: string;
-	discordChannel?: string;
-	sessionKey?: string;
+	callbackUrl?: string | undefined;
+	callbackToken?: string | undefined;
+	discordChannel?: string | undefined;
+	sessionKey?: string | undefined;
 };
 
 function resolveProjectCallback(argv: ProjectCallbackArgv) {
@@ -16,7 +16,9 @@ function resolveProjectCallback(argv: ProjectCallbackArgv) {
 		argv.sessionKey !== undefined;
 	if (!argv.callbackUrl) {
 		if (hasNonUrlField) {
-			throw new Error("--callback-url is required when setting callback token/channel/session fields.");
+			throw new Error(
+				"--callback-url is required when setting callback token/channel/session fields.",
+			);
 		}
 		return undefined;
 	}
