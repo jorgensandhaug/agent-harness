@@ -39,7 +39,12 @@ describe("poller/status-source.hasInternalsStatusSource", () => {
 });
 
 describe("poller/status-source.shouldUseUiParserForStatus", () => {
-	it("disables ui-parser status when internals are available", () => {
+	it("disables ui-parser status for codex and for providers with internals", () => {
+		expect(
+			shouldUseUiParserForStatus({
+				provider: "codex",
+			}),
+		).toBe(false);
 		expect(
 			shouldUseUiParserForStatus({
 				provider: "codex",
@@ -54,12 +59,7 @@ describe("poller/status-source.shouldUseUiParserForStatus", () => {
 		).toBe(false);
 	});
 
-	it("allows ui-parser status only when no internals source exists", () => {
-		expect(
-			shouldUseUiParserForStatus({
-				provider: "codex",
-			}),
-		).toBe(true);
+	it("allows ui-parser status only when provider has no internals path", () => {
 		expect(
 			shouldUseUiParserForStatus({
 				provider: "unknown-provider",

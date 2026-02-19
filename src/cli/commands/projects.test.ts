@@ -102,13 +102,17 @@ describe("cli/commands/projects callback defaults", () => {
 						tmuxSession: "ah-project-a",
 						agentCount: 0,
 						createdAt: "2024-01-01T00:00:00.000Z",
-						callback: {
-							url: input.callback.url,
-							...(input.callback.discordChannel
-								? { discordChannel: input.callback.discordChannel }
-								: {}),
-							...(input.callback.sessionKey ? { sessionKey: input.callback.sessionKey } : {}),
-						},
+						...(input.callback
+							? {
+									callback: {
+										url: input.callback.url,
+										...(input.callback.discordChannel
+											? { discordChannel: input.callback.discordChannel }
+											: {}),
+										...(input.callback.sessionKey ? { sessionKey: input.callback.sessionKey } : {}),
+									},
+								}
+							: {}),
 					},
 				};
 			},
@@ -155,6 +159,70 @@ describe("cli/commands/projects callback defaults", () => {
 				},
 			},
 		]);
+	});
+
+	it("sends cwd on project update without callback", async () => {
+		const updateCalls: Array<{ name: string; input: UpdateProjectRequest }> = [];
+		const client = {
+			async updateProject(name: string, input: UpdateProjectRequest) {
+				updateCalls.push({ name, input });
+				return {
+					project: {
+						name,
+						cwd: input.cwd ?? "/tmp/project-a",
+						tmuxSession: "ah-project-a",
+						agentCount: 0,
+						createdAt: "2024-01-01T00:00:00.000Z",
+					},
+				};
+			},
+		} as unknown as CliHttpClient;
+
+		const buildContext: BuildContext = async (_argv: GlobalOptions): Promise<CommandContext> => ({
+			config: {
+				url: "http://127.0.0.1:7070",
+				json: true,
+				compact: false,
+				configPath: "/tmp/cli.json",
+			},
+			client,
+			json: true,
+			compact: false,
+		});
+
+		const parser = createParser();
+		registerProjectCommands(parser, buildContext);
+		await parser.parseAsync(["projects", "update", "project-a", "--cwd", "/tmp/project-updated"]);
+
+		expect(updateCalls).toEqual([
+			{
+				name: "project-a",
+				input: {
+					cwd: "/tmp/project-updated",
+				},
+			},
+		]);
+	});
+
+	it("requires at least one update field on project update", async () => {
+		const client = {} as CliHttpClient;
+		const buildContext: BuildContext = async (_argv: GlobalOptions): Promise<CommandContext> => ({
+			config: {
+				url: "http://127.0.0.1:7070",
+				json: true,
+				compact: false,
+				configPath: "/tmp/cli.json",
+			},
+			client,
+			json: true,
+			compact: false,
+		});
+
+		const parser = createParser();
+		registerProjectCommands(parser, buildContext);
+		await expect(parser.parseAsync(["projects", "update", "project-a"])).rejects.toThrow(
+			"At least one of --cwd or callback fields is required.",
+		);
 	});
 
 	it("requires callback url when callback token/channel/session flags are set", async () => {

@@ -907,7 +907,8 @@ export function createManager(
 	function updateProject(
 		name: string,
 		update: {
-			callback: AgentCallback;
+			cwd?: string;
+			callback?: AgentCallback;
 		},
 	): Result<Project, ManagerError> {
 		const pName = projectName(name);
@@ -916,7 +917,7 @@ export function createManager(
 			return err({ code: "PROJECT_NOT_FOUND", name });
 		}
 
-		store.updateProjectCallback(pName, update.callback);
+		store.updateProject(pName, update);
 		return ok(project);
 	}
 

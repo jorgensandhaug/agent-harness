@@ -22,6 +22,7 @@ const CreateProjectBody = z.object({
 });
 
 const UpdateProjectBody = z.object({
+	cwd: z.string().min(1).optional(),
 	callback: CallbackBody.optional(),
 });
 
@@ -78,17 +79,20 @@ export function registerProjectRoutes(app: Hono, manager: Manager): void {
 				400,
 			);
 		}
-		if (!parsed.data.callback) {
+		if (!parsed.data.callback && !parsed.data.cwd) {
 			return c.json(
 				{
 					error: "INVALID_REQUEST",
-					message: "callback: Required",
+					message: "At least one of cwd or callback is required",
 				},
 				400,
 			);
 		}
 
-		const result = manager.updateProject(name, { callback: parsed.data.callback });
+		const result = manager.updateProject(name, {
+			...(parsed.data.cwd !== undefined ? { cwd: parsed.data.cwd } : {}),
+			...(parsed.data.callback ? { callback: parsed.data.callback } : {}),
+		});
 		if (!result.ok) {
 			const mapped = mapManagerError(result.error);
 			return c.json(mapped.body, mapped.status);

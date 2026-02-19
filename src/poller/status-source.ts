@@ -19,5 +19,9 @@ export function hasInternalsStatusSource(agent: PollAgentLike): boolean {
 }
 
 export function shouldUseUiParserForStatus(agent: PollAgentLike): boolean {
+	if (agent.provider === "codex") {
+		// Codex status must come from internals only; UI parser/heuristics are too noisy.
+		return false;
+	}
 	return !hasInternalsStatusSource(agent);
 }

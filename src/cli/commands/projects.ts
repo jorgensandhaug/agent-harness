@@ -136,9 +136,12 @@ export function registerProjectCommands(
 							demandOption: true,
 							describe: "Project name",
 						})
+						.option("cwd", {
+							type: "string",
+							describe: "Project working directory for new agents in this project",
+						})
 						.option("callback-url", {
 							type: "string",
-							demandOption: true,
 							describe: "Default webhook callback URL for agents in this project",
 						})
 						.option("callback-token", {
@@ -156,16 +159,20 @@ export function registerProjectCommands(
 				async (argv) => {
 					const context = await buildContext(argv);
 					const callback = resolveProjectCallback(argv);
-					if (!callback) {
-						throw new Error("callback defaults are required for project update.");
+					if (!callback && argv.cwd === undefined) {
+						throw new Error("At least one of --cwd or callback fields is required.");
 					}
-					const response = await context.client.updateProject(argv.name, { callback });
+					const response = await context.client.updateProject(argv.name, {
+						...(argv.cwd !== undefined ? { cwd: argv.cwd } : {}),
+						...(callback ? { callback } : {}),
+					});
 					if (context.json) {
 						printJson(response);
 						return;
 					}
 					printKeyValue([
 						{ key: "updated", value: response.project.name },
+						{ key: "cwd", value: response.project.cwd },
 						{ key: "callbackUrl", value: response.project.callback?.url ?? "(none)" },
 						{
 							key: "discordChannel",

@@ -51,15 +51,21 @@ export function createStore() {
 		project.agentCount = count;
 	}
 
-	function updateProjectCallback(name: ProjectName, callback?: AgentCallback): void {
+	function updateProject(
+		name: ProjectName,
+		update: {
+			cwd?: string;
+			callback?: AgentCallback;
+		},
+	): void {
 		const project = projects.get(name);
 		if (!project) return;
-		if (callback) {
-			project.callback = callback;
-			return;
+		if (update.cwd !== undefined) {
+			project.cwd = update.cwd;
 		}
-		const { callback: _omitted, ...rest } = project;
-		projects.set(name, rest);
+		if (update.callback !== undefined) {
+			project.callback = update.callback;
+		}
 	}
 
 	// --- Agents ---
@@ -124,7 +130,7 @@ export function createStore() {
 		getProject,
 		listProjects,
 		addProject,
-		updateProjectCallback,
+		updateProject,
 		removeProject,
 		getAgent,
 		listAgents,

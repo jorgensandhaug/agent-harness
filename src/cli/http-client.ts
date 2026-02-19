@@ -66,7 +66,8 @@ export type CreateProjectRequest = {
 };
 
 export type UpdateProjectRequest = {
-	callback: {
+	cwd?: string;
+	callback?: {
 		url: string;
 		token?: string;
 		discordChannel?: string;

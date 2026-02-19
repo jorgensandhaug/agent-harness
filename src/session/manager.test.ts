@@ -977,6 +977,7 @@ describe("session/manager.subscriptions", () => {
 		if (!projectRes.ok) throw new Error("project create failed");
 
 		const updateRes = manager.updateProject("pc-update", {
+			cwd: "/tmp/pc-update-new",
 			callback: {
 				url: "https://receiver.test/updated-default",
 				token: "updated-token",
@@ -986,6 +987,7 @@ describe("session/manager.subscriptions", () => {
 		});
 		expect(updateRes.ok).toBe(true);
 		if (!updateRes.ok) throw new Error("project update failed");
+		expect(updateRes.value.cwd).toBe("/tmp/pc-update-new");
 		expect(updateRes.value.callback).toEqual({
 			url: "https://receiver.test/updated-default",
 			token: "updated-token",

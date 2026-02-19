@@ -209,9 +209,10 @@ export function createPoller(
 			lastProviderEventsCount: providerEvents.length,
 		});
 
+		const codexStrictStatus = agent.provider === "codex";
 		let parsedStatus: AgentStatus = "starting";
 		let parsedStatusSource: StatusChangeSource = "fallback_heuristic";
-		if (shouldUseUiParserForStatus(agent)) {
+		if (!codexStrictStatus && shouldUseUiParserForStatus(agent)) {
 			try {
 				parsedStatus = provider.parseStatus(currentOutput);
 				parsedStatusSource = "ui_parser";
@@ -314,22 +315,29 @@ export function createPoller(
 				debugTracker?.noteError(scopedAgentId, "parse", `opencode internals read failed: ${msg}`);
 			}
 		}
-		const newStatus = deriveStatusFromSignals({
-			currentStatus: agent.status,
-			parsedStatus,
-			paneDead: false,
-			paneCurrentCommand: paneCommandResult.ok ? paneCommandResult.value : null,
-			currentOutput,
-			diff,
-			providerEvents,
-			lastDiffAtMs: runtime.lastDiffAtMs,
-			nowMs: statusNowMs,
-		});
+		let newStatus: AgentStatus;
+		let statusSource: StatusChangeSource;
+		if (codexStrictStatus) {
+			// For Codex, trust internals only. If no new internals status is available, keep current status.
+			newStatus = parsedStatus === "starting" ? agent.status : parsedStatus;
+			statusSource = "internals_codex_jsonl";
+		} else {
+			newStatus = deriveStatusFromSignals({
+				currentStatus: agent.status,
+				parsedStatus,
+				paneDead: false,
+				paneCurrentCommand: paneCommandResult.ok ? paneCommandResult.value : null,
+				currentOutput,
+				diff,
+				providerEvents,
+				lastDiffAtMs: runtime.lastDiffAtMs,
+				nowMs: statusNowMs,
+			});
+			statusSource = newStatus === parsedStatus ? parsedStatusSource : "fallback_heuristic";
+		}
 		if (newStatus === "processing" && runtime.lastDiffAtMs === null) {
 			runtime.lastDiffAtMs = statusNowMs;
 		}
-		const statusSource: StatusChangeSource =
-			newStatus === parsedStatus ? parsedStatusSource : "fallback_heuristic";
 		if (newStatus !== agent.status) {
 			const from = agent.status;
 			manager.updateAgentStatus(agent.project as ProjectName, agent.id as AgentId, newStatus);

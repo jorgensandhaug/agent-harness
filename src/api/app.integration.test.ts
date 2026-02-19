@@ -522,6 +522,7 @@ describe("http/projects.crud", () => {
 		const updated = await apiJson(env.baseUrl, "/api/v1/projects/p-http-callback-defaults", {
 			method: "PATCH",
 			body: JSON.stringify({
+				cwd: "/tmp/p-http-callback-defaults-updated",
 				callback: {
 					url: "https://receiver.test/project-updated",
 					token: "updated-token",
@@ -532,6 +533,7 @@ describe("http/projects.crud", () => {
 		});
 		expect(updated.status).toBe(200);
 		const updatedJson = await updated.json();
+		expect(updatedJson.project.cwd).toBe("/tmp/p-http-callback-defaults-updated");
 		expect(updatedJson.project.callback).toEqual({
 			url: "https://receiver.test/project-updated",
 			discordChannel: "updated-alerts",
@@ -541,6 +543,7 @@ describe("http/projects.crud", () => {
 		const got = await fetch(`${env.baseUrl}/api/v1/projects/p-http-callback-defaults`);
 		expect(got.status).toBe(200);
 		const gotJson = await got.json();
+		expect(gotJson.project.cwd).toBe("/tmp/p-http-callback-defaults-updated");
 		expect(gotJson.project.callback).toEqual({
 			url: "https://receiver.test/project-updated",
 			discordChannel: "updated-alerts",

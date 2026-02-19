@@ -356,10 +356,20 @@ ${PROVIDER_OPTIONS_HTML}
 				</div>
 			</section>
 
-			<section class="card events">
-				<label>Event timeline</label>
-				<pre id="event-log">(none)</pre>
-			</section>
+				<section class="card events">
+					<label>Event timeline</label>
+					<div class="inline" style="margin: 6px 0">
+						<label>
+							<input id="timeline-status-only" type="checkbox" />
+							Status changes only
+						</label>
+						<label>
+							<input id="timeline-hide-output" type="checkbox" />
+							Hide output events
+						</label>
+					</div>
+					<pre id="event-log">(none)</pre>
+				</section>
 
 			<section class="card output">
 				<label>Output snapshot</label>
@@ -427,12 +437,14 @@ ${PROVIDER_OPTIONS_HTML}
 						lastStatusSource: "",
 						messagesSource: "",
 						attachCommand: "",
-						lastEventId: "",
-						lastEventAt: "",
-						eventCounts: {},
-						eventLines: [],
-						eventTotal: 0,
-					streamConnected: false,
+							lastEventId: "",
+							lastEventAt: "",
+							eventCounts: {},
+							eventLines: [],
+							eventTotal: 0,
+							timelineStatusOnly: false,
+							timelineHideOutput: false,
+						streamConnected: false,
 					lastTransitionAt: "",
 					lastPollAt: "",
 					lastHeartbeatAt: "",
@@ -484,9 +496,11 @@ ${PROVIDER_OPTIONS_HTML}
 					sendInput: document.getElementById("send-input"),
 					abortAgent: document.getElementById("abort-agent"),
 					deleteAgent: document.getElementById("delete-agent"),
-						deleteProject: document.getElementById("delete-project"),
-						eventLog: document.getElementById("event-log"),
-						outputLog: document.getElementById("output-log"),
+							deleteProject: document.getElementById("delete-project"),
+							eventLog: document.getElementById("event-log"),
+							timelineStatusOnly: document.getElementById("timeline-status-only"),
+							timelineHideOutput: document.getElementById("timeline-hide-output"),
+							outputLog: document.getElementById("output-log"),
 						messagesLog: document.getElementById("messages-log"),
 						lastMessageLog: document.getElementById("last-message-log"),
 						subscriptionDetailsLog: document.getElementById("subscription-details-log"),
@@ -505,13 +519,26 @@ ${PROVIDER_OPTIONS_HTML}
 					el.uiStatus.textContent = text;
 				}
 
-				function pushEvent(line) {
-					state.eventLines.push(line);
-					if (state.eventLines.length > MAX_EVENTS) {
-						state.eventLines.splice(0, state.eventLines.length - MAX_EVENTS);
+					function renderEventLog() {
+						const filtered = state.eventLines.filter((entry) => {
+							if (state.timelineStatusOnly) {
+								return entry.type === "status_changed" || entry.type === "meta";
+							}
+							if (state.timelineHideOutput && entry.type === "output") {
+								return false;
+							}
+							return true;
+						});
+						el.eventLog.textContent = filtered.length > 0 ? filtered.map((entry) => entry.line).join("\n") : "(none)";
 					}
-					el.eventLog.textContent = state.eventLines.join("\n");
-				}
+
+					function pushEvent(line, type = "meta") {
+						state.eventLines.push({ line, type });
+						if (state.eventLines.length > MAX_EVENTS) {
+							state.eventLines.splice(0, state.eventLines.length - MAX_EVENTS);
+						}
+						renderEventLog();
+					}
 
 					function summarizePayload(eventType, payload) {
 						if (!payload || typeof payload !== "object") return "";
@@ -666,11 +693,12 @@ ${PROVIDER_OPTIONS_HTML}
 							debugEndpoint: state.debug,
 						};
 
-						renderSubscriptionDetails();
-						renderWebhookPanel();
-						renderMessages();
-						el.internalState.textContent = JSON.stringify(debugState, null, 2);
-					}
+							renderSubscriptionDetails();
+							renderWebhookPanel();
+							renderEventLog();
+							renderMessages();
+							el.internalState.textContent = JSON.stringify(debugState, null, 2);
+						}
 
 				async function api(path, init) {
 					return fetch(path, {
@@ -1142,10 +1170,10 @@ ${PROVIDER_OPTIONS_HTML}
 						state.lastTransitionAt = new Date().toISOString();
 					}
 
-					const summary = summarizePayload(eventType, payload);
-					pushEvent("[" + stamp() + "] " + eventType + (summary ? " " + summary : ""));
-					renderState();
-				}
+						const summary = summarizePayload(eventType, payload);
+						pushEvent("[" + stamp() + "] " + eventType + (summary ? " " + summary : ""), eventType);
+						renderState();
+					}
 
 				function connectStream(since) {
 					if (!state.projectName || !state.agentId) return;
@@ -1540,13 +1568,21 @@ ${PROVIDER_OPTIONS_HTML}
 				el.provider.addEventListener("change", () => {
 					void refreshSubscriptionsList();
 				});
-				el.subscription.addEventListener("change", () => {
-					renderSubscriptionDetails();
-				});
-				el.existingProject.addEventListener("change", () => {
-					syncProjectInputsFromSelection();
-					void refreshAgentsList();
-				});
+					el.subscription.addEventListener("change", () => {
+						renderSubscriptionDetails();
+					});
+					el.timelineStatusOnly.addEventListener("change", () => {
+						state.timelineStatusOnly = Boolean(el.timelineStatusOnly.checked);
+						renderEventLog();
+					});
+					el.timelineHideOutput.addEventListener("change", () => {
+						state.timelineHideOutput = Boolean(el.timelineHideOutput.checked);
+						renderEventLog();
+					});
+					el.existingProject.addEventListener("change", () => {
+						syncProjectInputsFromSelection();
+						void refreshAgentsList();
+					});
 				el.connectExisting.addEventListener("click", () => {
 					void connectExisting();
 				});
@@ -1575,9 +1611,11 @@ ${PROVIDER_OPTIONS_HTML}
 					void probeWebhookReceiver();
 				});
 
-				el.projectName.value = "";
-				el.projectCwd.value = ".";
-				void refreshSubscriptionsList();
+					el.projectName.value = "";
+					el.projectCwd.value = ".";
+					el.timelineStatusOnly.checked = false;
+					el.timelineHideOutput.checked = false;
+					void refreshSubscriptionsList();
 				void refreshWebhookStatus();
 				void refreshProjectsList();
 				renderSubscriptionDetails();
