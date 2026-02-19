@@ -99,6 +99,48 @@ async function writeCodexSessionWithPartialEventChunks(runtimeDir: string): Prom
 	);
 }
 
+async function writeCodexParentAndSubagentSessions(runtimeDir: string): Promise<void> {
+	const dir = join(runtimeDir, "sessions", "2026", "02", "19");
+	await mkdir(dir, { recursive: true });
+	await Bun.write(
+		join(dir, "rollout-2026-02-19T09-07-16-parent-session.jsonl"),
+		JSON.stringify({
+			timestamp: "2026-02-19T08:07:34.696Z",
+			type: "response_item",
+			payload: {
+				type: "message",
+				role: "assistant",
+				content: [
+					{
+						type: "output_text",
+						text: "Subagent 1 (`src/**/*.ts`): **102**\nSubagent 2 (`src/**/*.test.ts`): **39**",
+					},
+				],
+			},
+		}),
+	);
+	await Bun.write(
+		join(dir, "rollout-2026-02-19T09-07-25-subagent-session.jsonl"),
+		JSON.stringify({
+			timestamp: "2026-02-19T08:07:30.381Z",
+			type: "response_item",
+			payload: {
+				type: "message",
+				role: "assistant",
+				content: [{ type: "output_text", text: "rg --files src/ -g '*.test.ts' | wc -l\n39" }],
+			},
+		}),
+	);
+	await Bun.write(
+		join(runtimeDir, "history.jsonl"),
+		JSON.stringify({
+			session_id: "parent-session",
+			ts: 1771488437,
+			text: "parent task",
+		}),
+	);
+}
+
 async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {
 	const deadline = Date.now() + timeoutMs;
 	while (!predicate()) {
@@ -238,6 +280,58 @@ describe("webhook/client", () => {
 		unsubscribe();
 	});
 
+	it("uses codex history session id to avoid sending subagent output as lastMessage", async () => {
+		const runtimeDir = await mkdtemp(join(tmpdir(), "ah-webhook-client-parent-session-"));
+		tempDirs.push(runtimeDir);
+		await writeCodexParentAndSubagentSessions(runtimeDir);
+
+		const store = createStore();
+		store.addAgent(baseAgent(runtimeDir));
+		const bus = createEventBus(100);
+
+		const calls: Array<{ payload: unknown }> = [];
+		(globalThis as { fetch: typeof fetch }).fetch = (async (
+			input: RequestInfo | URL,
+			init?: RequestInit,
+		) => {
+			const request = new Request(input, init);
+			calls.push({
+				payload: await request.json(),
+			});
+			return new Response(null, { status: 200 });
+		}) as typeof fetch;
+
+		const unsubscribe = createWebhookClient(
+			webhookConfig({
+				url: "https://example.test/hook",
+				events: ["agent_completed"],
+			}),
+			bus,
+			store,
+		);
+		bus.emit({
+			id: "evt-parent-session" as EventId,
+			ts: "2026-02-19T10:00:00.000Z",
+			project: "proj-1",
+			agentId: "abcd1234",
+			type: "status_changed",
+			from: "processing",
+			to: "idle",
+		});
+
+		await waitFor(() => calls.length === 1);
+		expect(calls[0]?.payload).toEqual({
+			event: "agent_completed",
+			project: "proj-1",
+			agentId: "abcd1234",
+			provider: "codex",
+			status: "idle",
+			lastMessage: "Subagent 1 (`src/**/*.ts`): **102**\nSubagent 2 (`src/**/*.test.ts`): **39**",
+			timestamp: "2026-02-19T10:00:00.000Z",
+		});
+		unsubscribe();
+	});
+
 	it("uses per-agent callback over global fallback and includes routing fields", async () => {
 		const store = createStore();
 		store.addAgent({
@@ -302,6 +396,74 @@ describe("webhook/client", () => {
 				discordChannel: "alerts",
 				sessionKey: "session-42",
 				extra: { requestId: "req-1" },
+			},
+		});
+		unsubscribe();
+	});
+
+	it("falls back to project callback when agent callback is missing", async () => {
+		const store = createStore();
+		store.addProject({
+			name: projectName("proj-1"),
+			cwd: process.cwd(),
+			tmuxSession: "ah-proj-1",
+			agentCount: 1,
+			callback: {
+				url: "https://project-callback.test/hook",
+				token: "project-secret",
+				discordChannel: "project-alerts",
+				sessionKey: "project-session",
+				extra: { source: "project-defaults" },
+			},
+			createdAt: new Date().toISOString(),
+		});
+		store.addAgent({
+			...baseAgent(),
+			status: "processing",
+		});
+		const bus = createEventBus(100);
+
+		const calls: Array<{ url: string; auth: string | null; payload: unknown }> = [];
+		(globalThis as { fetch: typeof fetch }).fetch = (async (
+			input: RequestInfo | URL,
+			init?: RequestInit,
+		) => {
+			const request = new Request(input, init);
+			calls.push({
+				url: request.url,
+				auth: request.headers.get("authorization"),
+				payload: await request.json(),
+			});
+			return new Response(null, { status: 200 });
+		}) as typeof fetch;
+
+		const unsubscribe = createWebhookClient(null, bus, store);
+
+		bus.emit({
+			id: "evt-project-fallback" as EventId,
+			ts: "2026-02-18T10:00:00.000Z",
+			project: "proj-1",
+			agentId: "abcd1234",
+			type: "status_changed",
+			from: "processing",
+			to: "idle",
+		});
+
+		await waitFor(() => calls.length === 1);
+		expect(calls[0]).toEqual({
+			url: "https://project-callback.test/hook",
+			auth: "Bearer project-secret",
+			payload: {
+				event: "agent_completed",
+				project: "proj-1",
+				agentId: "abcd1234",
+				provider: "codex",
+				status: "idle",
+				lastMessage: null,
+				timestamp: "2026-02-18T10:00:00.000Z",
+				discordChannel: "project-alerts",
+				sessionKey: "project-session",
+				extra: { source: "project-defaults" },
 			},
 		});
 		unsubscribe();

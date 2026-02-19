@@ -27,7 +27,7 @@ type LifecycleState = {
 };
 
 type DeliverySource = "status_change" | "safety_net" | "manual_test";
-type DeliveryTargetKind = "agent_callback" | "global_fallback";
+type DeliveryTargetKind = "agent_callback" | "project_callback" | "global_fallback";
 
 type WebhookDeliveryTarget = {
 	kind: DeliveryTargetKind;
@@ -217,6 +217,7 @@ async function getLastMessage(
 function resolveTargetForEvent(
 	webhookEvent: WebhookEvent,
 	agent: Agent | undefined,
+	projectCallback: AgentCallback | undefined,
 	globalWebhookConfig: WebhookConfig | null,
 ): WebhookDeliveryTarget | null {
 	if (agent?.callback) {
@@ -224,6 +225,17 @@ function resolveTargetForEvent(
 		if (callback) {
 			return {
 				kind: "agent_callback",
+				url: callback.url,
+				...(callback.token ? { token: callback.token } : {}),
+				callback,
+			};
+		}
+	}
+	if (projectCallback) {
+		const callback = normalizeCallback(projectCallback);
+		if (callback) {
+			return {
+				kind: "project_callback",
 				url: callback.url,
 				...(callback.token ? { token: callback.token } : {}),
 				callback,
@@ -241,6 +253,12 @@ function resolveTargetForEvent(
 
 function hasValidCallback(agent: Agent): boolean {
 	return agent.callback ? normalizeCallback(agent.callback) !== null : false;
+}
+
+function hasValidProjectCallback(store: Store, project: string): boolean {
+	const projectRecord = store.getProject(projectName(project));
+	if (!projectRecord?.callback) return false;
+	return normalizeCallback(projectRecord.callback) !== null;
 }
 
 function scopedAgentKey(project: string, agentId: string): string {
@@ -296,7 +314,9 @@ export function createWebhookClient(
 
 	function shouldRunSafetyNet(): boolean {
 		if (safetyNetConfig.enabled) return true;
-		return store.listAgents().some((agent) => hasValidCallback(agent));
+		return store
+			.listAgents()
+			.some((agent) => hasValidCallback(agent) || hasValidProjectCallback(store, agent.project));
 	}
 
 	async function postWebhookAttempt(
@@ -429,7 +449,13 @@ export function createWebhookClient(
 		if (!webhookEvent) return false;
 
 		const agent = store.getAgent(projectName(input.project), input.agentId as AgentId);
-		const target = resolveTargetForEvent(webhookEvent, agent, fallbackWebhookConfig);
+		const projectRecord = store.getProject(projectName(input.project));
+		const target = resolveTargetForEvent(
+			webhookEvent,
+			agent,
+			projectRecord?.callback,
+			fallbackWebhookConfig,
+		);
 		if (!target) return false;
 		const callbackAgentId = agent?.id ?? input.agentId;
 

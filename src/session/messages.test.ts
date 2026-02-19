@@ -161,6 +161,69 @@ describe("session/messages.readAgentMessages", () => {
 		);
 	});
 
+	it("uses codex history session id to avoid selecting a newer subagent rollout file", async () => {
+		const root = await mkdtemp(join(tmpdir(), "ah-msg-codex-history-session-"));
+		tempDirs.push(root);
+		const dir = join(root, "sessions", "2026", "02", "19");
+		await mkdir(dir, { recursive: true });
+		await Bun.write(
+			join(dir, "rollout-2026-02-19T09-07-16-parent-session.jsonl"),
+			[
+				JSON.stringify({
+					timestamp: "2026-02-19T08:07:34.696Z",
+					type: "response_item",
+					payload: {
+						type: "message",
+						role: "assistant",
+						content: [
+							{
+								type: "output_text",
+								text: "Subagent 1 (`src/**/*.ts`): **102**\nSubagent 2 (`src/**/*.test.ts`): **39**",
+							},
+						],
+					},
+				}),
+			].join("\n"),
+		);
+		await Bun.write(
+			join(dir, "rollout-2026-02-19T09-07-25-child-session.jsonl"),
+			[
+				JSON.stringify({
+					timestamp: "2026-02-19T08:07:30.381Z",
+					type: "response_item",
+					payload: {
+						type: "message",
+						role: "assistant",
+						content: [
+							{
+								type: "output_text",
+								text: "rg --files src/ -g '*.test.ts' | wc -l\n39",
+							},
+						],
+					},
+				}),
+			].join("\n"),
+		);
+		await Bun.write(
+			join(root, "history.jsonl"),
+			JSON.stringify({
+				session_id: "parent-session",
+				ts: 1771488437,
+				text: "parent task",
+			}),
+		);
+
+		const agent: Agent = { ...baseAgent(), provider: "codex", providerRuntimeDir: root };
+		const result = await readAgentMessages(agent, { role: "assistant", limit: 10 });
+
+		expect(result.lastAssistantMessage?.text).toBe(
+			"Subagent 1 (`src/**/*.ts`): **102**\nSubagent 2 (`src/**/*.test.ts`): **39**",
+		);
+		expect(result.messages.map((message) => message.text)).toEqual([
+			"Subagent 1 (`src/**/*.ts`): **102**\nSubagent 2 (`src/**/*.test.ts`): **39**",
+		]);
+	});
+
 	it("reads claude assistant content and skips local command metadata", async () => {
 		const root = await mkdtemp(join(tmpdir(), "ah-msg-claude-"));
 		tempDirs.push(root);

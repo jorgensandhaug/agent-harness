@@ -52,6 +52,11 @@ type CodexSessionRecord = {
 	} | null;
 };
 
+type CodexHistoryRecord = {
+	session_id?: unknown;
+	ts?: unknown;
+};
+
 type ClaudeSessionRecord = {
 	timestamp?: unknown;
 	type?: unknown;
@@ -186,6 +191,88 @@ async function newestCodexSessionFile(sessionsRoot: string): Promise<string | nu
 	}
 }
 
+async function sessionFileForCodexSessionId(
+	sessionsRoot: string,
+	sessionId: string,
+): Promise<string | null> {
+	try {
+		const years = (await readdir(sessionsRoot, { withFileTypes: true }))
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name)
+			.sort()
+			.reverse();
+
+		for (const year of years) {
+			const yearPath = join(sessionsRoot, year);
+			const months = (await readdir(yearPath, { withFileTypes: true }))
+				.filter((entry) => entry.isDirectory())
+				.map((entry) => entry.name)
+				.sort()
+				.reverse();
+			for (const month of months) {
+				const monthPath = join(yearPath, month);
+				const days = (await readdir(monthPath, { withFileTypes: true }))
+					.filter((entry) => entry.isDirectory())
+					.map((entry) => entry.name)
+					.sort()
+					.reverse();
+				for (const day of days) {
+					const dayPath = join(monthPath, day);
+					const files = (await readdir(dayPath, { withFileTypes: true }))
+						.filter((entry) => entry.isFile() && entry.name.endsWith(".jsonl"))
+						.map((entry) => entry.name)
+						.sort()
+						.reverse();
+					const match = files.find((name) => name.endsWith(`-${sessionId}.jsonl`));
+					if (match) {
+						return join(dayPath, match);
+					}
+				}
+			}
+		}
+	} catch {
+		return null;
+	}
+	return null;
+}
+
+async function latestCodexHistorySessionId(runtimeDir: string): Promise<string | null> {
+	const historyPath = join(runtimeDir, "history.jsonl");
+	let text = "";
+	try {
+		text = await Bun.file(historyPath).text();
+	} catch {
+		return null;
+	}
+
+	let latestSessionId: string | null = null;
+	let latestTs = Number.NEGATIVE_INFINITY;
+	for (const line of text.split("\n")) {
+		if (line.trim().length === 0) continue;
+		try {
+			const parsed = JSON.parse(line) as CodexHistoryRecord;
+			const rawSessionId = parsed.session_id;
+			if (typeof rawSessionId !== "string") continue;
+			const sessionId = rawSessionId.trim();
+			if (sessionId.length === 0) continue;
+			const ts = typeof parsed.ts === "number" && Number.isFinite(parsed.ts) ? parsed.ts : null;
+			if (ts === null) {
+				if (latestTs === Number.NEGATIVE_INFINITY) {
+					latestSessionId = sessionId;
+				}
+				continue;
+			}
+			if (ts >= latestTs) {
+				latestTs = ts;
+				latestSessionId = sessionId;
+			}
+		} catch {
+			// Ignore malformed history lines.
+		}
+	}
+	return latestSessionId;
+}
+
 async function newestPiSessionFile(sessionsRoot: string): Promise<string | null> {
 	try {
 		const directories = await readdir(sessionsRoot, { withFileTypes: true });
@@ -246,7 +333,20 @@ async function newestOpenCodeSessionFile(sessionRoot: string): Promise<string | 
 
 async function readCodexMessages(runtimeDir: string): Promise<ProviderReadResult> {
 	const sessionsRoot = join(runtimeDir, "sessions");
-	const file = await newestCodexSessionFile(sessionsRoot);
+	const preferredSessionId = await latestCodexHistorySessionId(runtimeDir);
+	const warnings: string[] = [];
+	let file: string | null = null;
+	if (preferredSessionId) {
+		file = await sessionFileForCodexSessionId(sessionsRoot, preferredSessionId);
+		if (!file) {
+			warnings.push(
+				`codex history session '${preferredSessionId}' not found in sessions; using newest rollout file`,
+			);
+		}
+	}
+	if (!file) {
+		file = await newestCodexSessionFile(sessionsRoot);
+	}
 	if (!file) {
 		return {
 			source: "internals_unavailable",
@@ -314,9 +414,10 @@ async function readCodexMessages(runtimeDir: string): Promise<ProviderReadResult
 			warnings:
 				eventMessages.length > 0
 					? [
+							...warnings,
 							"codex response_item assistant messages preferred over event_msg records to avoid partial chunks",
 					  ]
-					: [],
+					: warnings,
 		};
 	}
 
@@ -325,7 +426,7 @@ async function readCodexMessages(runtimeDir: string): Promise<ProviderReadResult
 			source: "internals_codex_jsonl",
 			messages: eventMessages,
 			parseErrorCount,
-			warnings: [],
+			warnings,
 		};
 	}
 
@@ -333,7 +434,10 @@ async function readCodexMessages(runtimeDir: string): Promise<ProviderReadResult
 		source: "internals_codex_jsonl",
 		messages: responseMessages,
 		parseErrorCount,
-		warnings: ["codex event_msg user/agent messages missing; fell back to response_item messages"],
+		warnings: [
+			...warnings,
+			"codex event_msg user/agent messages missing; fell back to response_item messages",
+		],
 	};
 }
 
