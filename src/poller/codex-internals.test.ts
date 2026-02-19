@@ -89,4 +89,39 @@ describe("poller/codex-internals.readCodexInternalsStatus", () => {
 		expect(result.cursor.isSubagentSession).toBe(true);
 		expect(result.parseErrorCount).toBe(0);
 	});
+
+	it("prefers newest non-subagent session when latest session is from a subagent", async () => {
+		const root = await mkdtemp(join(tmpdir(), "ah-codex-internals-"));
+		const sessionsDir = join(root, "sessions", "2026", "02", "17");
+		await mkdir(sessionsDir, { recursive: true });
+		const mainFile = join(sessionsDir, "rollout-2026-02-17T19-01-27-thread.jsonl");
+		const subagentFile = join(sessionsDir, "rollout-2026-02-17T19-01-28-thread.jsonl");
+
+		await append(mainFile, [
+			JSON.stringify({ type: "event_msg", payload: { type: "task_started" } }),
+			JSON.stringify({ type: "event_msg", payload: { type: "task_complete" } }),
+		]);
+		await append(subagentFile, [
+			JSON.stringify({
+				type: "session_meta",
+				payload: {
+					source: {
+						subagent: {
+							thread_spawn: {
+								parent_thread_id: "parent-thread",
+								depth: 1,
+							},
+						},
+					},
+				},
+			}),
+			JSON.stringify({ type: "event_msg", payload: { type: "task_started" } }),
+			JSON.stringify({ type: "event_msg", payload: { type: "task_complete" } }),
+		]);
+
+		const result = await readCodexInternalsStatus(root, newCodexInternalsCursor());
+		expect(result.cursor.sessionFile).toBe(mainFile);
+		expect(result.status).toBe("idle");
+		expect(result.parseErrorCount).toBe(0);
+	});
 });

@@ -45,34 +45,81 @@ export function newCodexInternalsCursor(): CodexInternalsCursor {
 	};
 }
 
-async function newestEntryName(path: string): Promise<string | null> {
-	const entries = await readdir(path, { withFileTypes: true });
-	const names = entries
-		.filter((entry) => entry.isDirectory() || entry.isFile())
+async function sessionFilesNewestFirst(sessionsRoot: string): Promise<string[]> {
+	const files: string[] = [];
+	const years = await readdir(sessionsRoot, { withFileTypes: true });
+	const sortedYears = years
+		.filter((entry) => entry.isDirectory())
 		.map((entry) => entry.name)
 		.sort()
 		.reverse();
-	return names[0] ?? null;
+
+	for (const year of sortedYears) {
+		const yearPath = join(sessionsRoot, year);
+		const months = await readdir(yearPath, { withFileTypes: true });
+		const sortedMonths = months
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name)
+			.sort()
+			.reverse();
+
+		for (const month of sortedMonths) {
+			const monthPath = join(yearPath, month);
+			const days = await readdir(monthPath, { withFileTypes: true });
+			const sortedDays = days
+				.filter((entry) => entry.isDirectory())
+				.map((entry) => entry.name)
+				.sort()
+				.reverse();
+
+			for (const day of sortedDays) {
+				const dayPath = join(monthPath, day);
+				const entries = await readdir(dayPath, { withFileTypes: true });
+				const dayFiles = entries
+					.filter((entry) => entry.isFile() && entry.name.endsWith(".jsonl"))
+					.map((entry) => join(dayPath, entry.name))
+					.sort()
+					.reverse();
+				files.push(...dayFiles);
+			}
+		}
+	}
+
+	return files;
+}
+
+async function isSubagentSessionFile(file: string): Promise<boolean> {
+	try {
+		const head = await Bun.file(file)
+			.slice(0, 64 * 1024)
+			.text();
+		const lines = head.split("\n").slice(0, 40);
+		for (const line of lines) {
+			if (line.trim().length === 0) continue;
+			try {
+				const parsed = JSON.parse(line) as SessionRecord;
+				if (isSubagentSessionRecord(parsed)) return true;
+			} catch {
+				// Ignore malformed head lines while probing session type.
+			}
+		}
+		return false;
+	} catch {
+		return false;
+	}
 }
 
 async function newestSessionFile(sessionsRoot: string): Promise<string | null> {
 	try {
-		const year = await newestEntryName(sessionsRoot);
-		if (!year) return null;
-		const month = await newestEntryName(join(sessionsRoot, year));
-		if (!month) return null;
-		const day = await newestEntryName(join(sessionsRoot, year, month));
-		if (!day) return null;
+		const files = await sessionFilesNewestFirst(sessionsRoot);
+		const newest = files[0] ?? null;
+		if (!newest) return null;
 
-		const dayPath = join(sessionsRoot, year, month, day);
-		const entries = await readdir(dayPath, { withFileTypes: true });
-		const file = entries
-			.filter((entry) => entry.isFile() && entry.name.endsWith(".jsonl"))
-			.map((entry) => entry.name)
-			.sort()
-			.reverse()[0];
-		if (!file) return null;
-		return join(dayPath, file);
+		for (const file of files) {
+			if (!(await isSubagentSessionFile(file))) return file;
+		}
+
+		return newest;
 	} catch {
 		return null;
 	}
