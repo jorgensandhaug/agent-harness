@@ -4,8 +4,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { HarnessConfig } from "../config.ts";
+import { createDebugTracker } from "../debug/tracker.ts";
 import { createEventBus } from "../events/bus.ts";
 import type { NormalizedEvent } from "../events/types.ts";
+import { createPoller } from "../poller/poller.ts";
 import * as tmux from "../tmux/client.ts";
 import { createManager } from "./manager.ts";
 import { createStore } from "./store.ts";
@@ -459,6 +461,57 @@ function makeConfig(): HarnessConfig {
 		},
 	};
 }
+
+describe("session/poller.codex-unknown-filter", () => {
+	it("keeps codex unknown parser lines in warnings but does not emit unknown events", async () => {
+		const config = makeConfig();
+		config.pollIntervalMs = 50;
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const debugTracker = createDebugTracker(config, eventBus);
+		const manager = createManager(config, store, eventBus, debugTracker);
+		const poller = createPoller(config, store, manager, eventBus, debugTracker);
+		const seen: NormalizedEvent[] = [];
+		const unsubscribe = eventBus.subscribe({ project: "p-poller-unknown" }, (event) =>
+			seen.push(event),
+		);
+
+		try {
+			const projectRes = await manager.createProject("p-poller-unknown", process.cwd());
+			expect(projectRes.ok).toBe(true);
+			if (!projectRes.ok) throw new Error("project create failed");
+
+			const createRes = await manager.createAgent("p-poller-unknown", "codex", "initial task");
+			expect(createRes.ok).toBe(true);
+			if (!createRes.ok) throw new Error("agent create failed");
+			const agentId = createRes.value.id;
+			const debugKey = `p-poller-unknown:${agentId}`;
+
+			poller.start();
+			const sendRes = await manager.sendInput("p-poller-unknown", agentId, "***");
+			expect(sendRes.ok).toBe(true);
+			await waitFor(() => {
+				const debug = debugTracker.getAgentDebug(debugKey);
+				return debug?.parser.lastWarnings.includes("***") ?? false;
+			}, 2000);
+
+			const debug = debugTracker.getAgentDebug(debugKey);
+			expect(debug?.parser.lastWarnings).toContain("***");
+			expect(debug?.parser.lastProviderEventsCount).toBeGreaterThanOrEqual(1);
+			const unknownEvents = seen.filter(
+				(event) => event.agentId === agentId && event.type === "unknown",
+			);
+			expect(unknownEvents).toHaveLength(0);
+
+			const deleteRes = await manager.deleteProject("p-poller-unknown");
+			expect(deleteRes.ok).toBe(true);
+		} finally {
+			poller.stop();
+			debugTracker.stop();
+			unsubscribe();
+		}
+	});
+});
 
 describe("session/manager.initial-input", () => {
 	it("delivers initial task even if tmux would auto-rename windows", async () => {

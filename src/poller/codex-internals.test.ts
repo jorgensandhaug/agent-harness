@@ -60,12 +60,18 @@ describe("poller/codex-internals.readCodexInternalsStatus", () => {
 		expect(second.status).toBe("processing");
 	});
 
-	it("pins the first discovered session file and ignores newer session files", async () => {
+	it("prefers the rollout file matching latest history session id", async () => {
 		const root = await mkdtemp(join(tmpdir(), "ah-codex-internals-"));
 		const sessionsDir = join(root, "sessions", "2026", "02", "17");
 		await mkdir(sessionsDir, { recursive: true });
-		const mainFile = join(sessionsDir, "rollout-2026-02-17T19-01-27-thread.jsonl");
-		const subagentFile = join(sessionsDir, "rollout-2026-02-17T19-01-28-thread.jsonl");
+		const mainSessionId = "11111111-1111-1111-1111-111111111111";
+		const subagentSessionId = "22222222-2222-2222-2222-222222222222";
+		const mainFile = join(sessionsDir, `rollout-2026-02-17T19-01-27-${mainSessionId}.jsonl`);
+		const subagentFile = join(
+			sessionsDir,
+			`rollout-2026-02-17T19-01-28-${subagentSessionId}.jsonl`,
+		);
+		const historyFile = join(root, "history.jsonl");
 
 		await append(mainFile, [
 			JSON.stringify({ type: "event_msg", payload: { type: "task_started" } }),
@@ -73,6 +79,10 @@ describe("poller/codex-internals.readCodexInternalsStatus", () => {
 		await append(subagentFile, [
 			JSON.stringify({ type: "event_msg", payload: { type: "task_started" } }),
 			JSON.stringify({ type: "event_msg", payload: { type: "task_complete" } }),
+		]);
+		await append(historyFile, [
+			JSON.stringify({ ts: 1, session_id: mainSessionId }),
+			JSON.stringify({ ts: 2, session_id: mainSessionId }),
 		]);
 
 		let cursor = newCodexInternalsCursor();

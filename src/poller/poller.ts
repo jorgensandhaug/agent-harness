@@ -435,14 +435,16 @@ export function createPoller(
 						break;
 					case "unknown":
 						warnings.push(pe.raw);
-						eventBus.emit({
-							id: newEventId(),
-							ts,
-							project: agent.project,
-							agentId: agent.id,
-							type: "unknown",
-							raw: pe.raw,
-						});
+						if (agent.provider !== "codex") {
+							eventBus.emit({
+								id: newEventId(),
+								ts,
+								project: agent.project,
+								agentId: agent.id,
+								type: "unknown",
+								raw: pe.raw,
+							});
+						}
 						break;
 				}
 			}
