@@ -86,7 +86,9 @@ describe("poller/codex-internals.readCodexInternalsStatus", () => {
 		expect(second.cursor.sessionFile).toBe(mainFile);
 		expect(second.status).toBe("processing");
 
-		await append(mainFile, [JSON.stringify({ type: "event_msg", payload: { type: "task_complete" } })]);
+		await append(mainFile, [
+			JSON.stringify({ type: "event_msg", payload: { type: "task_complete" } }),
+		]);
 		const third = await readCodexInternalsStatus(root, cursor);
 		expect(third.cursor.sessionFile).toBe(mainFile);
 		expect(third.status).toBe("idle");

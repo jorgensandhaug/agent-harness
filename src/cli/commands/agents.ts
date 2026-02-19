@@ -32,6 +32,24 @@ function agentIdFromArg(value: string | number): string {
 	return String(value);
 }
 
+type AgentRecord = {
+	id?: unknown;
+	status?: unknown;
+	tmuxTarget?: unknown;
+	attachCommand?: unknown;
+	provider?: unknown;
+};
+
+type AgentMessageRecord = {
+	role?: unknown;
+	text?: unknown;
+};
+
+type AgentLastResponse = {
+	text?: unknown;
+	lastAssistantMessage?: unknown;
+};
+
 export function registerAgentCommands(
 	yargs: Argv<GlobalOptions>,
 	buildContext: BuildContext,
@@ -184,12 +202,12 @@ export function registerAgentCommands(
 						return;
 					}
 
-					const created = response.agent;
+					const created = response.agent as AgentRecord;
 					printKeyValue([
-						{ key: "id", value: created["id"] },
-						{ key: "status", value: created["status"] },
-						{ key: "tmuxTarget", value: created["tmuxTarget"] },
-						{ key: "attach", value: created["attachCommand"] },
+						{ key: "id", value: created.id },
+						{ key: "status", value: created.status },
+						{ key: "tmuxTarget", value: created.tmuxTarget },
+						{ key: "attach", value: created.attachCommand },
 					]);
 				},
 			)
@@ -218,14 +236,19 @@ export function registerAgentCommands(
 						printJson(response);
 						return;
 					}
-					const agent = response.agent;
+					const getResponse = response as {
+						agent: AgentRecord;
+						status?: unknown;
+						lastOutput?: unknown;
+					};
+					const agent = getResponse.agent;
 					printKeyValue([
-						{ key: "status", value: response.status ?? agent["status"] },
-						{ key: "id", value: agent["id"] },
-						{ key: "provider", value: agent["provider"] },
-						{ key: "tmuxTarget", value: agent["tmuxTarget"] },
+						{ key: "status", value: getResponse.status ?? agent.status },
+						{ key: "id", value: agent.id },
+						{ key: "provider", value: agent.provider },
+						{ key: "tmuxTarget", value: agent.tmuxTarget },
 					]);
-					const lastOutput = response.lastOutput;
+					const lastOutput = getResponse.lastOutput;
 					if (typeof lastOutput === "string" && lastOutput.trim().length > 0) {
 						printText("\nLast output:\n");
 						printText(lastOutput);
@@ -348,10 +371,13 @@ export function registerAgentCommands(
 						printText("\nRecent messages:");
 						printTable(
 							["ROLE", "TEXT"],
-							messages.map((message) => [
-								asString(message["role"]),
-								asString(message["text"]).replace(/\s+/g, " ").slice(0, 160),
-							]),
+							messages.map((rawMessage) => {
+								const message = rawMessage as AgentMessageRecord;
+								return [
+									asString(message.role),
+									asString(message.text).replace(/\s+/g, " ").slice(0, 160),
+								];
+							}),
 						);
 					}
 				},
@@ -381,18 +407,19 @@ export function registerAgentCommands(
 						printJson(response);
 						return;
 					}
-					if (typeof response["text"] === "string") {
-						printText(response["text"]);
+					const lastResponse = response as AgentLastResponse;
+					if (typeof lastResponse.text === "string") {
+						printText(lastResponse.text);
 						return;
 					}
-					const lastAssistantMessage = response["lastAssistantMessage"];
+					const lastAssistantMessage = lastResponse.lastAssistantMessage;
 					if (
 						lastAssistantMessage &&
 						typeof lastAssistantMessage === "object" &&
 						!Array.isArray(lastAssistantMessage)
 					) {
-						const assistantMessageRecord = lastAssistantMessage as Record<string, unknown>;
-						printText(asString(assistantMessageRecord["text"] ?? ""));
+						const assistantMessageRecord = lastAssistantMessage as AgentMessageRecord;
+						printText(asString(assistantMessageRecord.text ?? ""));
 						return;
 					}
 					printText("(no assistant message)");

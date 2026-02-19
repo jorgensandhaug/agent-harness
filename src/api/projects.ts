@@ -52,7 +52,11 @@ export function registerProjectRoutes(app: Hono, manager: Manager): void {
 			);
 		}
 
-		const result = await manager.createProject(parsed.data.name, parsed.data.cwd, parsed.data.callback);
+		const result = await manager.createProject(
+			parsed.data.name,
+			parsed.data.cwd,
+			parsed.data.callback,
+		);
 		if (!result.ok) {
 			const mapped = mapManagerError(result.error);
 			return c.json(mapped.body, mapped.status);

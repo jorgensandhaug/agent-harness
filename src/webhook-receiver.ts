@@ -132,8 +132,7 @@ export function loadConfig(env: EnvSource = process.env as EnvSource): ReceiverC
 		port: parseIntWithDefault(env.AH_WEBHOOK_RECEIVER_PORT, filePort),
 		bindAddress: env.AH_WEBHOOK_RECEIVER_BIND_ADDRESS?.trim() || fileBindAddress,
 		token: env.AH_WEBHOOK_RECEIVER_TOKEN?.trim() || fileToken,
-		discordBotToken:
-			env.AH_WEBHOOK_RECEIVER_DISCORD_BOT_TOKEN?.trim() || fileDiscordBotToken,
+		discordBotToken: env.AH_WEBHOOK_RECEIVER_DISCORD_BOT_TOKEN?.trim() || fileDiscordBotToken,
 	});
 
 	if (parsed.success) return parsed.data;
@@ -179,7 +178,11 @@ async function runDiscordAction(config: ReceiverConfig, payload: WebhookPayload)
 		lastMessage.length > 0 && lastMessage.length < DISCORD_INLINE_CHAR_LIMIT
 			? `${header}\n${lastMessage}`
 			: header;
-	const channelId = parseDiscordChannelId(payload.discordChannel!);
+	const discordChannel = payload.discordChannel;
+	if (!discordChannel) {
+		throw new Error("discord channel not configured");
+	}
+	const channelId = parseDiscordChannelId(discordChannel);
 	let response: Response;
 	if (lastMessage.length >= DISCORD_INLINE_CHAR_LIMIT) {
 		const form = new FormData();

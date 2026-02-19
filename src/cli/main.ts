@@ -8,8 +8,8 @@ import { registerEventsCommands } from "./commands/events.ts";
 import { registerProjectCommands } from "./commands/projects.ts";
 import { registerSubscriptionsCommands } from "./commands/subscriptions.ts";
 import { registerWebhookCommands } from "./commands/webhook.ts";
-import { resolveCliConfig, type CliRuntimeConfig } from "./config.ts";
-import { ApiError, createHttpClient, NetworkError, type CliHttpClient } from "./http-client.ts";
+import { type CliRuntimeConfig, resolveCliConfig } from "./config.ts";
+import { ApiError, type CliHttpClient, NetworkError, createHttpClient } from "./http-client.ts";
 import { formatApiError, printError, printText } from "./output.ts";
 
 export type GlobalOptions = {

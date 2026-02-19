@@ -20,12 +20,31 @@ const FILTERABLE_EVENT_TYPES = [
 
 type FilterableEventType = (typeof FILTERABLE_EVENT_TYPES)[number];
 
-function parsePayload(data: string): Record<string, unknown> | null {
+type EventPayload = {
+	from?: unknown;
+	to?: unknown;
+	text?: unknown;
+	tool?: unknown;
+	input?: unknown;
+	output?: unknown;
+	message?: unknown;
+	exitCode?: unknown;
+	description?: unknown;
+	question?: unknown;
+	provider?: unknown;
+	raw?: unknown;
+	ts?: unknown;
+	project?: unknown;
+	agentId?: unknown;
+	value?: unknown;
+};
+
+function parsePayload(data: string): EventPayload | null {
 	if (!data || data.trim().length === 0) return null;
 	try {
 		const parsed = JSON.parse(data);
 		if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-			return parsed as Record<string, unknown>;
+			return parsed as EventPayload;
 		}
 		return { value: parsed };
 	} catch {
@@ -48,44 +67,42 @@ function trimSummary(value: string, limit = 140): string {
 	return `${normalized.slice(0, limit - 1)}...`;
 }
 
-function eventSummary(eventType: string, payload: Record<string, unknown> | null): string {
+function eventSummary(eventType: string, payload: EventPayload | null): string {
 	if (eventType === "heartbeat") return "heartbeat";
 	if (!payload) return "";
 
 	switch (eventType) {
 		case "status_changed": {
-			const from = valueToString(payload["from"]);
-			const to = valueToString(payload["to"]);
+			const from = valueToString(payload.from);
+			const to = valueToString(payload.to);
 			return trimSummary(`${from} -> ${to}`);
 		}
 		case "output":
-			return trimSummary(valueToString(payload["text"]));
+			return trimSummary(valueToString(payload.text));
 		case "tool_use":
 			return trimSummary(
-				`tool=${valueToString(payload["tool"])} input=${valueToString(payload["input"])}`,
+				`tool=${valueToString(payload.tool)} input=${valueToString(payload.input)}`,
 			);
 		case "tool_result":
 			return trimSummary(
-				`tool=${valueToString(payload["tool"])} output=${valueToString(payload["output"])}`,
+				`tool=${valueToString(payload.tool)} output=${valueToString(payload.output)}`,
 			);
 		case "error":
-			return trimSummary(valueToString(payload["message"]));
+			return trimSummary(valueToString(payload.message));
 		case "agent_exited":
-			return trimSummary(`exitCode=${valueToString(payload["exitCode"])}`);
+			return trimSummary(`exitCode=${valueToString(payload.exitCode)}`);
 		case "input_sent":
-			return trimSummary(valueToString(payload["text"]));
+			return trimSummary(valueToString(payload.text));
 		case "permission_requested":
-			return trimSummary(valueToString(payload["description"]));
+			return trimSummary(valueToString(payload.description));
 		case "question_asked":
-			return trimSummary(valueToString(payload["question"]));
+			return trimSummary(valueToString(payload.question));
 		case "agent_started":
-			return trimSummary(`provider=${valueToString(payload["provider"])}`);
+			return trimSummary(`provider=${valueToString(payload.provider)}`);
 		case "unknown":
-			return trimSummary(valueToString(payload["raw"]));
+			return trimSummary(valueToString(payload.raw));
 		default:
-			return trimSummary(
-				valueToString(payload["message"] ?? payload["text"] ?? payload["raw"] ?? payload),
-			);
+			return trimSummary(valueToString(payload.message ?? payload.text ?? payload.raw ?? payload));
 	}
 }
 
@@ -185,9 +202,9 @@ export function registerEventsCommands(
 										});
 										continue;
 									}
-									const ts = valueToString(payload?.["ts"] ?? new Date().toISOString());
-									const project = valueToString(payload?.["project"] ?? argv.project);
-									const agent = valueToString(payload?.["agentId"] ?? argv.agent ?? "-");
+									const ts = valueToString(payload?.ts ?? new Date().toISOString());
+									const project = valueToString(payload?.project ?? argv.project);
+									const agent = valueToString(payload?.agentId ?? argv.agent ?? "-");
 									const summary = eventSummary(eventType, payload);
 									printText(
 										`${ts} ${project}/${agent} ${eventType}${summary ? ` ${summary}` : ""}`,

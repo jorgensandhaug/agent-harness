@@ -10,6 +10,7 @@ import { createApp } from "./app.ts";
 
 const originalSpawn = Bun.spawn;
 const originalInitialTaskDelay = process.env.HARNESS_INITIAL_TASK_DELAY_MS;
+const originalCodexFollowupSettle = process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS;
 
 type PaneState = {
 	id: string;
@@ -363,6 +364,7 @@ let env: TestEnv | null = null;
 beforeEach(async () => {
 	const testTmux = new FakeTmux();
 	process.env.HARNESS_INITIAL_TASK_DELAY_MS = "0";
+	process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS = "0";
 	(Bun as { spawn: typeof Bun.spawn }).spawn = ((cmd: readonly string[]) =>
 		testTmux.spawn(cmd)) as typeof Bun.spawn;
 	env = await setupEnv();
@@ -379,6 +381,11 @@ afterEach(async () => {
 		process.env.HARNESS_INITIAL_TASK_DELAY_MS = undefined;
 	} else {
 		process.env.HARNESS_INITIAL_TASK_DELAY_MS = originalInitialTaskDelay;
+	}
+	if (originalCodexFollowupSettle === undefined) {
+		process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS = undefined;
+	} else {
+		process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS = originalCodexFollowupSettle;
 	}
 });
 
@@ -824,13 +831,17 @@ describe("http/agents.crud-input-output-abort", () => {
 			body: JSON.stringify({ name: "p-agents-auto-name", cwd: process.cwd() }),
 		});
 
-		const createAgentRes = await apiJson(env.baseUrl, "/api/v1/projects/p-agents-auto-name/agents", {
-			method: "POST",
-			body: JSON.stringify({
-				provider: "codex",
-				task: "Reply with exactly: 4",
-			}),
-		});
+		const createAgentRes = await apiJson(
+			env.baseUrl,
+			"/api/v1/projects/p-agents-auto-name/agents",
+			{
+				method: "POST",
+				body: JSON.stringify({
+					provider: "codex",
+					task: "Reply with exactly: 4",
+				}),
+			},
+		);
 		expect(createAgentRes.status).toBe(201);
 		const createAgentJson = await createAgentRes.json();
 		expect(createAgentJson.agent.id).toMatch(/^codex-[a-z]{3,8}-[a-z]{3,8}$/);
@@ -975,9 +986,8 @@ describe("http/events.sse.agent-stream", () => {
 		const a1 = (await a1Res.json()).agent.id as string;
 		const a2 = (await a2Res.json()).agent.id as string;
 
-		const stream = await openSse(
-			`${env.baseUrl}/api/v1/projects/p-agent-events/agents/${a1}/events`,
-		);
+		const open = openSse(`${env.baseUrl}/api/v1/projects/p-agent-events/agents/${a1}/events`);
+		await Bun.sleep(100);
 
 		env.eventBus.emit({
 			id: newEventId(),
@@ -995,6 +1005,7 @@ describe("http/events.sse.agent-stream", () => {
 			type: "output",
 			text: "from-a1",
 		});
+		const stream = await open;
 
 		const event = await readSseEvent(stream.reader, 3000);
 		stream.abort();

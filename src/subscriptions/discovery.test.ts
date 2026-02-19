@@ -130,7 +130,7 @@ describe("subscriptions/discovery", () => {
 				claude_command: {
 					kind: "command",
 					command: "sh",
-					args: ["-lc", "printf 'sk-ant-oat01-from-command'"] ,
+					args: ["-lc", "printf 'sk-ant-oat01-from-command'"],
 				},
 			},
 			profiles: [

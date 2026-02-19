@@ -2,6 +2,19 @@ import type { Argv } from "yargs";
 import type { BuildContext, GlobalOptions } from "../main.ts";
 import { printJson, printTable, printText } from "../output.ts";
 
+type SubscriptionRecord = {
+	id?: unknown;
+	mode?: unknown;
+	valid?: unknown;
+	source?: unknown;
+	reason?: unknown;
+	subscription?: unknown;
+};
+
+type SubscriptionSource = {
+	provider?: unknown;
+};
+
 function getString(value: unknown): string {
 	if (typeof value === "string") return value;
 	if (value === null || value === undefined) return "";
@@ -37,20 +50,23 @@ export function registerSubscriptionsCommands(
 					}
 					printTable(
 						["ID", "PROVIDER", "MODE", "VALID", "SOURCE", "REASON"],
-						response.subscriptions.map((subscription) => {
-							const sourceRecord =
-								subscription["subscription"] &&
-								typeof subscription["subscription"] === "object" &&
-								!Array.isArray(subscription["subscription"])
-									? (subscription["subscription"] as Record<string, unknown>)
-									: {};
+						response.subscriptions.map((rawSubscription) => {
+							const subscription = rawSubscription as SubscriptionRecord;
+							let sourceRecord: SubscriptionSource = {};
+							if (
+								subscription.subscription &&
+								typeof subscription.subscription === "object" &&
+								!Array.isArray(subscription.subscription)
+							) {
+								sourceRecord = subscription.subscription as SubscriptionSource;
+							}
 							return [
-								getString(subscription["id"]),
-								getString(sourceRecord["provider"]),
-								getString(subscription["mode"]),
-								getBoolean(subscription["valid"]),
-								getString(subscription["source"]),
-								getString(subscription["reason"]),
+								getString(subscription.id),
+								getString(sourceRecord.provider),
+								getString(subscription.mode),
+								getBoolean(subscription.valid),
+								getString(subscription.source),
+								getString(subscription.reason),
 							];
 						}),
 					);

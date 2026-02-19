@@ -140,7 +140,7 @@ export async function readCodexInternalsStatus(
 					offset: 0,
 					partialLine: "",
 					lastStatus: cursor.lastStatus,
-			  };
+				};
 	let fullText = "";
 	try {
 		fullText = await Bun.file(file).text();

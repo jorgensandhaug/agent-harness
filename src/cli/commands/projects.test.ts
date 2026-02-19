@@ -184,6 +184,8 @@ describe("cli/commands/projects callback defaults", () => {
 				"--callback-token",
 				"project-token",
 			]),
-		).rejects.toThrow("--callback-url is required when setting callback token/channel/session fields.");
+		).rejects.toThrow(
+			"--callback-url is required when setting callback token/channel/session fields.",
+		);
 	});
 });

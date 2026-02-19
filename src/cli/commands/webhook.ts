@@ -2,6 +2,19 @@ import type { Argv } from "yargs";
 import type { BuildContext, GlobalOptions } from "../main.ts";
 import { printJson, printKeyValue, printText } from "../output.ts";
 
+type WebhookStatusResponseView = {
+	configured?: unknown;
+	status?: unknown;
+};
+
+type WebhookStatusView = {
+	config?: unknown;
+};
+
+type WebhookStatusConfigView = {
+	url?: unknown;
+};
+
 function parseExtra(entries: string[]): Record<string, string> {
 	const out: Record<string, string> = {};
 	for (const entry of entries) {
@@ -32,29 +45,28 @@ export function registerWebhookCommands(
 				async (argv) => {
 					const context = await buildContext(argv);
 					const response = await context.client.webhookStatus();
+					const statusResponse = response as WebhookStatusResponseView;
 					if (context.json) {
 						printJson(response);
 						return;
 					}
-					if (response["configured"] === false) {
+					if (statusResponse.configured === false) {
 						printText("Webhook not configured.");
 						return;
 					}
 					const status =
-						response["status"] &&
-						typeof response["status"] === "object" &&
-						!Array.isArray(response["status"])
-							? (response["status"] as Record<string, unknown>)
+						statusResponse.status &&
+						typeof statusResponse.status === "object" &&
+						!Array.isArray(statusResponse.status)
+							? (statusResponse.status as WebhookStatusView)
 							: null;
 					const statusConfig =
-						status?.["config"] &&
-						typeof status["config"] === "object" &&
-						!Array.isArray(status["config"])
-							? (status["config"] as Record<string, unknown>)
+						status?.config && typeof status.config === "object" && !Array.isArray(status.config)
+							? (status.config as WebhookStatusConfigView)
 							: null;
 					printKeyValue([
-						{ key: "configured", value: response["configured"] },
-						{ key: "url", value: statusConfig?.["url"] ?? "" },
+						{ key: "configured", value: statusResponse.configured },
+						{ key: "url", value: statusConfig?.url ?? "" },
 					]);
 				},
 			)

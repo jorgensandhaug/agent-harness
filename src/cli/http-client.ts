@@ -388,7 +388,8 @@ async function request(
 ): Promise<Response> {
 	const query = { ...(options.query ?? {}) };
 	if (shouldIncludeCompact(defaultCompact, options.compact)) {
-		query["compact"] = "1";
+		const compactKey = "compact";
+		query[compactKey] = "1";
 	}
 	const url = buildUrl(baseUrl, path, query);
 	const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -662,38 +663,38 @@ export function createHttpClient(options: ClientOptions): CliHttpClient {
 		},
 		listAgents(project) {
 			const encoded = encodeURIComponent(project);
-				return requestJson<{ agents: ApiAgentListItem[] }>(
-					baseUrl,
-					token,
-					defaultCompact,
-					"GET",
-					`/api/v1/projects/${encoded}/agents`,
-					{ timeoutMs: defaultTimeoutMs },
-				);
-			},
+			return requestJson<{ agents: ApiAgentListItem[] }>(
+				baseUrl,
+				token,
+				defaultCompact,
+				"GET",
+				`/api/v1/projects/${encoded}/agents`,
+				{ timeoutMs: defaultTimeoutMs },
+			);
+		},
 		createAgent(project, input) {
 			const encoded = encodeURIComponent(project);
-				return requestJson<{ agent: Record<string, unknown> }>(
-					baseUrl,
-					token,
-					defaultCompact,
-					"POST",
-					`/api/v1/projects/${encoded}/agents`,
-					{ body: input, timeoutMs: defaultTimeoutMs },
-				);
-			},
+			return requestJson<{ agent: Record<string, unknown> }>(
+				baseUrl,
+				token,
+				defaultCompact,
+				"POST",
+				`/api/v1/projects/${encoded}/agents`,
+				{ body: input, timeoutMs: defaultTimeoutMs },
+			);
+		},
 		getAgent(project, agentId) {
 			const encodedProject = encodeURIComponent(project);
 			const encodedAgent = encodeURIComponent(agentId);
-				return requestJson<AgentGetResponse>(
-					baseUrl,
-					token,
-					defaultCompact,
-					"GET",
-					`/api/v1/projects/${encodedProject}/agents/${encodedAgent}`,
-					{ timeoutMs: defaultTimeoutMs },
-				);
-			},
+			return requestJson<AgentGetResponse>(
+				baseUrl,
+				token,
+				defaultCompact,
+				"GET",
+				`/api/v1/projects/${encodedProject}/agents/${encodedAgent}`,
+				{ timeoutMs: defaultTimeoutMs },
+			);
+		},
 		sendAgentInput(project, agentId, input) {
 			const encodedProject = encodeURIComponent(project);
 			const encodedAgent = encodeURIComponent(agentId);
@@ -746,15 +747,15 @@ export function createHttpClient(options: ClientOptions): CliHttpClient {
 		getAgentLastMessage(project, agentId) {
 			const encodedProject = encodeURIComponent(project);
 			const encodedAgent = encodeURIComponent(agentId);
-				return requestJson<Record<string, unknown>>(
-					baseUrl,
-					token,
-					defaultCompact,
-					"GET",
-					`/api/v1/projects/${encodedProject}/agents/${encodedAgent}/messages/last`,
-					{ timeoutMs: defaultTimeoutMs },
-				);
-			},
+			return requestJson<Record<string, unknown>>(
+				baseUrl,
+				token,
+				defaultCompact,
+				"GET",
+				`/api/v1/projects/${encodedProject}/agents/${encodedAgent}/messages/last`,
+				{ timeoutMs: defaultTimeoutMs },
+			);
+		},
 		getAgentDebug(project, agentId) {
 			const encodedProject = encodeURIComponent(project);
 			const encodedAgent = encodeURIComponent(agentId);
