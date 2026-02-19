@@ -59,4 +59,34 @@ describe("poller/codex-internals.readCodexInternalsStatus", () => {
 		expect(second.parseErrorCount).toBe(1);
 		expect(second.status).toBe("processing");
 	});
+
+	it("ignores task_complete for subagent sessions", async () => {
+		const root = await mkdtemp(join(tmpdir(), "ah-codex-internals-"));
+		const sessionsDir = join(root, "sessions", "2026", "02", "17");
+		await mkdir(sessionsDir, { recursive: true });
+		const file = join(sessionsDir, "rollout-2026-02-17T19-01-27-thread.jsonl");
+
+		await append(file, [
+			JSON.stringify({
+				type: "session_meta",
+				payload: {
+					source: {
+						subagent: {
+							thread_spawn: {
+								parent_thread_id: "parent-thread",
+								depth: 1,
+							},
+						},
+					},
+				},
+			}),
+			JSON.stringify({ type: "event_msg", payload: { type: "task_started" } }),
+			JSON.stringify({ type: "event_msg", payload: { type: "task_complete" } }),
+		]);
+
+		const result = await readCodexInternalsStatus(root, newCodexInternalsCursor());
+		expect(result.status).toBe("processing");
+		expect(result.cursor.isSubagentSession).toBe(true);
+		expect(result.parseErrorCount).toBe(0);
+	});
 });

@@ -7,6 +7,7 @@ export type CodexInternalsCursor = {
 	offset: number;
 	partialLine: string;
 	lastStatus: AgentStatus | null;
+	isSubagentSession: boolean | null;
 };
 
 export type CodexInternalsResult = {
@@ -30,12 +31,17 @@ type EventMessagePayload = {
 	type?: unknown;
 };
 
+type SessionMetaPayload = {
+	source?: unknown;
+};
+
 export function newCodexInternalsCursor(): CodexInternalsCursor {
 	return {
 		sessionFile: null,
 		offset: 0,
 		partialLine: "",
 		lastStatus: null,
+		isSubagentSession: null,
 	};
 }
 
@@ -72,7 +78,21 @@ async function newestSessionFile(sessionsRoot: string): Promise<string | null> {
 	}
 }
 
-function statusFromEvent(record: SessionRecord): AgentStatus | null {
+function isSubagentSessionRecord(record: SessionRecord): boolean {
+	if (record.type !== "session_meta") return false;
+	const payload = (record.payload ?? {}) as SessionMetaPayload;
+	const source =
+		payload.source && typeof payload.source === "object"
+			? (payload.source as Record<string, unknown>)
+			: null;
+	const subagent =
+		source?.subagent && typeof source.subagent === "object"
+			? (source.subagent as Record<string, unknown>)
+			: null;
+	return Boolean(subagent?.thread_spawn && typeof subagent.thread_spawn === "object");
+}
+
+function statusFromEvent(record: SessionRecord, isSubagentSession: boolean): AgentStatus | null {
 	const type = typeof record.type === "string" ? record.type : null;
 	if (!type) return null;
 
@@ -101,7 +121,8 @@ function statusFromEvent(record: SessionRecord): AgentStatus | null {
 	if (!payloadType) return null;
 
 	if (payloadType === "task_started") return "processing";
-	if (payloadType === "task_complete" || payloadType === "turn_aborted") return "idle";
+	if (payloadType === "task_complete") return isSubagentSession ? null : "idle";
+	if (payloadType === "turn_aborted") return "idle";
 	if (payloadType === "agent_reasoning" || payloadType === "agent_message") return "processing";
 	return null;
 }
@@ -123,6 +144,7 @@ export async function readCodexInternalsStatus(
 			offset: 0,
 			partialLine: "",
 			lastStatus: cursor.lastStatus,
+			isSubagentSession: null,
 		};
 	}
 
@@ -136,11 +158,15 @@ export async function readCodexInternalsStatus(
 
 	let parseErrorCount = 0;
 	let status = nextCursor.lastStatus;
+	let isSubagentSession = nextCursor.isSubagentSession;
 	for (const line of lines) {
 		if (line.trim().length === 0) continue;
 		try {
 			const parsed = JSON.parse(line) as SessionRecord;
-			const derived = statusFromEvent(parsed);
+			if (isSubagentSession === null && isSubagentSessionRecord(parsed)) {
+				isSubagentSession = true;
+			}
+			const derived = statusFromEvent(parsed, isSubagentSession === true);
 			if (derived) status = derived;
 		} catch {
 			parseErrorCount++;
@@ -152,6 +178,7 @@ export async function readCodexInternalsStatus(
 		offset: fullText.length,
 		partialLine,
 		lastStatus: status,
+		isSubagentSession,
 	};
 
 	return {
