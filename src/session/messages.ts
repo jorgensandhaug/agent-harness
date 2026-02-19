@@ -303,6 +303,23 @@ async function readCodexMessages(runtimeDir: string): Promise<ProviderReadResult
 		}
 	}
 
+	const responseHasAssistant = responseMessages.some(
+		(message) => message.role === "assistant" && message.text.trim().length > 0,
+	);
+	if (responseHasAssistant) {
+		return {
+			source: "internals_codex_jsonl",
+			messages: responseMessages,
+			parseErrorCount,
+			warnings:
+				eventMessages.length > 0
+					? [
+							"codex response_item assistant messages preferred over event_msg records to avoid partial chunks",
+					  ]
+					: [],
+		};
+	}
+
 	if (eventMessages.length > 0) {
 		return {
 			source: "internals_codex_jsonl",

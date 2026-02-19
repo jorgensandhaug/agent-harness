@@ -109,6 +109,58 @@ describe("session/messages.readAgentMessages", () => {
 		expect(result.lastAssistantMessage?.text).toBe("second assistant");
 	});
 
+	it("prefers codex response_item assistant content over partial event_msg chunks", async () => {
+		const root = await mkdtemp(join(tmpdir(), "ah-msg-codex-response-item-"));
+		tempDirs.push(root);
+		const dir = join(root, "sessions", "2026", "02", "17");
+		await mkdir(dir, { recursive: true });
+		await Bun.write(
+			join(dir, "rollout-2026-02-17T00-00-01.jsonl"),
+			[
+				JSON.stringify({
+					timestamp: "2026-02-17T00:00:00.000Z",
+					type: "event_msg",
+					payload: { type: "user_message", message: "count files" },
+				}),
+				JSON.stringify({
+					timestamp: "2026-02-17T00:00:01.000Z",
+					type: "event_msg",
+					payload: {
+						type: "agent_message",
+						message: "TypeScript files in src/ recursively: 102",
+					},
+				}),
+				JSON.stringify({
+					timestamp: "2026-02-17T00:00:02.000Z",
+					type: "event_msg",
+					payload: { type: "agent_message", message: "39" },
+				}),
+				JSON.stringify({
+					timestamp: "2026-02-17T00:00:03.000Z",
+					type: "response_item",
+					payload: {
+						type: "message",
+						role: "assistant",
+						content: [
+							{ type: "output_text", text: "TypeScript files in src/ recursively: 102" },
+							{ type: "output_text", text: "Test files (*.test.ts) in src/ recursively: 39" },
+						],
+					},
+				}),
+			].join("\n"),
+		);
+
+		const agent: Agent = { ...baseAgent(), provider: "codex", providerRuntimeDir: root };
+		const result = await readAgentMessages(agent, { role: "assistant", limit: 10 });
+
+		expect(result.lastAssistantMessage?.text).toBe(
+			[
+				"TypeScript files in src/ recursively: 102",
+				"Test files (*.test.ts) in src/ recursively: 39",
+			].join("\n"),
+		);
+	});
+
 	it("reads claude assistant content and skips local command metadata", async () => {
 		const root = await mkdtemp(join(tmpdir(), "ah-msg-claude-"));
 		tempDirs.push(root);

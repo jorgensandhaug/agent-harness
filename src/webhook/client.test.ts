@@ -59,6 +59,46 @@ async function writeCodexSession(runtimeDir: string): Promise<void> {
 	);
 }
 
+async function writeCodexSessionWithPartialEventChunks(runtimeDir: string): Promise<void> {
+	const dir = join(runtimeDir, "sessions", "2026", "02", "18");
+	await mkdir(dir, { recursive: true });
+	await Bun.write(
+		join(dir, "rollout-2026-02-18T00-00-01.jsonl"),
+		[
+			JSON.stringify({
+				timestamp: "2026-02-18T00:00:00.000Z",
+				type: "event_msg",
+				payload: { type: "user_message", message: "count files" },
+			}),
+			JSON.stringify({
+				timestamp: "2026-02-18T00:00:01.000Z",
+				type: "event_msg",
+				payload: {
+					type: "agent_message",
+					message: "TypeScript files in src/ recursively: 102",
+				},
+			}),
+			JSON.stringify({
+				timestamp: "2026-02-18T00:00:02.000Z",
+				type: "event_msg",
+				payload: { type: "agent_message", message: "39" },
+			}),
+			JSON.stringify({
+				timestamp: "2026-02-18T00:00:03.000Z",
+				type: "response_item",
+				payload: {
+					type: "message",
+					role: "assistant",
+					content: [
+						{ type: "output_text", text: "TypeScript files in src/ recursively: 102" },
+						{ type: "output_text", text: "Test files (*.test.ts) in src/ recursively: 39" },
+					],
+				},
+			}),
+		].join("\n"),
+	);
+}
+
 async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {
 	const deadline = Date.now() + timeoutMs;
 	while (!predicate()) {
@@ -141,6 +181,59 @@ describe("webhook/client", () => {
 				lastMessage: "latest answer",
 				timestamp: "2026-02-18T10:00:00.000Z",
 			},
+		});
+		unsubscribe();
+	});
+
+	it("uses full multiline response_item assistant content instead of trailing event_msg chunk", async () => {
+		const runtimeDir = await mkdtemp(join(tmpdir(), "ah-webhook-client-"));
+		tempDirs.push(runtimeDir);
+		await writeCodexSessionWithPartialEventChunks(runtimeDir);
+
+		const store = createStore();
+		store.addAgent(baseAgent(runtimeDir));
+		const bus = createEventBus(100);
+
+		const calls: Array<{ payload: unknown }> = [];
+		(globalThis as { fetch: typeof fetch }).fetch = (async (
+			input: RequestInfo | URL,
+			init?: RequestInit,
+		) => {
+			const request = new Request(input, init);
+			calls.push({
+				payload: await request.json(),
+			});
+			return new Response(null, { status: 200 });
+		}) as typeof fetch;
+
+		const config = webhookConfig({
+			url: "https://example.test/hook",
+			events: ["agent_completed"],
+		});
+
+		const unsubscribe = createWebhookClient(config, bus, store);
+		bus.emit({
+			id: "evt-1-multiline" as EventId,
+			ts: "2026-02-18T10:00:00.000Z",
+			project: "proj-1",
+			agentId: "abcd1234",
+			type: "status_changed",
+			from: "processing",
+			to: "idle",
+		});
+
+		await waitFor(() => calls.length === 1);
+		expect(calls[0]?.payload).toEqual({
+			event: "agent_completed",
+			project: "proj-1",
+			agentId: "abcd1234",
+			provider: "codex",
+			status: "idle",
+			lastMessage: [
+				"TypeScript files in src/ recursively: 102",
+				"Test files (*.test.ts) in src/ recursively: 39",
+			].join("\n"),
+			timestamp: "2026-02-18T10:00:00.000Z",
 		});
 		unsubscribe();
 	});
