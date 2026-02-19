@@ -111,6 +111,11 @@ function collapsedPasteMarkers(charCount: number): string {
 	return chunks.map((size) => `[Pasted Content ${size} chars]`).join("");
 }
 
+function extractPromptFilePath(text: string): string | null {
+	const match = text.match(/(\/[^\s"'`]+prompt-cache[^\s"'`]*\.txt)/);
+	return match?.[1] ?? null;
+}
+
 function resolveWindow(target: string): { session: SessionState; windowName: string } | null {
 	const [sessionName, windowName] = target.split(":");
 	if (!sessionName || !windowName) return null;
@@ -681,7 +686,7 @@ describe("session/manager.initial-input", () => {
 		}
 	});
 
-	it("codex long follow-up waits for collapsed paste bursts then submits", async () => {
+	it("codex long follow-up stages prompt file and submits pointer instruction", async () => {
 		simulateCodexCollapsedPasteSubmit = true;
 		const priorDelay = process.env.HARNESS_INITIAL_TASK_DELAY_MS;
 		process.env.HARNESS_INITIAL_TASK_DELAY_MS = "10000";
@@ -713,7 +718,12 @@ describe("session/manager.initial-input", () => {
 
 			expect(window.enterKeyCount).toBe(enterBefore + 1);
 			expect(window.submitCount).toBeGreaterThanOrEqual(1);
-			expect(window.buffer).toContain("[Pasted Content 9216 chars][Pasted Content 1024 chars]");
+			expect(window.buffer).toContain("Read prompt from file:");
+			expect(window.buffer).not.toContain("[Pasted Content");
+			const promptFilePath = extractPromptFilePath(window.buffer);
+			expect(promptFilePath).not.toBeNull();
+			if (!promptFilePath) throw new Error("prompt file path missing");
+			expect(readFileSync(promptFilePath, "utf8")).toBe(longPrompt);
 
 			const deleteRes = await manager.deleteProject("p7");
 			expect(deleteRes.ok).toBe(true);
@@ -763,6 +773,12 @@ describe("session/manager.initial-input", () => {
 
 			await waitFor(() => window.submitCount > 0, 3000);
 			expect(window.enterKeyCount).toBeGreaterThanOrEqual(1);
+			expect(window.pendingCollapsedPasteSubmit).toBe(false);
+			expect(window.buffer).toContain("Read prompt from file:");
+			const promptFilePath = extractPromptFilePath(window.buffer);
+			expect(promptFilePath).not.toBeNull();
+			if (!promptFilePath) throw new Error("prompt file path missing");
+			expect(readFileSync(promptFilePath, "utf8")).toBe(longPrompt);
 
 			const deleteRes = await manager.deleteProject("p7-delay");
 			expect(deleteRes.ok).toBe(true);
@@ -822,7 +838,7 @@ describe("session/manager.initial-input", () => {
 		}
 	});
 
-	it("codex long initial task is passed in startup command (no post-launch paste)", async () => {
+	it("codex long initial task is staged and referenced in startup command", async () => {
 		simulateCodexCollapsedPasteSubmit = true;
 		const store = createStore();
 		const eventBus = createEventBus(500);
@@ -832,7 +848,7 @@ describe("session/manager.initial-input", () => {
 		expect(projectRes.ok).toBe(true);
 		if (!projectRes.ok) throw new Error("project create failed");
 
-		const longTask = `Long prompt: ${"xyz ".repeat(220)}`;
+		const longTask = `Long prompt: ${"xyz ".repeat(280)}`;
 		const createRes = await manager.createAgent("p8", "codex", longTask);
 		expect(createRes.ok).toBe(true);
 		if (!createRes.ok) throw new Error("agent create failed");
@@ -842,7 +858,11 @@ describe("session/manager.initial-input", () => {
 		const session = fake.sessions.get(sessionName);
 		const window = session?.windows.get(windowName);
 		if (!window) throw new Error("window missing");
-		expect(window.startCommand).toContain(longTask);
+		expect(window.startCommand).toContain("Read prompt from file:");
+		const promptFilePath = extractPromptFilePath(window.startCommand);
+		expect(promptFilePath).not.toBeNull();
+		if (!promptFilePath) throw new Error("prompt file path missing");
+		expect(readFileSync(promptFilePath, "utf8")).toBe(longTask);
 		expect(window.submitCount).toBe(0);
 		expect(window.pendingCollapsedPasteSubmit).toBe(false);
 
@@ -861,7 +881,7 @@ describe("session/manager.initial-input", () => {
 		expect(projectRes.ok).toBe(true);
 		if (!projectRes.ok) throw new Error("project create failed");
 
-		const longTask = `Long delayed initial: ${"xyz ".repeat(220)}`;
+		const longTask = `Long delayed initial: ${"xyz ".repeat(280)}`;
 		const createRes = await manager.createAgent("p8-delay", "codex", longTask);
 		expect(createRes.ok).toBe(true);
 		if (!createRes.ok) throw new Error("agent create failed");
@@ -871,7 +891,11 @@ describe("session/manager.initial-input", () => {
 		const session = fake.sessions.get(sessionName);
 		const window = session?.windows.get(windowName);
 		if (!window) throw new Error("window missing");
-		expect(window.startCommand).toContain(longTask);
+		expect(window.startCommand).toContain("Read prompt from file:");
+		const promptFilePath = extractPromptFilePath(window.startCommand);
+		expect(promptFilePath).not.toBeNull();
+		if (!promptFilePath) throw new Error("prompt file path missing");
+		expect(readFileSync(promptFilePath, "utf8")).toBe(longTask);
 		expect(window.submitCount).toBe(0);
 		expect(window.pendingCollapsedPasteSubmit).toBe(false);
 

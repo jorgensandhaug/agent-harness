@@ -6,6 +6,7 @@ import {
 	lstat,
 	mkdir,
 	readFile,
+	rm,
 	symlink,
 	writeFile,
 } from "node:fs/promises";
@@ -73,6 +74,7 @@ export function createManager(
 	const envReadyTimeout =
 		envReadyTimeoutRaw !== undefined ? Number.parseInt(envReadyTimeoutRaw, 10) : null;
 	const READY_POLL_INTERVAL_MS = 200;
+	const LARGE_PROMPT_FILE_THRESHOLD_CHARS = 1000;
 	const DEFAULT_CODEX_HOME = resolve(join(homedir(), ".codex"));
 	const DEFAULT_PI_HOME = resolve(join(homedir(), ".pi", "agent"));
 	const CLAUDE_AUTH_ENV_KEYS = [
@@ -487,6 +489,58 @@ export function createManager(
 		return providerName === "claude-code" || providerName === "codex";
 	}
 
+	function shouldUsePromptFile(providerName: string, text: string): boolean {
+		if (text.length <= LARGE_PROMPT_FILE_THRESHOLD_CHARS) return false;
+		return providerName === "claude-code" || providerName === "codex";
+	}
+
+	function promptFileDir(project: ProjectName, id: AgentId): string {
+		return resolve(config.logDir, "prompt-cache", project, id);
+	}
+
+	async function stagePromptFile(
+		project: ProjectName,
+		id: AgentId,
+		text: string,
+		phase: "initial" | "followup",
+	): Promise<Result<string, ManagerError>> {
+		const dir = promptFileDir(project, id);
+		try {
+			await ensureSecureDir(dir);
+			const filePath = join(dir, `${phase}-${Date.now()}-${randomUUID().slice(0, 8)}.txt`);
+			await writeFile(filePath, text, "utf8");
+			try {
+				await chmod(filePath, 0o600);
+			} catch {
+				// best effort
+			}
+			return ok(filePath);
+		} catch (error) {
+			return err({
+				code: "TMUX_ERROR",
+				message: `Failed to stage prompt file: ${error instanceof Error ? error.message : String(error)}`,
+			});
+		}
+	}
+
+	function promptFileInstruction(path: string): string {
+		return `Read prompt from file: ${path}. Use the file's full contents as my prompt.`;
+	}
+
+	async function cleanupPromptFiles(project: ProjectName, id: AgentId): Promise<void> {
+		const dir = promptFileDir(project, id);
+		try {
+			await rm(dir, { recursive: true, force: true });
+		} catch (error) {
+			log.debug("failed to cleanup prompt staging dir", {
+				project,
+				agentId: id,
+				dir,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+	}
+
 	function looksLikeStartupTrustPrompt(capturedOutput: string): boolean {
 		const lines = capturedOutput
 			.split("\n")
@@ -533,7 +587,7 @@ export function createManager(
 			const parsed = Number.parseInt(raw, 10);
 			if (Number.isFinite(parsed) && parsed >= 0) return parsed;
 		}
-		return 2000;
+		return 5000;
 	}
 
 	async function sendAgentInput(
@@ -897,6 +951,7 @@ export function createManager(
 		}
 
 		for (const agent of store.listAgents(pName)) {
+			await cleanupPromptFiles(agent.project, agent.id);
 			debugTracker?.removeAgent(debugAgentKey(agent.project, agent.id));
 		}
 
@@ -985,7 +1040,12 @@ export function createManager(
 		}
 		const wName = id;
 		let cmd = [...provider.buildCommand(effectiveConfig)];
-		const formattedInitialTask = provider.formatInput(task);
+		let formattedInitialTask = provider.formatInput(task);
+		if (shouldUsePromptFile(providerName, formattedInitialTask)) {
+			const staged = await stagePromptFile(pName, id, formattedInitialTask, "initial");
+			if (!staged.ok) return staged;
+			formattedInitialTask = promptFileInstruction(staged.value);
+		}
 		const initialTaskViaCli =
 			shouldPassInitialTaskViaCli(providerName) && formattedInitialTask.trim().length > 0;
 		let env = provider.buildEnv(effectiveConfig);
@@ -1278,7 +1338,12 @@ export function createManager(
 		if (agent.provider === "claude-code") {
 			await dismissStartupTrustPrompt(agent.tmuxTarget, agent.id, agent.provider);
 		}
-		const formatted = providerResult.value.formatInput(text);
+		let formatted = providerResult.value.formatInput(text);
+		if (shouldUsePromptFile(agent.provider, formatted)) {
+			const staged = await stagePromptFile(agent.project, agent.id, formatted, "followup");
+			if (!staged.ok) return staged;
+			formatted = promptFileInstruction(staged.value);
+		}
 		const result = await sendAgentInput(agent.tmuxTarget, agent.provider, formatted, "followup");
 		if (!result.ok) {
 			return err({
@@ -1381,6 +1446,7 @@ export function createManager(
 				message: `Failed to kill window '${agent.tmuxTarget}': ${JSON.stringify(killResult.error)}`,
 			});
 		}
+		await cleanupPromptFiles(agent.project, agent.id);
 
 		// Emit exit event
 		eventBus.emit({
