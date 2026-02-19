@@ -69,6 +69,8 @@ export function createManager(
 	const envReadyTimeout =
 		envReadyTimeoutRaw !== undefined ? Number.parseInt(envReadyTimeoutRaw, 10) : null;
 	const READY_POLL_INTERVAL_MS = 200;
+	const CODEX_COLLAPSED_PASTE_MIN_CHARS = 256;
+	const CODEX_PASTE_CONFIRM_DELAY_MS = 80;
 	const DEFAULT_CODEX_HOME = resolve(join(homedir(), ".codex"));
 	const DEFAULT_PI_HOME = resolve(join(homedir(), ".pi", "agent"));
 	const CLAUDE_AUTH_ENV_KEYS = [
@@ -508,6 +510,20 @@ export function createManager(
 		}
 	}
 
+	async function sendAgentInput(target: string, providerName: string, text: string) {
+		const inputResult = await tmux.sendInput(target, text);
+		if (!inputResult.ok) return inputResult;
+		// Codex keeps long pasted content in the composer as "[Pasted Content N chars]".
+		// An extra Enter is required to submit that collapsed draft.
+		if (providerName !== "codex" || text.length < CODEX_COLLAPSED_PASTE_MIN_CHARS) {
+			return inputResult;
+		}
+		await Bun.sleep(CODEX_PASTE_CONFIRM_DELAY_MS);
+		const confirmResult = await tmux.sendKeys(target, "Enter");
+		if (!confirmResult.ok) return confirmResult;
+		return ok(undefined);
+	}
+
 	function tmuxSessionName(name: ProjectName): string {
 		return `${config.tmuxPrefix}-${name}`;
 	}
@@ -921,7 +937,7 @@ export function createManager(
 			}
 			if (!stillExists()) return;
 			const formattedInput = provider.formatInput(task);
-			const inputResult = await tmux.sendInput(target, formattedInput);
+			const inputResult = await sendAgentInput(target, providerName, formattedInput);
 			if (!inputResult.ok) {
 				if (!stillExists()) return;
 				log.error("failed to send initial task", {
@@ -979,7 +995,7 @@ export function createManager(
 			await dismissStartupTrustPrompt(agent.tmuxTarget, agent.id, agent.provider);
 		}
 		const formatted = providerResult.value.formatInput(text);
-		const result = await tmux.sendInput(agent.tmuxTarget, formatted);
+		const result = await sendAgentInput(agent.tmuxTarget, agent.provider, formatted);
 		if (!result.ok) {
 			return err({
 				code: "TMUX_ERROR",
