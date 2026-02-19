@@ -1,6 +1,6 @@
+import { spawn as nodeSpawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawn as nodeSpawn } from "node:child_process";
 import { log } from "../log.ts";
 import { type Result, err, ok } from "../types.ts";
 import type { TmuxError, TmuxSessionInfo, TmuxWindowInfo } from "./types.ts";
@@ -146,14 +146,15 @@ async function exec(args: readonly string[]): Promise<Result<string, TmuxError>>
 		"SHELL",
 	] as const;
 	for (const key of passThroughKeys) {
-		// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
 		const value = process.env[key];
 		if (typeof value === "string" && value.length > 0) {
 			childEnv[key] = value;
 		}
 	}
 	// Preserve user binary locations so tmux-launched panes can run CLI providers.
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
 	childEnv["PATH"] = tmuxCommandPath();
+	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
 	childEnv["TERM"] =
 		// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
 		process.env["TERM"] ?? "xterm-256color";
@@ -171,10 +172,7 @@ async function exec(args: readonly string[]): Promise<Result<string, TmuxError>>
 
 	// Bun.spawn can intermittently fail under systemd service env with tmux "server exited unexpectedly".
 	// Retry with node child_process in that case.
-	if (
-		runResult.exitCode !== 0 &&
-		runResult.stderr.includes("server exited unexpectedly")
-	) {
+	if (runResult.exitCode !== 0 && runResult.stderr.includes("server exited unexpectedly")) {
 		const fallback = await execWithNodeSpawn(args, childEnv);
 		if (fallback !== null) {
 			if (!bunSpawnDisabled) {
@@ -298,7 +296,22 @@ function buildWindowCommand(
 }
 
 export async function sendInput(target: string, text: string): Promise<Result<void, TmuxError>> {
-	// Write text to temp file, load into tmux buffer, paste into target pane, then submit.
+	const pasteResult = await pasteInput(target, text);
+	if (!pasteResult.ok) return pasteResult;
+
+	const settleMs = pasteSettleDelayMs();
+	if (settleMs > 0) {
+		await Bun.sleep(settleMs);
+	}
+
+	const enterResult = await exec(["send-keys", "-t", target, "Enter"]);
+	if (!enterResult.ok) return enterResult;
+
+	return ok(undefined);
+}
+
+export async function pasteInput(target: string, text: string): Promise<Result<void, TmuxError>> {
+	// Write text to temp file, load into tmux buffer, and paste into target pane.
 	const tempPath = join(tmpdir(), `ah-input-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 	await Bun.write(tempPath, text);
 
@@ -310,15 +323,6 @@ export async function sendInput(target: string, text: string): Promise<Result<vo
 		// instead of submitting on Enter when bracketed paste is enabled.
 		const pasteResult = await exec(["paste-buffer", "-t", target, "-d"]);
 		if (!pasteResult.ok) return pasteResult;
-
-		const settleMs = pasteSettleDelayMs();
-		if (settleMs > 0) {
-			await Bun.sleep(settleMs);
-		}
-
-		const enterResult = await exec(["send-keys", "-t", target, "Enter"]);
-		if (!enterResult.ok) return enterResult;
-
 		return ok(undefined);
 	} finally {
 		try {

@@ -37,6 +37,9 @@ type SessionState = {
 			lastPasteAtMs: number;
 			minSubmitDelayMs: number;
 			pendingCollapsedPasteSubmit: boolean;
+			collapsedPasteMarkerArmedAtMs: number;
+			collapsedPasteMarkerInjected: boolean;
+			collapsedPasteChars: number;
 			submitCount: number;
 		}
 	>;
@@ -57,6 +60,7 @@ let simulateSlowCodexStartup = false;
 let simulateClaudeStartupConfirm = false;
 let simulateCodexPasteEnterRace = false;
 let simulateCodexCollapsedPasteSubmit = false;
+let simulateCodexCollapsedPasteMarkerDelayMs = 0;
 const cleanupDirs: string[] = [];
 
 function resetFake(): void {
@@ -90,6 +94,22 @@ function commandFromStartCommand(startCommand: string): string {
 	return "sh";
 }
 
+function collapsedPasteMarkers(charCount: number): string {
+	if (charCount <= 0) return "";
+	const chunks: number[] = [];
+	let remaining = charCount;
+	if (remaining > 9216) {
+		chunks.push(9216);
+		remaining -= 9216;
+	}
+	while (remaining > 0) {
+		const size = Math.min(1024, remaining);
+		chunks.push(size);
+		remaining -= size;
+	}
+	return chunks.map((size) => `[Pasted Content ${size} chars]`).join("");
+}
+
 function resolveWindow(target: string): { session: SessionState; windowName: string } | null {
 	const [sessionName, windowName] = target.split(":");
 	if (!sessionName || !windowName) return null;
@@ -107,6 +127,7 @@ beforeEach(() => {
 	simulateClaudeStartupConfirm = false;
 	simulateCodexPasteEnterRace = false;
 	simulateCodexCollapsedPasteSubmit = false;
+	simulateCodexCollapsedPasteMarkerDelayMs = 0;
 
 	(Bun as { spawn: typeof Bun.spawn }).spawn = ((cmd: readonly string[]) => {
 		if (cmd[0] !== "tmux") {
@@ -173,6 +194,9 @@ beforeEach(() => {
 					lastPasteAtMs: 0,
 					minSubmitDelayMs: simulateCodexPasteEnterRace && provider === "codex" ? 100 : 0,
 					pendingCollapsedPasteSubmit: false,
+					collapsedPasteMarkerArmedAtMs: 0,
+					collapsedPasteMarkerInjected: false,
+					collapsedPasteChars: 0,
 					submitCount: 0,
 				});
 				return proc(0, `${paneId}\n`);
@@ -210,7 +234,15 @@ beforeEach(() => {
 					fake.pasteBuffer.length >= 256
 				) {
 					window.pendingCollapsedPasteSubmit = true;
-					window.buffer += `[Pasted Content ${fake.pasteBuffer.length} chars]`;
+					window.collapsedPasteChars = fake.pasteBuffer.length;
+					window.collapsedPasteMarkerArmedAtMs =
+						Date.now() + simulateCodexCollapsedPasteMarkerDelayMs;
+					if (simulateCodexCollapsedPasteMarkerDelayMs <= 0) {
+						window.collapsedPasteMarkerInjected = true;
+						window.buffer += collapsedPasteMarkers(fake.pasteBuffer.length);
+					} else {
+						window.collapsedPasteMarkerInjected = false;
+					}
 					return proc(0);
 				}
 				window.buffer += fake.pasteBuffer;
@@ -226,12 +258,26 @@ beforeEach(() => {
 				const key = args[args.length - 1];
 				if (key === "Enter") {
 					window.enterKeyCount++;
+					if (
+						window.pendingCollapsedPasteSubmit &&
+						!window.collapsedPasteMarkerInjected &&
+						Date.now() >= window.collapsedPasteMarkerArmedAtMs
+					) {
+						window.collapsedPasteMarkerInjected = true;
+						window.buffer += collapsedPasteMarkers(window.collapsedPasteChars);
+					}
 					if (window.requiresStartupConfirm && !window.startupConfirmed) {
 						window.startupConfirmed = true;
 						return proc(0);
 					}
 					if (window.pendingCollapsedPasteSubmit) {
+						if (!window.collapsedPasteMarkerInjected) {
+							// Marker not visible yet; Enter is swallowed by codex.
+							return proc(0);
+						}
 						window.pendingCollapsedPasteSubmit = false;
+						window.submitCount++;
+						window.buffer += "\n";
 						return proc(0);
 					}
 					if (
@@ -292,6 +338,14 @@ beforeEach(() => {
 				const ageMs = Date.now() - window.createdAtMs;
 				if (ageMs < window.readyAfterMs) {
 					return proc(0, "booting...\n");
+				}
+				if (
+					window.pendingCollapsedPasteSubmit &&
+					!window.collapsedPasteMarkerInjected &&
+					Date.now() >= window.collapsedPasteMarkerArmedAtMs
+				) {
+					window.collapsedPasteMarkerInjected = true;
+					window.buffer += collapsedPasteMarkers(window.collapsedPasteChars);
 				}
 				return proc(0, `${window.buffer}\n> `);
 			}
@@ -427,7 +481,7 @@ describe("session/manager.initial-input", () => {
 		unsubscribe();
 	});
 
-	it("delivers initial task for codex even when startup drops early keystrokes", async () => {
+	it("passes codex initial task as startup CLI argument", async () => {
 		simulateSlowCodexStartup = true;
 		const store = createStore();
 		const eventBus = createEventBus(500);
@@ -441,22 +495,19 @@ describe("session/manager.initial-input", () => {
 		expect(createRes.ok).toBe(true);
 		if (!createRes.ok) throw new Error("agent create failed");
 		const target = createRes.value.tmuxTarget;
-
-		const containsPrompt = (): boolean => {
-			const [sessionName, windowName] = target.split(":");
-			if (!sessionName || !windowName) return false;
-			const session = fake.sessions.get(sessionName);
-			const window = session?.windows.get(windowName);
-			return Boolean(window?.buffer.includes("Reply with exactly: 4"));
-		};
-
-		await waitFor(containsPrompt, 1200);
+		const [sessionName, windowName] = target.split(":");
+		if (!sessionName || !windowName) throw new Error("bad tmux target");
+		const session = fake.sessions.get(sessionName);
+		const window = session?.windows.get(windowName);
+		if (!window) throw new Error("window missing");
+		expect(window.startCommand).toContain("Reply with exactly: 4");
+		expect(window.submitCount).toBe(0);
 
 		const deleteRes = await manager.deleteProject("p2");
 		expect(deleteRes.ok).toBe(true);
 	});
 
-	it("delivers initial task after claude startup trust prompt requires Enter", async () => {
+	it("passes claude initial task as startup CLI argument and auto-confirms trust prompt", async () => {
 		simulateClaudeStartupConfirm = true;
 		const store = createStore();
 		const eventBus = createEventBus(500);
@@ -470,16 +521,13 @@ describe("session/manager.initial-input", () => {
 		expect(createRes.ok).toBe(true);
 		if (!createRes.ok) throw new Error("agent create failed");
 		const target = createRes.value.tmuxTarget;
-
-		const containsTask = (): boolean => {
-			const [sessionName, windowName] = target.split(":");
-			if (!sessionName || !windowName) return false;
-			const session = fake.sessions.get(sessionName);
-			const window = session?.windows.get(windowName);
-			return Boolean(window?.buffer.includes("Reply with exactly: 4"));
-		};
-
-		await waitFor(containsTask, 1500);
+		const [sessionName, windowName] = target.split(":");
+		if (!sessionName || !windowName) throw new Error("bad tmux target");
+		const session = fake.sessions.get(sessionName);
+		const window = session?.windows.get(windowName);
+		if (!window) throw new Error("window missing");
+		expect(window.startCommand).toContain("Reply with exactly: 4");
+		await waitFor(() => window.startupConfirmed, 1500);
 
 		const deleteRes = await manager.deleteProject("p3");
 		expect(deleteRes.ok).toBe(true);
@@ -626,10 +674,12 @@ describe("session/manager.initial-input", () => {
 		}
 	});
 
-	it("codex long pasted input submits with a second Enter after collapsed paste marker", async () => {
+	it("codex long follow-up waits for collapsed paste bursts then submits", async () => {
 		simulateCodexCollapsedPasteSubmit = true;
 		const priorDelay = process.env.HARNESS_INITIAL_TASK_DELAY_MS;
 		process.env.HARNESS_INITIAL_TASK_DELAY_MS = "10000";
+		const priorCodexFollowupSettle = process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS;
+		process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS = "400";
 		const store = createStore();
 		const eventBus = createEventBus(500);
 		const manager = createManager(makeConfig(), store, eventBus);
@@ -650,12 +700,13 @@ describe("session/manager.initial-input", () => {
 			if (!window) throw new Error("window missing");
 			const enterBefore = window.enterKeyCount;
 
-			const longPrompt = `Long prompt: ${"abc ".repeat(200)}`;
+			const longPrompt = `Long prompt: ${"abc ".repeat(2800)}`;
 			const sendRes = await manager.sendInput("p7", createRes.value.id, longPrompt);
 			expect(sendRes.ok).toBe(true);
 
-			expect(window.enterKeyCount).toBeGreaterThanOrEqual(enterBefore + 2);
+			expect(window.enterKeyCount).toBe(enterBefore + 1);
 			expect(window.submitCount).toBeGreaterThanOrEqual(1);
+			expect(window.buffer).toContain("[Pasted Content 9216 chars][Pasted Content 1024 chars]");
 
 			const deleteRes = await manager.deleteProject("p7");
 			expect(deleteRes.ok).toBe(true);
@@ -665,11 +716,66 @@ describe("session/manager.initial-input", () => {
 			} else {
 				process.env.HARNESS_INITIAL_TASK_DELAY_MS = priorDelay;
 			}
+			if (priorCodexFollowupSettle === undefined) {
+				process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS = undefined;
+			} else {
+				process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS = priorCodexFollowupSettle;
+			}
+		}
+	});
+
+	it("codex delayed collapsed-paste marker still submits follow-up input", async () => {
+		simulateCodexCollapsedPasteSubmit = true;
+		simulateCodexCollapsedPasteMarkerDelayMs = 350;
+		const priorDelay = process.env.HARNESS_INITIAL_TASK_DELAY_MS;
+		const priorCodexFollowupSettle = process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS;
+		process.env.HARNESS_INITIAL_TASK_DELAY_MS = "10000";
+		process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS = "450";
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(makeConfig(), store, eventBus);
+
+		try {
+			const projectRes = await manager.createProject("p7-delay", process.cwd());
+			expect(projectRes.ok).toBe(true);
+			if (!projectRes.ok) throw new Error("project create failed");
+
+			const createRes = await manager.createAgent("p7-delay", "codex", "initial task");
+			expect(createRes.ok).toBe(true);
+			if (!createRes.ok) throw new Error("agent create failed");
+			const target = createRes.value.tmuxTarget;
+			const [sessionName, windowName] = target.split(":");
+			if (!sessionName || !windowName) throw new Error("bad tmux target");
+			const session = fake.sessions.get(sessionName);
+			const window = session?.windows.get(windowName);
+			if (!window) throw new Error("window missing");
+
+			const longPrompt = `Long delayed prompt: ${"delay ".repeat(220)}`;
+			const sendRes = await manager.sendInput("p7-delay", createRes.value.id, longPrompt);
+			expect(sendRes.ok).toBe(true);
+
+			await waitFor(() => window.submitCount > 0, 3000);
+			expect(window.enterKeyCount).toBeGreaterThanOrEqual(1);
+
+			const deleteRes = await manager.deleteProject("p7-delay");
+			expect(deleteRes.ok).toBe(true);
+		} finally {
+			if (priorDelay === undefined) {
+				process.env.HARNESS_INITIAL_TASK_DELAY_MS = undefined;
+			} else {
+				process.env.HARNESS_INITIAL_TASK_DELAY_MS = priorDelay;
+			}
+			if (priorCodexFollowupSettle === undefined) {
+				process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS = undefined;
+			} else {
+				process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS = priorCodexFollowupSettle;
+			}
 		}
 	});
 
 	it("reproduces codex collapsed-paste bug with single-Enter tmux sendInput", async () => {
 		simulateCodexCollapsedPasteSubmit = true;
+		simulateCodexCollapsedPasteMarkerDelayMs = 350;
 		const priorDelay = process.env.HARNESS_INITIAL_TASK_DELAY_MS;
 		process.env.HARNESS_INITIAL_TASK_DELAY_MS = "10000";
 		const store = createStore();
@@ -691,12 +797,12 @@ describe("session/manager.initial-input", () => {
 			const window = session?.windows.get(windowName);
 			if (!window) throw new Error("window missing");
 
-			const longPrompt = `Long prompt: ${"bug ".repeat(200)}`;
+			const longPrompt = `Long prompt: ${"bug ".repeat(2800)}`;
 			const inputRes = await tmux.sendInput(target, longPrompt);
 			expect(inputRes.ok).toBe(true);
-			expect(window.buffer).toContain(`[Pasted Content ${longPrompt.length} chars]`);
 			expect(window.enterKeyCount).toBeGreaterThanOrEqual(1);
 			expect(window.submitCount).toBe(0);
+			expect(window.pendingCollapsedPasteSubmit).toBe(true);
 
 			const deleteRes = await manager.deleteProject("p7b");
 			expect(deleteRes.ok).toBe(true);
@@ -709,7 +815,7 @@ describe("session/manager.initial-input", () => {
 		}
 	});
 
-	it("codex long initial task submits with a second Enter after collapsed paste marker", async () => {
+	it("codex long initial task is passed in startup command (no post-launch paste)", async () => {
 		simulateCodexCollapsedPasteSubmit = true;
 		const store = createStore();
 		const eventBus = createEventBus(500);
@@ -729,11 +835,40 @@ describe("session/manager.initial-input", () => {
 		const session = fake.sessions.get(sessionName);
 		const window = session?.windows.get(windowName);
 		if (!window) throw new Error("window missing");
-
-		await waitFor(() => window.submitCount > 0, 1500);
-		expect(window.enterKeyCount).toBeGreaterThanOrEqual(2);
+		expect(window.startCommand).toContain(longTask);
+		expect(window.submitCount).toBe(0);
+		expect(window.pendingCollapsedPasteSubmit).toBe(false);
 
 		const deleteRes = await manager.deleteProject("p8");
+		expect(deleteRes.ok).toBe(true);
+	});
+
+	it("codex initial startup command is stable even with delayed collapsed-marker simulation", async () => {
+		simulateCodexCollapsedPasteSubmit = true;
+		simulateCodexCollapsedPasteMarkerDelayMs = 350;
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(makeConfig(), store, eventBus);
+
+		const projectRes = await manager.createProject("p8-delay", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const longTask = `Long delayed initial: ${"xyz ".repeat(220)}`;
+		const createRes = await manager.createAgent("p8-delay", "codex", longTask);
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+		const target = createRes.value.tmuxTarget;
+		const [sessionName, windowName] = target.split(":");
+		if (!sessionName || !windowName) throw new Error("bad tmux target");
+		const session = fake.sessions.get(sessionName);
+		const window = session?.windows.get(windowName);
+		if (!window) throw new Error("window missing");
+		expect(window.startCommand).toContain(longTask);
+		expect(window.submitCount).toBe(0);
+		expect(window.pendingCollapsedPasteSubmit).toBe(false);
+
+		const deleteRes = await manager.deleteProject("p8-delay");
 		expect(deleteRes.ok).toBe(true);
 	});
 });

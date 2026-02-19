@@ -74,7 +74,6 @@ export function createManager(
 		envReadyTimeoutRaw !== undefined ? Number.parseInt(envReadyTimeoutRaw, 10) : null;
 	const READY_POLL_INTERVAL_MS = 200;
 	const CODEX_COLLAPSED_PASTE_MIN_CHARS = 256;
-	const CODEX_PASTE_CONFIRM_DELAY_MS = 80;
 	const DEFAULT_CODEX_HOME = resolve(join(homedir(), ".codex"));
 	const DEFAULT_PI_HOME = resolve(join(homedir(), ".pi", "agent"));
 	const CLAUDE_AUTH_ENV_KEYS = [
@@ -485,6 +484,10 @@ export function createManager(
 		return providerName === "claude-code" || providerName === "codex";
 	}
 
+	function shouldPassInitialTaskViaCli(providerName: string): boolean {
+		return providerName === "claude-code" || providerName === "codex";
+	}
+
 	function looksLikeStartupTrustPrompt(capturedOutput: string): boolean {
 		const lines = capturedOutput
 			.split("\n")
@@ -524,18 +527,34 @@ export function createManager(
 		}
 	}
 
-	async function sendAgentInput(target: string, providerName: string, text: string) {
-		const inputResult = await tmux.sendInput(target, text);
-		if (!inputResult.ok) return inputResult;
-		// Codex keeps long pasted content in the composer as "[Pasted Content N chars]".
-		// An extra Enter is required to submit that collapsed draft.
-		if (providerName !== "codex" || text.length < CODEX_COLLAPSED_PASTE_MIN_CHARS) {
-			return inputResult;
+	function codexFollowupPasteSettleMs(): number {
+		// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
+		const raw = process.env["HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS"];
+		if (raw !== undefined) {
+			const parsed = Number.parseInt(raw, 10);
+			if (Number.isFinite(parsed) && parsed >= 0) return parsed;
 		}
-		await Bun.sleep(CODEX_PASTE_CONFIRM_DELAY_MS);
-		const confirmResult = await tmux.sendKeys(target, "Enter");
-		if (!confirmResult.ok) return confirmResult;
-		return ok(undefined);
+		return 2000;
+	}
+
+	async function sendAgentInput(
+		target: string,
+		providerName: string,
+		text: string,
+		phase: "initial" | "followup",
+	) {
+		if (
+			phase === "followup" &&
+			providerName === "codex" &&
+			text.length >= CODEX_COLLAPSED_PASTE_MIN_CHARS
+		) {
+			const pasteResult = await tmux.pasteInput(target, text);
+			if (!pasteResult.ok) return pasteResult;
+			await Bun.sleep(codexFollowupPasteSettleMs());
+			return tmux.sendKeys(target, "Enter");
+		}
+
+		return tmux.sendInput(target, text);
 	}
 
 	function tmuxSessionName(name: ProjectName): string {
@@ -970,6 +989,9 @@ export function createManager(
 		}
 		const wName = id;
 		let cmd = [...provider.buildCommand(effectiveConfig)];
+		const formattedInitialTask = provider.formatInput(task);
+		const initialTaskViaCli =
+			shouldPassInitialTaskViaCli(providerName) && formattedInitialTask.trim().length > 0;
 		let env = provider.buildEnv(effectiveConfig);
 		let unsetEnv: readonly string[] = [];
 		let providerRuntimeDir: string | undefined;
@@ -1055,6 +1077,9 @@ export function createManager(
 				env["PATH"] ?? "",
 			]),
 		};
+		if (initialTaskViaCli) {
+			cmd = [...cmd, formattedInitialTask];
+		}
 		const target = `${project.tmuxSession}:${wName}`;
 
 		// Create tmux window with the agent command
@@ -1108,6 +1133,24 @@ export function createManager(
 		});
 
 		log.info("agent created", { id, provider: providerName, project: projectNameStr });
+
+		if (initialTaskViaCli) {
+			if (providerName === "claude-code") {
+				setTimeout(() => {
+					void dismissStartupTrustPrompt(target, id, providerName);
+				}, 120);
+			}
+			transitionAgentStatus(projectNameStr, agent, "processing", "manager_initial_input");
+			eventBus.emit({
+				id: newEventId(),
+				ts: new Date().toISOString(),
+				project: projectNameStr,
+				agentId: id,
+				type: "input_sent",
+				text: task,
+			});
+			return ok(agent);
+		}
 
 		// Send initial task after provider startup delay so the TUI is ready to accept input.
 		const delayMs = initialTaskDelayMs(providerName);
@@ -1176,8 +1219,12 @@ export function createManager(
 				await dismissStartupTrustPrompt(target, id, providerName);
 			}
 			if (!stillExists()) return;
-			const formattedInput = provider.formatInput(task);
-			const inputResult = await sendAgentInput(target, providerName, formattedInput);
+			const inputResult = await sendAgentInput(
+				target,
+				providerName,
+				formattedInitialTask,
+				"initial",
+			);
 			if (!inputResult.ok) {
 				if (!stillExists()) return;
 				log.error("failed to send initial task", {
@@ -1236,7 +1283,7 @@ export function createManager(
 			await dismissStartupTrustPrompt(agent.tmuxTarget, agent.id, agent.provider);
 		}
 		const formatted = providerResult.value.formatInput(text);
-		const result = await sendAgentInput(agent.tmuxTarget, agent.provider, formatted);
+		const result = await sendAgentInput(agent.tmuxTarget, agent.provider, formatted, "followup");
 		if (!result.ok) {
 			return err({
 				code: "TMUX_ERROR",

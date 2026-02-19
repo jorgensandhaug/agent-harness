@@ -30,6 +30,7 @@ export interface TmuxClient {
 		cmd?: readonly string[],
 		env?: Record<string, string>,
 	): Promise<Result<string, TmuxError>>;
+	pasteInput(target: string, text: string): Promise<Result<void, TmuxError>>;
 	sendInput(target: string, text: string): Promise<Result<void, TmuxError>>;
 	sendKeys(target: string, keys: string): Promise<Result<void, TmuxError>>;
 	capturePane(target: string, lines: number): Promise<Result<string, TmuxError>>;
