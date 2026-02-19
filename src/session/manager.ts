@@ -36,6 +36,7 @@ import {
 	projectName,
 } from "../types.ts";
 import { formatAttachCommand } from "./attach.ts";
+import { createCallbackState } from "./callback-state.ts";
 import { claudeProjectStorageDir } from "./claude-path.ts";
 import type { Store } from "./store.ts";
 import type { Agent, AgentCallback, Project } from "./types.ts";
@@ -64,6 +65,7 @@ export function createManager(
 	eventBus: EventBus,
 	debugTracker?: DebugTracker,
 ) {
+	const callbackState = createCallbackState(config.logDir);
 	const TRUST_PROMPT_CONFIRM_PATTERN = /Enter to confirm/i;
 	const TRUST_PROMPT_CONTEXT_PATTERN = /Quick safety check|trust this folder|Accessing workspace/i;
 	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
@@ -611,6 +613,101 @@ export function createManager(
 		return `${project}:${id}`;
 	}
 
+	async function loadPersistedProjectCallback(
+		project: ProjectName,
+	): Promise<AgentCallback | undefined> {
+		try {
+			return await callbackState.getProjectCallback(project);
+		} catch (error) {
+			log.warn("failed to load persisted project callback", {
+				project,
+				error: error instanceof Error ? error.message : String(error),
+			});
+			return undefined;
+		}
+	}
+
+	async function loadPersistedAgentCallback(
+		project: ProjectName,
+		id: AgentId,
+	): Promise<AgentCallback | undefined> {
+		try {
+			return await callbackState.getAgentCallback(project, id);
+		} catch (error) {
+			log.warn("failed to load persisted agent callback", {
+				project,
+				agentId: id,
+				error: error instanceof Error ? error.message : String(error),
+			});
+			return undefined;
+		}
+	}
+
+	async function persistProjectCallback(
+		project: ProjectName,
+		callback: AgentCallback | undefined,
+	): Promise<void> {
+		try {
+			await callbackState.setProjectCallback(project, callback);
+		} catch (error) {
+			log.warn("failed to persist project callback", {
+				project,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+	}
+
+	async function persistAgentCallback(
+		project: ProjectName,
+		id: AgentId,
+		callback: AgentCallback | undefined,
+	): Promise<void> {
+		try {
+			await callbackState.setAgentCallback(project, id, callback);
+		} catch (error) {
+			log.warn("failed to persist agent callback", {
+				project,
+				agentId: id,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+	}
+
+	async function removePersistedProject(project: ProjectName): Promise<void> {
+		try {
+			await callbackState.removeProject(project);
+		} catch (error) {
+			log.warn("failed to remove persisted project callback state", {
+				project,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+	}
+
+	async function removePersistedAgent(project: ProjectName, id: AgentId): Promise<void> {
+		try {
+			await callbackState.removeAgent(project, id);
+		} catch (error) {
+			log.warn("failed to remove persisted agent callback state", {
+				project,
+				agentId: id,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+	}
+
+	async function prunePersistedCallbacks(): Promise<void> {
+		const projects = new Set(store.listProjects().map((project) => project.name));
+		const agents = new Set(store.listAgents().map((agent) => `${agent.project}:${agent.id}`));
+		try {
+			await callbackState.prune(projects, agents);
+		} catch (error) {
+			log.warn("failed to prune persisted callback state", {
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+	}
+
 	function projectNameFromSession(sessionName: string): ProjectName | null {
 		const prefix = `${config.tmuxPrefix}-`;
 		if (!sessionName.startsWith(prefix)) return null;
@@ -732,12 +829,14 @@ export function createManager(
 			if (existingBySession.has(session.name)) continue;
 			const name = projectNameFromSession(session.name);
 			if (!name) continue;
+			const callback = await loadPersistedProjectCallback(name);
 
 			const project: Project = {
 				name,
 				cwd: session.path || ".",
 				tmuxSession: session.name,
 				agentCount: 0,
+				...(callback ? { callback } : {}),
 				createdAt: createdAtFromEpochSeconds(session.createdAt),
 			};
 			store.addProject(project);
@@ -814,6 +913,7 @@ export function createManager(
 				const codexRuntimeDir = envVarFromStartCommand(startCommand, "CODEX_HOME");
 				const piRuntimeDir = envVarFromStartCommand(startCommand, "PI_CODING_AGENT_DIR");
 				const opencodeDataHome = envVarFromStartCommand(startCommand, "XDG_DATA_HOME");
+				const callback = await loadPersistedAgentCallback(project.name, id);
 
 				const agent: Agent = {
 					id,
@@ -835,6 +935,7 @@ export function createManager(
 					...(providerName === "opencode" && opencodeDataHome
 						? { providerRuntimeDir: opencodeDataHome }
 						: {}),
+					...(callback ? { callback } : {}),
 					createdAt: now,
 					lastActivity: now,
 					lastCapturedOutput: output,
@@ -850,6 +951,7 @@ export function createManager(
 		if (recovered > 0) {
 			log.info("agents rehydrated from tmux windows", { recovered });
 		}
+		await prunePersistedCallbacks();
 	}
 
 	// --- Projects ---
@@ -884,6 +986,7 @@ export function createManager(
 		};
 
 		store.addProject(project);
+		await persistProjectCallback(pName, callback);
 		log.info("project created", { name, session: sessionName });
 		return ok(project);
 	}
@@ -900,13 +1003,13 @@ export function createManager(
 		return store.listProjects();
 	}
 
-	function updateProject(
+	async function updateProject(
 		name: string,
 		update: {
 			cwd?: string;
 			callback?: AgentCallback;
 		},
-	): Result<Project, ManagerError> {
+	): Promise<Result<Project, ManagerError>> {
 		const pName = projectName(name);
 		const project = store.getProject(pName);
 		if (!project) {
@@ -914,6 +1017,9 @@ export function createManager(
 		}
 
 		store.updateProject(pName, update);
+		if (update.callback !== undefined) {
+			await persistProjectCallback(pName, update.callback);
+		}
 		return ok(project);
 	}
 
@@ -953,6 +1059,7 @@ export function createManager(
 		}
 
 		store.removeProject(pName);
+		await removePersistedProject(pName);
 		log.info("project deleted", { name });
 		return ok(undefined);
 	}
@@ -1173,6 +1280,7 @@ export function createManager(
 		};
 
 		store.addAgent(agent);
+		await persistAgentCallback(pName, id, effectiveCallback);
 		debugTracker?.ensureAgent(debugAgentKey(agent.project, id));
 
 		// Emit agent_started event
@@ -1456,6 +1564,7 @@ export function createManager(
 		});
 
 		store.removeAgent(agent.project, agent.id);
+		await removePersistedAgent(agent.project, agent.id);
 		debugTracker?.removeAgent(debugAgentKey(agent.project, agent.id));
 		log.info("agent deleted", { id, project: projectNameStr });
 		return ok(undefined);

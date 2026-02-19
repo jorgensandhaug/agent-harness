@@ -175,7 +175,20 @@ describeLive("session/manager.rehydrate.live", () => {
 			await manager1.rehydrateProjectsFromTmux();
 			await manager1.rehydrateAgentsFromTmux();
 
-			const createProject = await manager1.createProject(project, root);
+			const projectCallback = {
+				url: "https://receiver.test/project-default",
+				token: "project-token",
+				discordChannel: "project-alerts",
+				sessionKey: "project-session",
+			};
+			const agentCallback = {
+				url: "https://receiver.test/agent-explicit",
+				token: "agent-token",
+				discordChannel: "agent-alerts",
+				sessionKey: "agent-session",
+			};
+
+			const createProject = await manager1.createProject(project, root, projectCallback);
 			expect(createProject.ok).toBe(true);
 			if (!createProject.ok) throw new Error("project create failed");
 
@@ -185,11 +198,12 @@ describeLive("session/manager.rehydrate.live", () => {
 				"seed",
 				undefined,
 				undefined,
-				undefined,
+				agentCallback,
 				pc.agentName,
 			);
 			expect(createAgent.ok).toBe(true);
 			if (!createAgent.ok) throw new Error("agent create failed");
+			expect(createAgent.value.callback).toEqual(agentCallback);
 
 			const target = createAgent.value.tmuxTarget;
 			const paneIdBefore = await tmux.getPaneVar(target, "pane_id");
@@ -211,6 +225,12 @@ describeLive("session/manager.rehydrate.live", () => {
 			expect(recovered.value[0]?.id).toBe(pc.agentName);
 			expect(recovered.value[0]?.provider).toBe(pc.provider);
 			expect(recovered.value[0]?.tmuxTarget).toBe(target);
+			expect(recovered.value[0]?.callback).toEqual(agentCallback);
+
+			const recoveredProject = manager2.getProject(project);
+			expect(recoveredProject.ok).toBe(true);
+			if (!recoveredProject.ok) throw new Error("project rehydrate failed");
+			expect(recoveredProject.value.callback).toEqual(projectCallback);
 
 			if (pc.provider === "codex") {
 				expect(recovered.value[0]?.providerRuntimeDir).toContain(

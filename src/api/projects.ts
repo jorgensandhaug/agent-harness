@@ -89,7 +89,7 @@ export function registerProjectRoutes(app: Hono, manager: Manager): void {
 			);
 		}
 
-		const result = manager.updateProject(name, {
+		const result = await manager.updateProject(name, {
 			...(parsed.data.cwd !== undefined ? { cwd: parsed.data.cwd } : {}),
 			...(parsed.data.callback ? { callback: parsed.data.callback } : {}),
 		});

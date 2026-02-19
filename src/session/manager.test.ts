@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { HarnessConfig } from "../config.ts";
@@ -124,6 +124,10 @@ function resolveWindow(target: string): { session: SessionState; windowName: str
 	const session = fake.sessions.get(sessionName);
 	if (!session) return null;
 	return { session, windowName };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
 }
 
 beforeEach(() => {
@@ -443,11 +447,26 @@ async function makeTempDir(prefix: string): Promise<string> {
 	return dir;
 }
 
+async function readPersistedCallbackState(logDir: string): Promise<{
+	projects: Record<string, unknown>;
+	agents: Record<string, unknown>;
+}> {
+	const raw = await readFile(join(logDir, "state", "callbacks.json"), "utf8");
+	const parsed: unknown = JSON.parse(raw);
+	const projects = isRecord(parsed) && isRecord(parsed.projects) ? parsed.projects : {};
+	const agents = isRecord(parsed) && isRecord(parsed.agents) ? parsed.agents : {};
+	return { projects, agents };
+}
+
 function makeConfig(): HarnessConfig {
+	const logDir = join(
+		tmpdir(),
+		`ah-manager-test-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+	);
 	return {
 		port: 0,
 		tmuxPrefix: "ah-manager-test",
-		logDir: "./logs",
+		logDir,
 		logLevel: "error",
 		pollIntervalMs: 200,
 		captureLines: 200,
@@ -1051,7 +1070,7 @@ describe("session/manager.subscriptions", () => {
 		expect(projectRes.ok).toBe(true);
 		if (!projectRes.ok) throw new Error("project create failed");
 
-		const updateRes = manager.updateProject("pc-update", {
+		const updateRes = await manager.updateProject("pc-update", {
 			cwd: "/tmp/pc-update-new",
 			callback: {
 				url: "https://receiver.test/updated-default",
@@ -1103,6 +1122,132 @@ describe("session/manager.subscriptions", () => {
 			sessionKey: "session-main",
 			extra: { requestId: "req-1" },
 		});
+	});
+
+	it("rehydrates project and agent callbacks across manager restart", async () => {
+		const logDir = await makeTempDir("ah-callback-rehydrate-");
+		const config = makeConfig();
+		config.logDir = logDir;
+
+		const store1 = createStore();
+		const eventBus1 = createEventBus(500);
+		const manager1 = createManager(config, store1, eventBus1);
+
+		const projectCallback = {
+			url: "https://receiver.test/project-default",
+			token: "project-token",
+			discordChannel: "project-alerts",
+			sessionKey: "project-session",
+		};
+		const agentCallback = {
+			url: "https://receiver.test/agent-explicit",
+			token: "agent-token",
+			discordChannel: "agent-alerts",
+			sessionKey: "agent-session",
+			extra: { requestId: "req-77" },
+		};
+
+		const createProjectRes = await manager1.createProject(
+			"pc-rehydrate",
+			process.cwd(),
+			projectCallback,
+		);
+		expect(createProjectRes.ok).toBe(true);
+		if (!createProjectRes.ok) throw new Error("project create failed");
+
+		const inheritedRes = await manager1.createAgent(
+			"pc-rehydrate",
+			"codex",
+			"Reply with exactly: inherited",
+			undefined,
+			undefined,
+			undefined,
+			"codex-inherited-callback",
+		);
+		expect(inheritedRes.ok).toBe(true);
+		if (!inheritedRes.ok) throw new Error("inherited agent create failed");
+
+		const explicitRes = await manager1.createAgent(
+			"pc-rehydrate",
+			"claude-code",
+			"Reply with exactly: explicit",
+			undefined,
+			undefined,
+			agentCallback,
+			"claude-explicit-callback",
+		);
+		expect(explicitRes.ok).toBe(true);
+		if (!explicitRes.ok) throw new Error("explicit agent create failed");
+
+		const store2 = createStore();
+		const eventBus2 = createEventBus(500);
+		const manager2 = createManager(config, store2, eventBus2);
+		await manager2.rehydrateProjectsFromTmux();
+		await manager2.rehydrateAgentsFromTmux();
+
+		const projectRes = manager2.getProject("pc-rehydrate");
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project rehydrate failed");
+		expect(projectRes.value.callback).toEqual(projectCallback);
+
+		const agentsRes = manager2.listAgents("pc-rehydrate");
+		expect(agentsRes.ok).toBe(true);
+		if (!agentsRes.ok) throw new Error("agent list failed");
+		const inherited = agentsRes.value.find((agent) => agent.id === "codex-inherited-callback");
+		const explicit = agentsRes.value.find((agent) => agent.id === "claude-explicit-callback");
+		expect(inherited?.callback).toEqual(projectCallback);
+		expect(explicit?.callback).toEqual(agentCallback);
+	});
+
+	it("removes persisted callback state when agent/project are deleted", async () => {
+		const logDir = await makeTempDir("ah-callback-prune-");
+		const config = makeConfig();
+		config.logDir = logDir;
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(config, store, eventBus);
+
+		const createProjectRes = await manager.createProject("pc-persist-delete", process.cwd(), {
+			url: "https://receiver.test/project-delete",
+			token: "project-delete-token",
+		});
+		expect(createProjectRes.ok).toBe(true);
+		if (!createProjectRes.ok) throw new Error("project create failed");
+
+		const createAgentRes = await manager.createAgent(
+			"pc-persist-delete",
+			"codex",
+			"Reply with exactly: delete-state",
+			undefined,
+			undefined,
+			{
+				url: "https://receiver.test/agent-delete",
+				token: "agent-delete-token",
+			},
+			"codex-persist-delete",
+		);
+		expect(createAgentRes.ok).toBe(true);
+		if (!createAgentRes.ok) throw new Error("agent create failed");
+
+		const beforeDelete = await readPersistedCallbackState(logDir);
+		expect(beforeDelete.projects["pc-persist-delete"]).toBeDefined();
+		expect(beforeDelete.agents["pc-persist-delete:codex-persist-delete"]).toBeDefined();
+
+		const deleteAgentRes = await manager.deleteAgent("pc-persist-delete", "codex-persist-delete");
+		expect(deleteAgentRes.ok).toBe(true);
+		if (!deleteAgentRes.ok) throw new Error("agent delete failed");
+
+		const afterAgentDelete = await readPersistedCallbackState(logDir);
+		expect(afterAgentDelete.projects["pc-persist-delete"]).toBeDefined();
+		expect(afterAgentDelete.agents["pc-persist-delete:codex-persist-delete"]).toBeUndefined();
+
+		const deleteProjectRes = await manager.deleteProject("pc-persist-delete");
+		expect(deleteProjectRes.ok).toBe(true);
+		if (!deleteProjectRes.ok) throw new Error("project delete failed");
+
+		const afterProjectDelete = await readPersistedCallbackState(logDir);
+		expect(afterProjectDelete.projects["pc-persist-delete"]).toBeUndefined();
+		expect(afterProjectDelete.agents["pc-persist-delete:codex-persist-delete"]).toBeUndefined();
 	});
 
 	it("rejects unknown subscription id", async () => {
@@ -1253,9 +1398,10 @@ describe("session/manager.subscriptions", () => {
 
 describe("session/manager.rehydrate", () => {
 	it("rehydrates codex agents from existing tmux sessions/windows and is idempotent", async () => {
+		const config = makeConfig();
 		const sourceStore = createStore();
 		const sourceBus = createEventBus(500);
-		const sourceManager = createManager(makeConfig(), sourceStore, sourceBus);
+		const sourceManager = createManager(config, sourceStore, sourceBus);
 
 		const projectRes = await sourceManager.createProject("pr1", process.cwd());
 		expect(projectRes.ok).toBe(true);
@@ -1275,7 +1421,7 @@ describe("session/manager.rehydrate", () => {
 
 		const recoveredStore = createStore();
 		const recoveredBus = createEventBus(500);
-		const recoveredManager = createManager(makeConfig(), recoveredStore, recoveredBus);
+		const recoveredManager = createManager(config, recoveredStore, recoveredBus);
 
 		await recoveredManager.rehydrateProjectsFromTmux();
 		await recoveredManager.rehydrateAgentsFromTmux();
@@ -1295,9 +1441,7 @@ describe("session/manager.rehydrate", () => {
 		expect(recoveredAgents.value[0]?.attachCommand).toContain("ah-manager-test-pr1");
 		expect(recoveredAgents.value[0]?.status).toBe("idle");
 		expect(recoveredAgents.value[0]?.lastCapturedOutput).toContain(">");
-		expect(recoveredAgents.value[0]?.providerRuntimeDir).toContain(
-			"logs/codex/pr1/agent-reattach-1",
-		);
+		expect(recoveredAgents.value[0]?.providerRuntimeDir).toContain("/codex/pr1/agent-reattach-1");
 	});
 
 	it("rehydrates claude agents and restores provider session file path", async () => {
