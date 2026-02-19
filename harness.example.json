@@ -1,0 +1,22 @@
+{
+  "port": 7070,
+  "bindAddress": "127.0.0.1",
+  "logLevel": "info",
+  "auth": {
+    "token": "replace-with-strong-random-token"
+  },
+  "providers": {
+    "claude-code": {
+      "command": "claude",
+      "extraArgs": [],
+      "env": {},
+      "enabled": true
+    },
+    "codex": {
+      "command": "codex",
+      "extraArgs": [],
+      "env": {},
+      "enabled": true
+    }
+  }
+}

@@ -1,5 +1,10 @@
 # Agent Harness
 
+## Config
+
+- `harness.example.json` and `webhook-receiver.example.json` provide safe starter configs.
+- Keep runtime overrides local (`harness.json`, `webhook-receiver.json`, `*.local.json`) since they are gitignored.
+
 ## Inspector
 
 Run:

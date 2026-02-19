@@ -4,3 +4,7 @@ logs/
 *.log
 .env
 docs/licenses/dependency-license-inventory.json
+harness.json
+harness.local.json
+webhook-receiver.json
+webhook-receiver.local.json

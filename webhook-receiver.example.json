@@ -1,0 +1,6 @@
+{
+  "port": 7071,
+  "bindAddress": "127.0.0.1",
+  "token": "replace-with-strong-random-token",
+  "discordBotToken": "replace-with-discord-bot-token"
+}
