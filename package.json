@@ -1,6 +1,15 @@
 {
   "name": "agent-harness",
   "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jorgensandhaug/agent-harness.git"
+  },
+  "homepage": "https://github.com/jorgensandhaug/agent-harness#readme",
+  "bugs": {
+    "url": "https://github.com/jorgensandhaug/agent-harness/issues"
+  },
   "type": "module",
   "bin": {
     "agent-harness": "./agent-harness"
@@ -21,7 +30,8 @@
     "smoke:codex": "bun run src/smoke.ts --provider codex",
     "smoke:pi": "bun run src/smoke.ts --provider pi",
     "smoke:opencode": "bun run src/smoke.ts --provider opencode",
-    "smoke:all": "bun run src/smoke.ts --all"
+    "smoke:all": "bun run src/smoke.ts --all",
+    "licenses:inventory": "mkdir -p docs/licenses && bunx --bun license-checker --json --customPath docs/licenses/license-checker-format.json --out docs/licenses/dependency-license-inventory.json"
   },
   "dependencies": {
     "hono": "^4.7.0",
