@@ -29,7 +29,7 @@ type SessionState = {
 
 class FakeTmux {
 	private sessions = new Map<string, SessionState>();
-	private pasteBuffer = "";
+	private pasteBuffers = new Map<string, string>();
 	private nextPaneId = 1;
 
 	spawn(cmd: readonly string[]): ReturnType<typeof Bun.spawn> {
@@ -162,10 +162,15 @@ class FakeTmux {
 	}
 
 	private loadBuffer(args: readonly string[]): ReturnType<typeof Bun.spawn> {
-		const path = args[1];
+		const namedBuffer = this.arg(args, "-b");
+		const namedBufferIndex = args.indexOf("-b");
+		const path = namedBuffer
+			? (namedBufferIndex !== -1 ? args[namedBufferIndex + 2] : undefined)
+			: args[1];
 		if (!path) return this.fail("missing path");
 		try {
-			this.pasteBuffer = readFileSync(path, "utf8");
+			const key = namedBuffer ?? "__default__";
+			this.pasteBuffers.set(key, readFileSync(path, "utf8"));
 			return this.ok();
 		} catch {
 			return this.fail("load buffer failed");
@@ -174,12 +179,17 @@ class FakeTmux {
 
 	private pasteBufferToPane(args: readonly string[]): ReturnType<typeof Bun.spawn> {
 		const target = this.arg(args, "-t");
+		const namedBuffer = this.arg(args, "-b");
 		if (!target) return this.fail("can't find window");
 		const pane = this.resolvePane(target);
 		if (!pane) return this.fail("can't find window");
-		if (typeof this.pasteBuffer !== "string") return this.fail("buffer empty");
+		const key = namedBuffer ?? "__default__";
+		const text = this.pasteBuffers.get(key);
+		if (typeof text !== "string") return this.fail("buffer empty");
+		if (args.includes("-d")) {
+			this.pasteBuffers.delete(key);
+		}
 
-		const text = this.pasteBuffer;
 		pane.buffer += text;
 		return this.ok();
 	}

@@ -51,13 +51,13 @@ type SessionState = {
 type FakeTmuxState = {
 	sessions: Map<string, SessionState>;
 	nextPaneId: number;
-	pasteBuffer: string;
+	pasteBuffers: Map<string, string>;
 };
 
 const fake: FakeTmuxState = {
 	sessions: new Map(),
 	nextPaneId: 1,
-	pasteBuffer: "",
+	pasteBuffers: new Map(),
 };
 let simulateSlowCodexStartup = false;
 let simulateClaudeStartupConfirm = false;
@@ -69,7 +69,7 @@ const cleanupDirs: string[] = [];
 function resetFake(): void {
 	fake.sessions.clear();
 	fake.nextPaneId = 1;
-	fake.pasteBuffer = "";
+	fake.pasteBuffers.clear();
 }
 
 function proc(exitCode: number, stdout = "", stderr = ""): ReturnType<typeof Bun.spawn> {
@@ -215,10 +215,15 @@ beforeEach(() => {
 				return proc(0, `${paneId}\n`);
 			}
 			case "load-buffer": {
-				const path = args[1];
+				const namedBuffer = arg(args, "-b");
+				const namedBufferIndex = args.indexOf("-b");
+				const path = namedBuffer
+					? (namedBufferIndex !== -1 ? args[namedBufferIndex + 2] : undefined)
+					: args[1];
 				if (!path) return proc(1, "", "missing path");
 				try {
-					fake.pasteBuffer = readFileSync(path, "utf8");
+					const key = namedBuffer ?? "__default__";
+					fake.pasteBuffers.set(key, readFileSync(path, "utf8"));
 					return proc(0);
 				} catch {
 					return proc(1, "", "load buffer failed");
@@ -226,11 +231,19 @@ beforeEach(() => {
 			}
 			case "paste-buffer": {
 				const target = arg(args, "-t");
+				const namedBuffer = arg(args, "-b");
 				if (!target) return proc(1, "", "can't find window");
 				const resolved = resolveWindow(target);
 				if (!resolved) return proc(1, "", "can't find window");
 				const window = resolved.session.windows.get(resolved.windowName);
 				if (!window) return proc(1, "", "can't find window");
+				const key = namedBuffer ?? "__default__";
+				const text = fake.pasteBuffers.get(key);
+				if (typeof text !== "string") return proc(1, "", "buffer empty");
+				const shouldDelete = args.includes("-d");
+				if (shouldDelete) {
+					fake.pasteBuffers.delete(key);
+				}
 				window.lastPasteAtMs = Date.now();
 				if (window.requiresStartupConfirm && !window.startupConfirmed) {
 					// Startup prompt swallows pasted task text until user confirms trust prompt.
@@ -244,21 +257,21 @@ beforeEach(() => {
 				if (
 					simulateCodexCollapsedPasteSubmit &&
 					window.provider === "codex" &&
-					fake.pasteBuffer.length >= 256
+					text.length >= 256
 				) {
 					window.pendingCollapsedPasteSubmit = true;
-					window.collapsedPasteChars = fake.pasteBuffer.length;
+					window.collapsedPasteChars = text.length;
 					window.collapsedPasteMarkerArmedAtMs =
 						Date.now() + simulateCodexCollapsedPasteMarkerDelayMs;
 					if (simulateCodexCollapsedPasteMarkerDelayMs <= 0) {
 						window.collapsedPasteMarkerInjected = true;
-						window.buffer += collapsedPasteMarkers(fake.pasteBuffer.length);
+						window.buffer += collapsedPasteMarkers(text.length);
 					} else {
 						window.collapsedPasteMarkerInjected = false;
 					}
 					return proc(0);
 				}
-				window.buffer += fake.pasteBuffer;
+				window.buffer += text;
 				return proc(0);
 			}
 			case "send-keys": {

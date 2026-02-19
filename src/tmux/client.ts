@@ -219,6 +219,11 @@ function pasteSettleDelayMs(): number {
 	return 120;
 }
 
+function tmuxInputBufferName(): string {
+	const suffix = Math.random().toString(36).slice(2);
+	return `ah-input-${Date.now()}-${suffix}`;
+}
+
 export async function createSession(name: string, cwd: string): Promise<Result<void, TmuxError>> {
 	const result = await exec(["new-session", "-d", "-s", name, "-c", cwd, "-x", "220", "-y", "50"]);
 	if (!result.ok) return result;
@@ -313,15 +318,16 @@ export async function sendInput(target: string, text: string): Promise<Result<vo
 export async function pasteInput(target: string, text: string): Promise<Result<void, TmuxError>> {
 	// Write text to temp file, load into tmux buffer, and paste into target pane.
 	const tempPath = join(tmpdir(), `ah-input-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+	const bufferName = tmuxInputBufferName();
 	await Bun.write(tempPath, text);
 
 	try {
-		const loadResult = await exec(["load-buffer", tempPath]);
+		const loadResult = await exec(["load-buffer", "-b", bufferName, tempPath]);
 		if (!loadResult.ok) return loadResult;
 
 		// Avoid bracketed paste mode here; some TUIs keep pasted newlines in the editor
 		// instead of submitting on Enter when bracketed paste is enabled.
-		const pasteResult = await exec(["paste-buffer", "-t", target, "-d"]);
+		const pasteResult = await exec(["paste-buffer", "-b", bufferName, "-t", target, "-d"]);
 		if (!pasteResult.ok) return pasteResult;
 		return ok(undefined);
 	} finally {

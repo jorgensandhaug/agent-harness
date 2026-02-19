@@ -133,11 +133,26 @@ describe("tmux/client.command-shape", () => {
 				(call) =>
 					call[0] === "tmux" &&
 					call[1] === "load-buffer" &&
-					typeof call[2] === "string" &&
-					call[2].length > 0,
+					call[2] === "-b" &&
+					typeof call[3] === "string" &&
+					call[3].startsWith("ah-input-") &&
+					typeof call[4] === "string" &&
+					call[4].length > 0,
 			),
 		).toBe(true);
-		expect(state.calls).toContainEqual(["tmux", "paste-buffer", "-t", "ah-p:1.0", "-d"]);
+		expect(
+			state.calls.some(
+				(call) =>
+					call[0] === "tmux" &&
+					call[1] === "paste-buffer" &&
+					call[2] === "-b" &&
+					typeof call[3] === "string" &&
+					call[3].startsWith("ah-input-") &&
+					call[4] === "-t" &&
+					call[5] === "ah-p:1.0" &&
+					call[6] === "-d",
+			),
+		).toBe(true);
 		expect(state.calls).toContainEqual(["tmux", "send-keys", "-t", "ah-p:1.0", "Enter"]);
 		expect(state.calls).toContainEqual(["tmux", "send-keys", "-t", "ah-p:1.0", "C-c"]);
 		expect(state.calls).toContainEqual([
@@ -183,5 +198,41 @@ describe("tmux/client.command-shape", () => {
 			"#{pane_dead}",
 		]);
 		expect(state.calls).toContainEqual(["tmux", "set-environment", "-t", "ah-p", "B", "2"]);
+	});
+
+	it("uses distinct named tmux buffers for parallel sends to avoid cross-wire", async () => {
+		await Promise.all([sendInput("ah-p:1.0", "alpha"), sendInput("ah-p:2.0", "beta")]);
+
+		const loadCalls = state.calls.filter((call) => call[0] === "tmux" && call[1] === "load-buffer");
+		expect(loadCalls.length).toBe(2);
+
+		const buffers = new Set<string>();
+		for (const call of loadCalls) {
+			expect(call[2]).toBe("-b");
+			const bufferName = call[3];
+			if (typeof bufferName !== "string") {
+				throw new Error("missing tmux buffer name in load-buffer call");
+			}
+			expect(bufferName.startsWith("ah-input-")).toBe(true);
+			expect(buffers.has(bufferName)).toBe(false);
+			buffers.add(bufferName);
+		}
+
+		const pasteCalls = state.calls.filter((call) => call[0] === "tmux" && call[1] === "paste-buffer");
+		expect(pasteCalls.length).toBe(2);
+		const targets = new Set<string>();
+		for (const call of pasteCalls) {
+			expect(call[2]).toBe("-b");
+			const bufferName = call[3];
+			if (typeof bufferName !== "string") {
+				throw new Error("missing tmux buffer name in paste-buffer call");
+			}
+			expect(buffers.has(bufferName)).toBe(true);
+			expect(call[4]).toBe("-t");
+			targets.add(String(call[5]));
+			expect(call[6]).toBe("-d");
+		}
+
+		expect(targets).toEqual(new Set(["ah-p:1.0", "ah-p:2.0"]));
 	});
 });
