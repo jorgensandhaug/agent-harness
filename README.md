@@ -31,6 +31,43 @@ bun run smoke
 
 Smoke auto-copies attach command at agent start and supports `c` to copy again while running.
 
+## Subscription Discovery
+
+Discovery is config-driven via `subscriptionDiscovery.sources` and `subscriptionDiscovery.profiles`.
+
+```json
+{
+  "subscriptionDiscovery": {
+    "enabled": true,
+    "includeDefaults": true,
+    "sources": {
+      "claude_env": { "kind": "env", "name": "CLOUDGENI_CLAUDE_TOKEN" },
+      "openai_op": {
+        "kind": "command",
+        "command": "op",
+        "args": ["read", "op://vault/item/openai_api_key"]
+      }
+    },
+    "profiles": [
+      {
+        "provider": "claude-code",
+        "source": "claude_env",
+        "valueType": "token",
+        "label": "cloudgeni"
+      },
+      {
+        "provider": "codex",
+        "source": "openai_op",
+        "valueType": "apiKey",
+        "label": "op"
+      }
+    ]
+  }
+}
+```
+
+Legacy fields (`claudeDirs`, `claudeTokenFiles`, `codexDirs`) still work.
+
 ## Messages API (Internals-First)
 
 Structured provider-internals messages (not tmux pane text):

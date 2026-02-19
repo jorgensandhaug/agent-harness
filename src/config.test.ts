@@ -67,6 +67,8 @@ describe("config/load.defaults", () => {
 		expect(config.subscriptionDiscovery).toEqual({
 			enabled: true,
 			includeDefaults: true,
+			sources: {},
+			profiles: [],
 			claudeDirs: [],
 			claudeTokenFiles: [],
 			codexDirs: [],
@@ -251,6 +253,20 @@ describe("config/load.valid-file", () => {
 				subscriptionDiscovery: {
 					enabled: false,
 					includeDefaults: false,
+					sources: {
+						claude_token: {
+							kind: "env",
+							name: "CLOUDGENI_CLAUDE_TOKEN",
+						},
+					},
+					profiles: [
+						{
+							provider: "claude-code",
+							source: "claude_token",
+							valueType: "token",
+							label: "cloudgeni",
+						},
+					],
 					claudeDirs: ["/tmp/claude-work"],
 					claudeTokenFiles: ["/tmp/claude-tokens/default.token"],
 					codexDirs: ["/tmp/codex-team"],
@@ -262,6 +278,21 @@ describe("config/load.valid-file", () => {
 		expect(config.subscriptionDiscovery).toEqual({
 			enabled: false,
 			includeDefaults: false,
+			sources: {
+				claude_token: {
+					kind: "env",
+					name: "CLOUDGENI_CLAUDE_TOKEN",
+				},
+			},
+			profiles: [
+				{
+					provider: "claude-code",
+					source: "claude_token",
+					valueType: "token",
+					label: "cloudgeni",
+					enabled: true,
+				},
+			],
 			claudeDirs: ["/tmp/claude-work"],
 			claudeTokenFiles: ["/tmp/claude-tokens/default.token"],
 			codexDirs: ["/tmp/codex-team"],

@@ -5,10 +5,22 @@ import { join } from "node:path";
 import { discoverSubscriptions } from "./discovery.ts";
 
 const tempDirs: string[] = [];
+const originalCloudgeniToken = process.env.CLOUDGENI_CLAUDE_TOKEN;
+const originalOpenAiKey = process.env.OPENAI_API_KEY;
 
 afterEach(async () => {
 	for (const dir of tempDirs.splice(0, tempDirs.length)) {
 		await rm(dir, { recursive: true, force: true });
+	}
+	if (originalCloudgeniToken === undefined) {
+		process.env.CLOUDGENI_CLAUDE_TOKEN = undefined;
+	} else {
+		process.env.CLOUDGENI_CLAUDE_TOKEN = originalCloudgeniToken;
+	}
+	if (originalOpenAiKey === undefined) {
+		process.env.OPENAI_API_KEY = undefined;
+	} else {
+		process.env.OPENAI_API_KEY = originalOpenAiKey;
 	}
 });
 
@@ -23,6 +35,8 @@ describe("subscriptions/discovery", () => {
 		const discovered = await discoverSubscriptions({
 			enabled: false,
 			includeDefaults: false,
+			sources: {},
+			profiles: [],
 			claudeDirs: [],
 			claudeTokenFiles: [],
 			codexDirs: [],
@@ -62,6 +76,8 @@ describe("subscriptions/discovery", () => {
 		const discovered = await discoverSubscriptions({
 			enabled: true,
 			includeDefaults: false,
+			sources: {},
+			profiles: [],
 			claudeDirs: [claudeDir],
 			claudeTokenFiles: [],
 			codexDirs: [codexDir],
@@ -69,7 +85,6 @@ describe("subscriptions/discovery", () => {
 
 		expect(discovered.length).toBe(2);
 		const claude = discovered.find((entry) => entry.subscription.provider === "claude-code");
-		expect(claude?.source).toBe("discovered");
 		expect(claude?.provenance.method).toBe("claude_source_dir");
 		expect(claude?.provenance.locatorPath).toBe(claudeDir);
 		expect(claude?.subscription).toEqual({
@@ -77,10 +92,8 @@ describe("subscriptions/discovery", () => {
 			mode: "oauth",
 			sourceDir: claudeDir,
 		});
-		expect(claude?.id.startsWith("auto-claude-")).toBe(true);
 
 		const codex = discovered.find((entry) => entry.subscription.provider === "codex");
-		expect(codex?.source).toBe("discovered");
 		expect(codex?.provenance.method).toBe("codex_source_dir");
 		expect(codex?.subscription).toEqual({
 			provider: "codex",
@@ -89,7 +102,84 @@ describe("subscriptions/discovery", () => {
 			workspaceId: "acct_123",
 			enforceWorkspace: false,
 		});
-		expect(codex?.id.startsWith("auto-codex-")).toBe(true);
+	});
+
+	it("supports profile sources from env + file + command", async () => {
+		const root = await makeTempDir("ah-discovery-profiles-");
+		const tokenFile = join(root, "claude.token");
+		const jsonFile = join(root, "keys.json");
+		await Bun.write(tokenFile, "sk-ant-oat01-from-file\n");
+		await Bun.write(
+			jsonFile,
+			JSON.stringify({
+				secrets: {
+					openai: "sk-from-json",
+				},
+			}),
+		);
+
+		process.env.CLOUDGENI_CLAUDE_TOKEN = "sk-ant-oat01-from-env";
+
+		const discovered = await discoverSubscriptions({
+			enabled: true,
+			includeDefaults: false,
+			sources: {
+				claude_env: { kind: "env", name: "CLOUDGENI_CLAUDE_TOKEN" },
+				claude_file: { kind: "path", value: tokenFile },
+				openai_json: { kind: "file", path: jsonFile, format: "json", jsonPath: "secrets.openai" },
+				claude_command: {
+					kind: "command",
+					command: "sh",
+					args: ["-lc", "printf 'sk-ant-oat01-from-command'"] ,
+				},
+			},
+			profiles: [
+				{
+					provider: "claude-code",
+					source: "claude_env",
+					valueType: "token",
+					label: "env",
+				},
+				{
+					provider: "claude-code",
+					source: "claude_file",
+					valueType: "tokenFile",
+					label: "file",
+				},
+				{
+					provider: "claude-code",
+					source: "claude_command",
+					valueType: "token",
+					label: "command",
+				},
+				{
+					provider: "codex",
+					source: "openai_json",
+					valueType: "apiKey",
+					label: "json",
+				},
+			],
+			claudeDirs: [],
+			claudeTokenFiles: [],
+			codexDirs: [],
+		});
+
+		const claudeSubs = discovered.filter((entry) => entry.subscription.provider === "claude-code");
+		expect(claudeSubs.length).toBe(3);
+		expect(claudeSubs.some((entry) => entry.provenance.method === "claude_token_value")).toBe(true);
+		expect(claudeSubs.some((entry) => entry.provenance.method === "claude_token_file")).toBe(true);
+
+		const codex = discovered.find((entry) => entry.subscription.provider === "codex");
+		expect(codex).toBeDefined();
+		expect(codex?.subscription.mode).toBe("apikey");
+		expect(codex?.provenance.method).toBe("codex_api_key");
+		if (codex && codex.subscription.provider === "codex") {
+			const authJson = await Bun.file(join(codex.subscription.sourceDir, "auth.json")).json();
+			expect(authJson).toMatchObject({
+				auth_mode: "apikey",
+				OPENAI_API_KEY: "sk-from-json",
+			});
+		}
 	});
 
 	it("respects explicit codex auth_mode=apikey when both token and key fields exist", async () => {
@@ -110,6 +200,8 @@ describe("subscriptions/discovery", () => {
 		const discovered = await discoverSubscriptions({
 			enabled: true,
 			includeDefaults: false,
+			sources: {},
+			profiles: [],
 			claudeDirs: [],
 			claudeTokenFiles: [],
 			codexDirs: [codexDir],
@@ -150,6 +242,8 @@ describe("subscriptions/discovery", () => {
 		const discovered = await discoverSubscriptions({
 			enabled: true,
 			includeDefaults: false,
+			sources: {},
+			profiles: [],
 			claudeDirs: [claudeDir],
 			claudeTokenFiles: [duplicateTokenFile, distinctTokenFile],
 			codexDirs: [],

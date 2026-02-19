@@ -74,10 +74,81 @@ const SubscriptionConfigSchema = z.discriminatedUnion("provider", [
 	CodexSubscriptionSchema,
 ]);
 
+const DiscoverySourcePathSchema = z
+	.object({
+		kind: z.literal("path"),
+		value: z.string().min(1),
+	})
+	.strict();
+
+const DiscoverySourceEnvSchema = z
+	.object({
+		kind: z.literal("env"),
+		name: z.string().min(1),
+	})
+	.strict();
+
+const DiscoverySourceFileSchema = z
+	.object({
+		kind: z.literal("file"),
+		path: z.string().min(1),
+		format: z.enum(["text", "json"]).default("text"),
+		jsonPath: z.string().min(1).optional(),
+	})
+	.strict();
+
+const DiscoverySourceCommandSchema = z
+	.object({
+		kind: z.literal("command"),
+		command: z.string().min(1),
+		args: z.array(z.string()).default([]),
+	})
+	.strict();
+
+const DiscoverySourceSchema = z.discriminatedUnion("kind", [
+	DiscoverySourcePathSchema,
+	DiscoverySourceEnvSchema,
+	DiscoverySourceFileSchema,
+	DiscoverySourceCommandSchema,
+]);
+
+const ClaudeDiscoveryProfileSchema = z
+	.object({
+		provider: z.literal("claude-code"),
+		mode: z.literal("oauth").optional(),
+		source: z.string().min(1),
+		valueType: z.enum(["sourceDir", "tokenFile", "token"]),
+		id: z.string().min(1).optional(),
+		label: z.string().min(1).optional(),
+		enabled: z.boolean().default(true),
+	})
+	.strict();
+
+const CodexDiscoveryProfileSchema = z
+	.object({
+		provider: z.literal("codex"),
+		mode: z.enum(["chatgpt", "apikey"]).optional(),
+		source: z.string().min(1),
+		valueType: z.enum(["sourceDir", "apiKey"]),
+		id: z.string().min(1).optional(),
+		label: z.string().min(1).optional(),
+		enabled: z.boolean().default(true),
+		workspaceId: z.string().min(1).optional(),
+		enforceWorkspace: z.boolean().default(false),
+	})
+	.strict();
+
+const DiscoveryProfileSchema = z.discriminatedUnion("provider", [
+	ClaudeDiscoveryProfileSchema,
+	CodexDiscoveryProfileSchema,
+]);
+
 const SubscriptionDiscoveryConfigSchema = z
 	.object({
 		enabled: z.boolean().default(true),
 		includeDefaults: z.boolean().default(true),
+		sources: z.record(DiscoverySourceSchema).default({}),
+		profiles: z.array(DiscoveryProfileSchema).default([]),
 		claudeDirs: z.array(z.string().min(1)).default([]),
 		claudeTokenFiles: z.array(z.string().min(1)).default([]),
 		codexDirs: z.array(z.string().min(1)).default([]),
@@ -168,6 +239,8 @@ export type WebhookConfig = z.infer<typeof WebhookConfigSchema>;
 export type WebhookEvent = z.infer<typeof WebhookEventSchema>;
 export type WebhookSafetyNetConfig = z.infer<typeof WebhookSafetyNetConfigSchema>;
 export type SubscriptionConfig = z.infer<typeof SubscriptionConfigSchema>;
+export type DiscoverySourceConfig = z.infer<typeof DiscoverySourceSchema>;
+export type DiscoveryProfileConfig = z.infer<typeof DiscoveryProfileSchema>;
 export type SubscriptionDiscoveryConfig = z.infer<typeof SubscriptionDiscoveryConfigSchema>;
 
 function nonEmpty(value: string | undefined): string | undefined {
@@ -268,6 +341,8 @@ export async function loadConfig(path?: string): Promise<HarnessConfig> {
 			subscriptionDiscovery: {
 				enabled: true,
 				includeDefaults: true,
+				sources: {},
+				profiles: [],
 				claudeDirs: [],
 				claudeTokenFiles: [],
 				codexDirs: [],
