@@ -16,7 +16,7 @@ describe("poller/claude-internals.readClaudeInternalsStatus", () => {
 		await Promise.all(cleanup.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 	});
 
-	it("tracks queue enqueue -> user -> assistant transitions", async () => {
+	it("tracks queue enqueue -> user -> assistant -> queue remove transitions", async () => {
 		const root = await mkdtemp(join(tmpdir(), "ah-claude-internals-"));
 		cleanup.push(root);
 		const sessionFile = join(root, "session.jsonl");
@@ -44,7 +44,7 @@ describe("poller/claude-internals.readClaudeInternalsStatus", () => {
 			JSON.stringify({ type: "queue-operation", operation: "enqueue" }),
 			JSON.stringify({ type: "user" }),
 			JSON.stringify({ type: "assistant", message: { stop_reason: null } }),
-			JSON.stringify({ type: "assistant", message: { stop_reason: "end_turn" } }),
+			JSON.stringify({ type: "queue-operation", operation: "remove" }),
 		]);
 		const fourth = await readClaudeInternalsStatus(sessionFile, third.cursor);
 		expect(fourth.status).toBe("idle");
@@ -91,6 +91,31 @@ describe("poller/claude-internals.readClaudeInternalsStatus", () => {
 		await append(sessionFile, [
 			JSON.stringify({ type: "assistant", message: { stop_reason: "error" } }),
 			JSON.stringify({ type: "assistant", message: { stop_reason: "end_turn" } }),
+		]);
+		const second = await readClaudeInternalsStatus(sessionFile, first.cursor);
+		expect(second.status).toBe("idle");
+	});
+
+	it("maps system turn completion records to idle", async () => {
+		const root = await mkdtemp(join(tmpdir(), "ah-claude-internals-"));
+		cleanup.push(root);
+		const sessionFile = join(root, "session.jsonl");
+
+		await append(sessionFile, [
+			JSON.stringify({ type: "user" }),
+			JSON.stringify({ type: "assistant", message: { stop_reason: null } }),
+			JSON.stringify({ type: "system", subtype: "stop_hook_summary" }),
+		]);
+		const first = await readClaudeInternalsStatus(sessionFile, newClaudeInternalsCursor());
+		expect(first.status).toBe("idle");
+
+		await append(sessionFile, [
+			JSON.stringify({ type: "user" }),
+			JSON.stringify({ type: "assistant", message: { stop_reason: null } }),
+			JSON.stringify({ type: "system", subtype: "stop_hook_summary" }),
+			JSON.stringify({ type: "user" }),
+			JSON.stringify({ type: "assistant", message: { stop_reason: null } }),
+			JSON.stringify({ type: "system", subtype: "turn_duration" }),
 		]);
 		const second = await readClaudeInternalsStatus(sessionFile, first.cursor);
 		expect(second.status).toBe("idle");

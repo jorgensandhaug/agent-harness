@@ -16,6 +16,7 @@ export type ClaudeInternalsResult = {
 type ClaudeRecord = {
 	type?: unknown;
 	operation?: unknown;
+	subtype?: unknown;
 	level?: unknown;
 	message?: {
 		stop_reason?: unknown;
@@ -41,6 +42,7 @@ function statusFromRecord(record: ClaudeRecord): AgentStatus | null {
 	if (type === "queue-operation") {
 		const operation = typeof record.operation === "string" ? record.operation : null;
 		if (operation === "enqueue") return "processing";
+		if (operation === "remove") return "idle";
 		return null;
 	}
 	if (type === "user") return "processing";
@@ -55,6 +57,8 @@ function statusFromRecord(record: ClaudeRecord): AgentStatus | null {
 	if (type === "system") {
 		const level = typeof record.level === "string" ? record.level : null;
 		if (level === "error") return "error";
+		const subtype = typeof record.subtype === "string" ? record.subtype : null;
+		if (subtype === "turn_duration" || subtype === "stop_hook_summary") return "idle";
 	}
 	return null;
 }
