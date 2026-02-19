@@ -60,37 +60,7 @@ describe("poller/codex-internals.readCodexInternalsStatus", () => {
 		expect(second.status).toBe("processing");
 	});
 
-	it("ignores task_complete for subagent sessions", async () => {
-		const root = await mkdtemp(join(tmpdir(), "ah-codex-internals-"));
-		const sessionsDir = join(root, "sessions", "2026", "02", "17");
-		await mkdir(sessionsDir, { recursive: true });
-		const file = join(sessionsDir, "rollout-2026-02-17T19-01-27-thread.jsonl");
-
-		await append(file, [
-			JSON.stringify({
-				type: "session_meta",
-				payload: {
-					source: {
-						subagent: {
-							thread_spawn: {
-								parent_thread_id: "parent-thread",
-								depth: 1,
-							},
-						},
-					},
-				},
-			}),
-			JSON.stringify({ type: "event_msg", payload: { type: "task_started" } }),
-			JSON.stringify({ type: "event_msg", payload: { type: "task_complete" } }),
-		]);
-
-		const result = await readCodexInternalsStatus(root, newCodexInternalsCursor());
-		expect(result.status).toBe("processing");
-		expect(result.cursor.isSubagentSession).toBe(true);
-		expect(result.parseErrorCount).toBe(0);
-	});
-
-	it("prefers newest non-subagent session when latest session is from a subagent", async () => {
+	it("pins the first discovered session file and ignores newer session files", async () => {
 		const root = await mkdtemp(join(tmpdir(), "ah-codex-internals-"));
 		const sessionsDir = join(root, "sessions", "2026", "02", "17");
 		await mkdir(sessionsDir, { recursive: true });
@@ -99,29 +69,27 @@ describe("poller/codex-internals.readCodexInternalsStatus", () => {
 
 		await append(mainFile, [
 			JSON.stringify({ type: "event_msg", payload: { type: "task_started" } }),
-			JSON.stringify({ type: "event_msg", payload: { type: "task_complete" } }),
 		]);
 		await append(subagentFile, [
-			JSON.stringify({
-				type: "session_meta",
-				payload: {
-					source: {
-						subagent: {
-							thread_spawn: {
-								parent_thread_id: "parent-thread",
-								depth: 1,
-							},
-						},
-					},
-				},
-			}),
 			JSON.stringify({ type: "event_msg", payload: { type: "task_started" } }),
 			JSON.stringify({ type: "event_msg", payload: { type: "task_complete" } }),
 		]);
 
-		const result = await readCodexInternalsStatus(root, newCodexInternalsCursor());
-		expect(result.cursor.sessionFile).toBe(mainFile);
-		expect(result.status).toBe("idle");
-		expect(result.parseErrorCount).toBe(0);
+		let cursor = newCodexInternalsCursor();
+		const first = await readCodexInternalsStatus(root, cursor);
+		cursor = first.cursor;
+		expect(first.cursor.sessionFile).toBe(mainFile);
+		expect(first.status).toBe("processing");
+
+		const second = await readCodexInternalsStatus(root, cursor);
+		cursor = second.cursor;
+		expect(second.cursor.sessionFile).toBe(mainFile);
+		expect(second.status).toBe("processing");
+
+		await append(mainFile, [JSON.stringify({ type: "event_msg", payload: { type: "task_complete" } })]);
+		const third = await readCodexInternalsStatus(root, cursor);
+		expect(third.cursor.sessionFile).toBe(mainFile);
+		expect(third.status).toBe("idle");
+		expect(third.parseErrorCount).toBe(0);
 	});
 });

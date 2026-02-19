@@ -7,7 +7,6 @@ export type CodexInternalsCursor = {
 	offset: number;
 	partialLine: string;
 	lastStatus: AgentStatus | null;
-	isSubagentSession: boolean | null;
 };
 
 export type CodexInternalsResult = {
@@ -31,28 +30,22 @@ type EventMessagePayload = {
 	type?: unknown;
 };
 
-type SessionMetaPayload = {
-	source?: unknown;
-};
-
 export function newCodexInternalsCursor(): CodexInternalsCursor {
 	return {
 		sessionFile: null,
 		offset: 0,
 		partialLine: "",
 		lastStatus: null,
-		isSubagentSession: null,
 	};
 }
 
-async function sessionFilesNewestFirst(sessionsRoot: string): Promise<string[]> {
+async function sessionFilesOldestFirst(sessionsRoot: string): Promise<string[]> {
 	const files: string[] = [];
 	const years = await readdir(sessionsRoot, { withFileTypes: true });
 	const sortedYears = years
 		.filter((entry) => entry.isDirectory())
 		.map((entry) => entry.name)
-		.sort()
-		.reverse();
+		.sort();
 
 	for (const year of sortedYears) {
 		const yearPath = join(sessionsRoot, year);
@@ -60,8 +53,7 @@ async function sessionFilesNewestFirst(sessionsRoot: string): Promise<string[]> 
 		const sortedMonths = months
 			.filter((entry) => entry.isDirectory())
 			.map((entry) => entry.name)
-			.sort()
-			.reverse();
+			.sort();
 
 		for (const month of sortedMonths) {
 			const monthPath = join(yearPath, month);
@@ -69,8 +61,7 @@ async function sessionFilesNewestFirst(sessionsRoot: string): Promise<string[]> 
 			const sortedDays = days
 				.filter((entry) => entry.isDirectory())
 				.map((entry) => entry.name)
-				.sort()
-				.reverse();
+				.sort();
 
 			for (const day of sortedDays) {
 				const dayPath = join(monthPath, day);
@@ -78,8 +69,7 @@ async function sessionFilesNewestFirst(sessionsRoot: string): Promise<string[]> 
 				const dayFiles = entries
 					.filter((entry) => entry.isFile() && entry.name.endsWith(".jsonl"))
 					.map((entry) => join(dayPath, entry.name))
-					.sort()
-					.reverse();
+					.sort();
 				files.push(...dayFiles);
 			}
 		}
@@ -88,58 +78,16 @@ async function sessionFilesNewestFirst(sessionsRoot: string): Promise<string[]> 
 	return files;
 }
 
-async function isSubagentSessionFile(file: string): Promise<boolean> {
+async function firstSessionFile(sessionsRoot: string): Promise<string | null> {
 	try {
-		const head = await Bun.file(file)
-			.slice(0, 64 * 1024)
-			.text();
-		const lines = head.split("\n").slice(0, 40);
-		for (const line of lines) {
-			if (line.trim().length === 0) continue;
-			try {
-				const parsed = JSON.parse(line) as SessionRecord;
-				if (isSubagentSessionRecord(parsed)) return true;
-			} catch {
-				// Ignore malformed head lines while probing session type.
-			}
-		}
-		return false;
-	} catch {
-		return false;
-	}
-}
-
-async function newestSessionFile(sessionsRoot: string): Promise<string | null> {
-	try {
-		const files = await sessionFilesNewestFirst(sessionsRoot);
-		const newest = files[0] ?? null;
-		if (!newest) return null;
-
-		for (const file of files) {
-			if (!(await isSubagentSessionFile(file))) return file;
-		}
-
-		return newest;
+		const files = await sessionFilesOldestFirst(sessionsRoot);
+		return files[0] ?? null;
 	} catch {
 		return null;
 	}
 }
 
-function isSubagentSessionRecord(record: SessionRecord): boolean {
-	if (record.type !== "session_meta") return false;
-	const payload = (record.payload ?? {}) as SessionMetaPayload;
-	const source =
-		payload.source && typeof payload.source === "object"
-			? (payload.source as Record<string, unknown>)
-			: null;
-	const subagent =
-		source?.subagent && typeof source.subagent === "object"
-			? (source.subagent as Record<string, unknown>)
-			: null;
-	return Boolean(subagent?.thread_spawn && typeof subagent.thread_spawn === "object");
-}
-
-function statusFromEvent(record: SessionRecord, isSubagentSession: boolean): AgentStatus | null {
+function statusFromEvent(record: SessionRecord): AgentStatus | null {
 	const type = typeof record.type === "string" ? record.type : null;
 	if (!type) return null;
 
@@ -168,7 +116,7 @@ function statusFromEvent(record: SessionRecord, isSubagentSession: boolean): Age
 	if (!payloadType) return null;
 
 	if (payloadType === "task_started") return "processing";
-	if (payloadType === "task_complete") return isSubagentSession ? null : "idle";
+	if (payloadType === "task_complete") return "idle";
 	if (payloadType === "turn_aborted") return "idle";
 	if (payloadType === "agent_reasoning" || payloadType === "agent_message") return "processing";
 	return null;
@@ -179,23 +127,26 @@ export async function readCodexInternalsStatus(
 	cursor: CodexInternalsCursor,
 ): Promise<CodexInternalsResult> {
 	const sessionsRoot = join(codexRuntimeDir, "sessions");
-	const file = await newestSessionFile(sessionsRoot);
+	const file = cursor.sessionFile ?? (await firstSessionFile(sessionsRoot));
 	if (!file) {
 		return { cursor, status: cursor.lastStatus, parseErrorCount: 0 };
 	}
 
-	let nextCursor = cursor;
-	if (cursor.sessionFile !== file) {
-		nextCursor = {
-			sessionFile: file,
-			offset: 0,
-			partialLine: "",
-			lastStatus: cursor.lastStatus,
-			isSubagentSession: null,
-		};
+	let nextCursor =
+		cursor.sessionFile === file
+			? cursor
+			: {
+					sessionFile: file,
+					offset: 0,
+					partialLine: "",
+					lastStatus: cursor.lastStatus,
+			  };
+	let fullText = "";
+	try {
+		fullText = await Bun.file(file).text();
+	} catch {
+		return { cursor: nextCursor, status: nextCursor.lastStatus, parseErrorCount: 0 };
 	}
-
-	const fullText = await Bun.file(file).text();
 	const safeOffset =
 		nextCursor.offset >= 0 && nextCursor.offset <= fullText.length ? nextCursor.offset : 0;
 	const appendedText = fullText.slice(safeOffset);
@@ -205,15 +156,11 @@ export async function readCodexInternalsStatus(
 
 	let parseErrorCount = 0;
 	let status = nextCursor.lastStatus;
-	let isSubagentSession = nextCursor.isSubagentSession;
 	for (const line of lines) {
 		if (line.trim().length === 0) continue;
 		try {
 			const parsed = JSON.parse(line) as SessionRecord;
-			if (isSubagentSession === null && isSubagentSessionRecord(parsed)) {
-				isSubagentSession = true;
-			}
-			const derived = statusFromEvent(parsed, isSubagentSession === true);
+			const derived = statusFromEvent(parsed);
 			if (derived) status = derived;
 		} catch {
 			parseErrorCount++;
@@ -225,7 +172,6 @@ export async function readCodexInternalsStatus(
 		offset: fullText.length,
 		partialLine,
 		lastStatus: status,
-		isSubagentSession,
 	};
 
 	return {
