@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { newClaudeInternalsCursor, readClaudeInternalsStatus } from "./claude-internals.ts";
@@ -54,5 +54,24 @@ describe("poller/claude-internals.readClaudeInternalsStatus", () => {
 		const second = await readClaudeInternalsStatus(sessionFile, first.cursor);
 		expect(second.status).toBe("processing");
 		expect(second.parseErrorCount).toBe(1);
+	});
+
+	it("reads internals via fallback when claude project key contains dots", async () => {
+		const root = await mkdtemp(join(tmpdir(), "ah-claude-internals-fallback-"));
+		cleanup.push(root);
+		const projectsRoot = join(root, ".claude", "projects");
+		const actualDir = join(projectsRoot, "-tmp--worktrees-demo");
+		await mkdir(actualDir, { recursive: true });
+		const sessionFileName = "952db2ba-36b6-4389-b515-24c376e96b2f.jsonl";
+		const actualFile = join(actualDir, sessionFileName);
+		await append(actualFile, [JSON.stringify({ type: "user" })]);
+
+		const missingPreferredPath = join(projectsRoot, "-tmp-.worktrees-demo", sessionFileName);
+		const result = await readClaudeInternalsStatus(
+			missingPreferredPath,
+			newClaudeInternalsCursor(),
+		);
+		expect(result.status).toBe("processing");
+		expect(result.parseErrorCount).toBe(0);
 	});
 });

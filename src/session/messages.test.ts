@@ -264,6 +264,45 @@ describe("session/messages.readAgentMessages", () => {
 		expect(result.lastAssistantMessage?.finishReason).toBe("end_turn");
 	});
 
+	it("reads claude messages via fallback when session path project key is unsanitized", async () => {
+		const root = await mkdtemp(join(tmpdir(), "ah-msg-claude-fallback-"));
+		tempDirs.push(root);
+		const projectsRoot = join(root, ".claude", "projects");
+		const actualDir = join(projectsRoot, "-tmp--worktrees-demo");
+		await mkdir(actualDir, { recursive: true });
+		const sessionFileName = "952db2ba-36b6-4389-b515-24c376e96b2f.jsonl";
+		await Bun.write(
+			join(actualDir, sessionFileName),
+			[
+				JSON.stringify({
+					timestamp: "2026-02-17T00:00:00.000Z",
+					type: "user",
+					message: { role: "user", content: "hello" },
+				}),
+				JSON.stringify({
+					timestamp: "2026-02-17T00:00:01.000Z",
+					type: "assistant",
+					message: { role: "assistant", content: [{ type: "text", text: "world" }] },
+				}),
+			].join("\n"),
+		);
+
+		const preferredMissingPath = join(projectsRoot, "-tmp-.worktrees-demo", sessionFileName);
+		const agent: Agent = {
+			...baseAgent(),
+			provider: "claude-code",
+			providerSessionFile: preferredMissingPath,
+		};
+		const result = await readAgentMessages(agent, { role: "all", limit: 10 });
+
+		expect(result.source).toBe("internals_claude_jsonl");
+		expect(result.messages.map((m) => [m.role, m.text])).toEqual([
+			["user", "hello"],
+			["assistant", "world"],
+		]);
+		expect(result.warnings.some((warning) => warning.includes("fallback used"))).toBe(true);
+	});
+
 	it("returns latest claude assistant message after follow-up turn", async () => {
 		const root = await mkdtemp(join(tmpdir(), "ah-msg-claude-last-"));
 		tempDirs.push(root);

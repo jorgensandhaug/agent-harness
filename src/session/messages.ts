@@ -1,6 +1,7 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { StatusChangeSource } from "../events/types.ts";
+import { claudeSessionFileCandidates } from "./claude-path.ts";
 import type { Agent } from "./types.ts";
 
 export type AgentMessageRole = "user" | "assistant" | "system" | "developer";
@@ -443,9 +444,18 @@ async function readCodexMessages(runtimeDir: string): Promise<ProviderReadResult
 
 async function readClaudeMessages(sessionFilePath: string): Promise<ProviderReadResult> {
 	let text = "";
-	try {
-		text = await Bun.file(sessionFilePath).text();
-	} catch {
+	let usedPath: string | null = null;
+	const candidates = claudeSessionFileCandidates(sessionFilePath);
+	for (const candidate of candidates) {
+		try {
+			text = await Bun.file(candidate).text();
+			usedPath = candidate;
+			break;
+		} catch {
+			// Try next candidate.
+		}
+	}
+	if (!usedPath) {
 		return {
 			source: "internals_unavailable",
 			messages: [],
@@ -487,7 +497,8 @@ async function readClaudeMessages(sessionFilePath: string): Promise<ProviderRead
 		source: "internals_claude_jsonl",
 		messages,
 		parseErrorCount,
-		warnings: [],
+		warnings:
+			usedPath === sessionFilePath ? [] : [`claude session path fallback used: ${usedPath}`],
 	};
 }
 

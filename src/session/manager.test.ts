@@ -598,6 +598,28 @@ describe("session/manager.initial-input", () => {
 		expect(deleteRes.ok).toBe(true);
 	});
 
+	it("stores claude session file path with dot-segment-safe project key", async () => {
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(makeConfig(), store, eventBus);
+		const cwdWithDotSegment = "/tmp/.worktrees/claude-path-test";
+
+		const projectRes = await manager.createProject("p3b", cwdWithDotSegment);
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await manager.createAgent("p3b", "claude-code", "Reply with exactly: 4");
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+		expect(createRes.value.providerSessionFile).toContain(
+			"/.claude/projects/-tmp--worktrees-claude-path-test/",
+		);
+		expect(createRes.value.providerSessionFile).not.toContain("/.claude/projects/-tmp-.worktrees-");
+
+		const deleteRes = await manager.deleteProject("p3b");
+		expect(deleteRes.ok).toBe(true);
+	});
+
 	it("sendInput delivers follow-up text when startup trust prompt is still blocking", async () => {
 		simulateClaudeStartupConfirm = true;
 		const priorDelay = process.env.HARNESS_INITIAL_TASK_DELAY_MS;

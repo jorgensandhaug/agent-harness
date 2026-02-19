@@ -1,4 +1,5 @@
 import type { AgentStatus } from "../providers/types.ts";
+import { claudeSessionFileCandidates } from "../session/claude-path.ts";
 
 export type ClaudeInternalsCursor = {
 	offset: number;
@@ -57,9 +58,18 @@ export async function readClaudeInternalsStatus(
 	cursor: ClaudeInternalsCursor,
 ): Promise<ClaudeInternalsResult> {
 	let fullText = "";
-	try {
-		fullText = await Bun.file(sessionFilePath).text();
-	} catch {
+	const candidates = claudeSessionFileCandidates(sessionFilePath);
+	let foundReadable = false;
+	for (const candidate of candidates) {
+		try {
+			fullText = await Bun.file(candidate).text();
+			foundReadable = true;
+			break;
+		} catch {
+			// Try next candidate.
+		}
+	}
+	if (!foundReadable) {
 		return { cursor, status: cursor.lastStatus, parseErrorCount: 0 };
 	}
 

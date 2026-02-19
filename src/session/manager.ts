@@ -36,6 +36,7 @@ import {
 	projectName,
 } from "../types.ts";
 import { formatAttachCommand } from "./attach.ts";
+import { claudeProjectStorageDir } from "./claude-path.ts";
 import type { Store } from "./store.ts";
 import type { Agent, AgentCallback, Project } from "./types.ts";
 
@@ -436,11 +437,6 @@ export function createManager(
 				XDG_CACHE_HOME: cacheHome,
 			},
 		};
-	}
-
-	function claudeProjectStorageDir(cwd: string): string {
-		const normalized = resolve(cwd).replaceAll("/", "-");
-		return join(homedir(), ".claude", "projects", normalized);
 	}
 
 	function transitionAgentStatus(
