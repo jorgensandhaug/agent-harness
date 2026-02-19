@@ -524,7 +524,7 @@ export function createManager(
 	}
 
 	function promptFileInstruction(path: string): string {
-		return `Read prompt from file: ${path}. Use the file's full contents as my prompt.`;
+		return `read my instructions in file: ${path}. Use the file's full contents as my prompt.`;
 	}
 
 	async function cleanupPromptFiles(project: ProjectName, id: AgentId): Promise<void> {

@@ -314,6 +314,68 @@ describe("session/messages.readAgentMessages", () => {
 		expect(result.lastAssistantMessage?.text).toBe("second assistant");
 	});
 
+	it("filters empty claude message records from internals output", async () => {
+		const root = await mkdtemp(join(tmpdir(), "ah-msg-claude-empty-"));
+		tempDirs.push(root);
+		const file = join(root, "session.jsonl");
+		await Bun.write(
+			file,
+			[
+				JSON.stringify({
+					timestamp: "2026-02-17T00:00:00.000Z",
+					type: "user",
+					message: { role: "user", content: "run task" },
+				}),
+				JSON.stringify({
+					timestamp: "2026-02-17T00:00:01.000Z",
+					type: "assistant",
+					message: {
+						role: "assistant",
+						content: [{ type: "text", text: "\n\n" }],
+						stop_reason: null,
+					},
+				}),
+				JSON.stringify({
+					timestamp: "2026-02-17T00:00:02.000Z",
+					type: "assistant",
+					message: {
+						role: "assistant",
+						content: [{ type: "thinking", thinking: "reasoning..." }],
+						stop_reason: null,
+					},
+				}),
+				JSON.stringify({
+					timestamp: "2026-02-17T00:00:03.000Z",
+					type: "assistant",
+					message: {
+						role: "assistant",
+						content: [{ type: "tool_use", name: "Task", input: { description: "x" } }],
+						stop_reason: null,
+					},
+				}),
+				JSON.stringify({
+					timestamp: "2026-02-17T00:00:04.000Z",
+					type: "assistant",
+					message: {
+						role: "assistant",
+						content: [{ type: "text", text: "done" }],
+						stop_reason: "end_turn",
+					},
+				}),
+			].join("\n"),
+		);
+
+		const agent: Agent = { ...baseAgent(), provider: "claude-code", providerSessionFile: file };
+		const result = await readAgentMessages(agent, { role: "all", limit: 20 });
+
+		expect(result.messages.map((m) => [m.role, m.text])).toEqual([
+			["user", "run task"],
+			["assistant", "done"],
+		]);
+		expect(result.totalMessages).toBe(2);
+		expect(result.lastAssistantMessage?.text).toBe("done");
+	});
+
 	it("reads pi message history and last assistant text", async () => {
 		const root = await mkdtemp(join(tmpdir(), "ah-msg-pi-"));
 		tempDirs.push(root);

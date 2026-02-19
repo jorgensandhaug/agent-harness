@@ -718,7 +718,7 @@ describe("session/manager.initial-input", () => {
 
 			expect(window.enterKeyCount).toBe(enterBefore + 1);
 			expect(window.submitCount).toBeGreaterThanOrEqual(1);
-			expect(window.buffer).toContain("Read prompt from file:");
+			expect(window.buffer).toContain("read my instructions in file:");
 			expect(window.buffer).not.toContain("[Pasted Content");
 			const promptFilePath = extractPromptFilePath(window.buffer);
 			expect(promptFilePath).not.toBeNull();
@@ -774,7 +774,7 @@ describe("session/manager.initial-input", () => {
 			await waitFor(() => window.submitCount > 0, 3000);
 			expect(window.enterKeyCount).toBeGreaterThanOrEqual(1);
 			expect(window.pendingCollapsedPasteSubmit).toBe(false);
-			expect(window.buffer).toContain("Read prompt from file:");
+			expect(window.buffer).toContain("read my instructions in file:");
 			const promptFilePath = extractPromptFilePath(window.buffer);
 			expect(promptFilePath).not.toBeNull();
 			if (!promptFilePath) throw new Error("prompt file path missing");
@@ -858,7 +858,7 @@ describe("session/manager.initial-input", () => {
 		const session = fake.sessions.get(sessionName);
 		const window = session?.windows.get(windowName);
 		if (!window) throw new Error("window missing");
-		expect(window.startCommand).toContain("Read prompt from file:");
+		expect(window.startCommand).toContain("read my instructions in file:");
 		const promptFilePath = extractPromptFilePath(window.startCommand);
 		expect(promptFilePath).not.toBeNull();
 		if (!promptFilePath) throw new Error("prompt file path missing");
@@ -891,7 +891,7 @@ describe("session/manager.initial-input", () => {
 		const session = fake.sessions.get(sessionName);
 		const window = session?.windows.get(windowName);
 		if (!window) throw new Error("window missing");
-		expect(window.startCommand).toContain("Read prompt from file:");
+		expect(window.startCommand).toContain("read my instructions in file:");
 		const promptFilePath = extractPromptFilePath(window.startCommand);
 		expect(promptFilePath).not.toBeNull();
 		if (!promptFilePath) throw new Error("prompt file path missing");

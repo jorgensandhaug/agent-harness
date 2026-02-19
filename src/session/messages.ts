@@ -416,7 +416,7 @@ async function readCodexMessages(runtimeDir: string): Promise<ProviderReadResult
 					? [
 							...warnings,
 							"codex response_item assistant messages preferred over event_msg records to avoid partial chunks",
-					  ]
+						]
 					: warnings,
 		};
 	}
@@ -740,9 +740,10 @@ export async function readAgentMessages(
 		}
 	}
 
-	const roleFiltered = providerRead.messages.filter((message) =>
-		roleMatches(message.role, roleFilter),
+	const nonEmptyMessages = providerRead.messages.filter(
+		(message) => message.text.trim().length > 0,
 	);
+	const roleFiltered = nonEmptyMessages.filter((message) => roleMatches(message.role, roleFilter));
 	const totalMessages = roleFiltered.length;
 	const startIndex = Math.max(0, totalMessages - limit);
 	const messages = roleFiltered.slice(startIndex);
@@ -751,7 +752,7 @@ export async function readAgentMessages(
 		provider: agent.provider,
 		source: providerRead.source,
 		messages,
-		lastAssistantMessage: pickLastAssistant(providerRead.messages),
+		lastAssistantMessage: pickLastAssistant(nonEmptyMessages),
 		totalMessages,
 		truncated: startIndex > 0,
 		parseErrorCount: providerRead.parseErrorCount,
