@@ -488,6 +488,94 @@ describe("http/projects.crud", () => {
 			]),
 		);
 	});
+
+	it("supports project callback defaults on create and update", async () => {
+		if (!env) throw new Error("env missing");
+		const created = await apiJson(env.baseUrl, "/api/v1/projects", {
+			method: "POST",
+			body: JSON.stringify({
+				name: "p-http-callback-defaults",
+				cwd: process.cwd(),
+				callback: {
+					url: "https://receiver.test/project-default",
+					token: "project-token",
+					discordChannel: "project-alerts",
+					sessionKey: "project-session",
+				},
+			}),
+		});
+		expect(created.status).toBe(201);
+		const createdJson = await created.json();
+		expect(createdJson.project.callback).toEqual({
+			url: "https://receiver.test/project-default",
+			discordChannel: "project-alerts",
+			sessionKey: "project-session",
+		});
+
+		const updated = await apiJson(env.baseUrl, "/api/v1/projects/p-http-callback-defaults", {
+			method: "PATCH",
+			body: JSON.stringify({
+				callback: {
+					url: "https://receiver.test/project-updated",
+					token: "updated-token",
+					discordChannel: "updated-alerts",
+					sessionKey: "updated-session",
+				},
+			}),
+		});
+		expect(updated.status).toBe(200);
+		const updatedJson = await updated.json();
+		expect(updatedJson.project.callback).toEqual({
+			url: "https://receiver.test/project-updated",
+			discordChannel: "updated-alerts",
+			sessionKey: "updated-session",
+		});
+
+		const got = await fetch(`${env.baseUrl}/api/v1/projects/p-http-callback-defaults`);
+		expect(got.status).toBe(200);
+		const gotJson = await got.json();
+		expect(gotJson.project.callback).toEqual({
+			url: "https://receiver.test/project-updated",
+			discordChannel: "updated-alerts",
+			sessionKey: "updated-session",
+		});
+	});
+
+	it("inherits project callback defaults when agent callback is omitted", async () => {
+		if (!env) throw new Error("env missing");
+		await apiJson(env.baseUrl, "/api/v1/projects", {
+			method: "POST",
+			body: JSON.stringify({
+				name: "p-http-inherit-callback",
+				cwd: process.cwd(),
+				callback: {
+					url: "https://receiver.test/project-default",
+					token: "project-token",
+					discordChannel: "project-alerts",
+					sessionKey: "project-session",
+				},
+			}),
+		});
+
+		const createAgentRes = await apiJson(
+			env.baseUrl,
+			"/api/v1/projects/p-http-inherit-callback/agents",
+			{
+				method: "POST",
+				body: JSON.stringify({
+					provider: "codex",
+					task: "Reply with exactly: 4",
+				}),
+			},
+		);
+		expect(createAgentRes.status).toBe(201);
+		const createAgentJson = await createAgentRes.json();
+		expect(createAgentJson.agent.callback).toEqual({
+			url: "https://receiver.test/project-default",
+			discordChannel: "project-alerts",
+			sessionKey: "project-session",
+		});
+	});
 });
 
 describe("http/agents.crud-input-output-abort", () => {

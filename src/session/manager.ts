@@ -595,7 +595,11 @@ export function createManager(
 
 	// --- Projects ---
 
-	async function createProject(name: string, cwd: string): Promise<Result<Project, ManagerError>> {
+	async function createProject(
+		name: string,
+		cwd: string,
+		callback?: AgentCallback,
+	): Promise<Result<Project, ManagerError>> {
 		const pName = projectName(name);
 
 		if (store.getProject(pName)) {
@@ -616,6 +620,7 @@ export function createManager(
 			cwd,
 			tmuxSession: sessionName,
 			agentCount: 0,
+			...(callback ? { callback } : {}),
 			createdAt: new Date().toISOString(),
 		};
 
@@ -634,6 +639,22 @@ export function createManager(
 
 	function listProjects(): readonly Project[] {
 		return store.listProjects();
+	}
+
+	function updateProject(
+		name: string,
+		update: {
+			callback: AgentCallback;
+		},
+	): Result<Project, ManagerError> {
+		const pName = projectName(name);
+		const project = store.getProject(pName);
+		if (!project) {
+			return err({ code: "PROJECT_NOT_FOUND", name });
+		}
+
+		store.updateProjectCallback(pName, update.callback);
+		return ok(project);
 	}
 
 	async function listSubscriptions() {
@@ -858,6 +879,7 @@ export function createManager(
 			});
 		}
 
+		const effectiveCallback = callback ?? project.callback;
 		const now = new Date().toISOString();
 		const agent: Agent = {
 			id,
@@ -872,7 +894,7 @@ export function createManager(
 			...(providerRuntimeDir ? { providerRuntimeDir } : {}),
 			...(providerSessionFile ? { providerSessionFile } : {}),
 			...(subscriptionId ? { subscriptionId } : {}),
-			...(callback ? { callback } : {}),
+			...(effectiveCallback ? { callback: effectiveCallback } : {}),
 			createdAt: now,
 			lastActivity: now,
 			lastCapturedOutput: "",
@@ -1156,6 +1178,7 @@ export function createManager(
 		createProject,
 		getProject,
 		listProjects,
+		updateProject,
 		listSubscriptions,
 		deleteProject,
 		createAgent,

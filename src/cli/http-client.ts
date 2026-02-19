@@ -5,6 +5,11 @@ export type ApiProject = {
 	cwd: string;
 	tmuxSession: string;
 	agentCount: number;
+	callback?: {
+		url: string;
+		discordChannel?: string;
+		sessionKey?: string;
+	};
 	createdAt: string;
 };
 
@@ -52,6 +57,21 @@ export type HealthResponse = {
 export type CreateProjectRequest = {
 	name: string;
 	cwd: string;
+	callback?: {
+		url: string;
+		token?: string;
+		discordChannel?: string;
+		sessionKey?: string;
+	};
+};
+
+export type UpdateProjectRequest = {
+	callback: {
+		url: string;
+		token?: string;
+		discordChannel?: string;
+		sessionKey?: string;
+	};
 };
 
 export type CreateAgentRequest = {
@@ -200,6 +220,7 @@ export type CliHttpClient = {
 	health(): Promise<HealthResponse>;
 	listProjects(): Promise<{ projects: ApiProject[] }>;
 	createProject(input: CreateProjectRequest): Promise<{ project: ApiProject }>;
+	updateProject(name: string, input: UpdateProjectRequest): Promise<{ project: ApiProject }>;
 	getProject(name: string): Promise<ProjectDetailResponse>;
 	deleteProject(name: string): Promise<void>;
 	listAgents(project: string): Promise<{ agents: ApiAgentListItem[] }>;
@@ -607,6 +628,17 @@ export function createHttpClient(options: ClientOptions): CliHttpClient {
 				defaultCompact,
 				"POST",
 				"/api/v1/projects",
+				{ body: input, timeoutMs: defaultTimeoutMs, compact: false },
+			);
+		},
+		updateProject(name, input) {
+			const encoded = encodeURIComponent(name);
+			return requestJson<{ project: ApiProject }>(
+				baseUrl,
+				token,
+				defaultCompact,
+				"PATCH",
+				`/api/v1/projects/${encoded}`,
 				{ body: input, timeoutMs: defaultTimeoutMs, compact: false },
 			);
 		},

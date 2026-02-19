@@ -663,6 +663,95 @@ describe("session/manager.initial-input", () => {
 });
 
 describe("session/manager.subscriptions", () => {
+	it("inherits project callback defaults when agent callback is omitted", async () => {
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(makeConfig(), store, eventBus);
+
+		const projectRes = await manager.createProject("pc-defaults", process.cwd(), {
+			url: "https://receiver.test/harness-webhook",
+			token: "project-token",
+			discordChannel: "project-alerts",
+			sessionKey: "project-session",
+		});
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await manager.createAgent("pc-defaults", "codex", "Reply with exactly: 4");
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+		expect(createRes.value.callback).toEqual({
+			url: "https://receiver.test/harness-webhook",
+			token: "project-token",
+			discordChannel: "project-alerts",
+			sessionKey: "project-session",
+		});
+	});
+
+	it("prefers explicit agent callback over project callback defaults", async () => {
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(makeConfig(), store, eventBus);
+
+		const projectRes = await manager.createProject("pc-explicit", process.cwd(), {
+			url: "https://receiver.test/project-default",
+			token: "project-token",
+			discordChannel: "project-alerts",
+			sessionKey: "project-session",
+		});
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await manager.createAgent(
+			"pc-explicit",
+			"codex",
+			"Reply with exactly: 4",
+			undefined,
+			undefined,
+			{
+				url: "https://receiver.test/agent-explicit",
+				token: "agent-token",
+				discordChannel: "agent-alerts",
+				sessionKey: "agent-session",
+			},
+		);
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+		expect(createRes.value.callback).toEqual({
+			url: "https://receiver.test/agent-explicit",
+			token: "agent-token",
+			discordChannel: "agent-alerts",
+			sessionKey: "agent-session",
+		});
+	});
+
+	it("updates persisted project callback defaults", async () => {
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(makeConfig(), store, eventBus);
+
+		const projectRes = await manager.createProject("pc-update", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const updateRes = manager.updateProject("pc-update", {
+			callback: {
+				url: "https://receiver.test/updated-default",
+				token: "updated-token",
+				discordChannel: "updated-alerts",
+				sessionKey: "updated-session",
+			},
+		});
+		expect(updateRes.ok).toBe(true);
+		if (!updateRes.ok) throw new Error("project update failed");
+		expect(updateRes.value.callback).toEqual({
+			url: "https://receiver.test/updated-default",
+			token: "updated-token",
+			discordChannel: "updated-alerts",
+			sessionKey: "updated-session",
+		});
+	});
+
 	it("persists per-agent callback routing", async () => {
 		const store = createStore();
 		const eventBus = createEventBus(500);

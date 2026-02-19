@@ -6,6 +6,7 @@ export interface Project {
 	cwd: string;
 	tmuxSession: string;
 	agentCount: number;
+	callback?: AgentCallback;
 	createdAt: string; // ISO 8601
 }
 

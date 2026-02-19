@@ -127,20 +127,50 @@ export function registerAgentCommands(
 						}),
 				async (argv) => {
 					const context = await buildContext(argv);
+					const projectResponse = await context.client.getProject(argv.project);
+					const projectCallback = projectResponse.project.callback;
 					const extra = toKeyValueRecord(argv.extra ?? []);
-					const callbackUrl = argv.callbackUrl ?? context.config.callbackUrl;
-					const callbackToken = argv.callbackToken ?? context.config.callbackToken;
-					const discordChannel = argv.discordChannel ?? context.config.discordChannel;
-					const sessionKey = argv.sessionKey ?? context.config.sessionKey;
-					const callback = callbackUrl
-						? {
-								url: callbackUrl,
-								...(callbackToken ? { token: callbackToken } : {}),
-								...(discordChannel ? { discordChannel } : {}),
-								...(sessionKey ? { sessionKey } : {}),
-								...(Object.keys(extra).length > 0 ? { extra } : {}),
-							}
-						: undefined;
+					const hasExplicitCallbackOverride =
+						argv.callbackUrl !== undefined ||
+						argv.callbackToken !== undefined ||
+						argv.discordChannel !== undefined ||
+						argv.sessionKey !== undefined ||
+						Object.keys(extra).length > 0;
+					let callback:
+						| {
+								url: string;
+								token?: string;
+								discordChannel?: string;
+								sessionKey?: string;
+								extra?: Record<string, string>;
+						  }
+						| undefined;
+					if (hasExplicitCallbackOverride) {
+						if (!argv.callbackUrl) {
+							throw new Error(
+								"Callback URL is required when setting callback overrides. Set --callback-url.",
+							);
+						}
+						callback = {
+							url: argv.callbackUrl,
+							...(argv.callbackToken ? { token: argv.callbackToken } : {}),
+							...(argv.discordChannel ? { discordChannel: argv.discordChannel } : {}),
+							...(argv.sessionKey ? { sessionKey: argv.sessionKey } : {}),
+							...(Object.keys(extra).length > 0 ? { extra } : {}),
+						};
+					} else if (projectCallback?.url) {
+						// Let the API apply project callback defaults, including hidden fields such as token.
+						callback = undefined;
+					} else if (context.config.callbackUrl) {
+						callback = {
+							url: context.config.callbackUrl,
+							...(context.config.callbackToken ? { token: context.config.callbackToken } : {}),
+							...(context.config.discordChannel
+								? { discordChannel: context.config.discordChannel }
+								: {}),
+							...(context.config.sessionKey ? { sessionKey: context.config.sessionKey } : {}),
+						};
+					}
 					const response = await context.client.createAgent(argv.project, {
 						provider: argv.provider,
 						task: argv.task,

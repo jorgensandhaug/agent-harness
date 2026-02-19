@@ -1,6 +1,6 @@
 import type { AgentStatus } from "../providers/types.ts";
 import type { AgentId, ProjectName } from "../types.ts";
-import type { Agent, Project } from "./types.ts";
+import type { Agent, AgentCallback, Project } from "./types.ts";
 
 export function createStore() {
 	const projects = new Map<ProjectName, Project>();
@@ -49,6 +49,12 @@ export function createStore() {
 			if (agent.project === name) count++;
 		}
 		project.agentCount = count;
+	}
+
+	function updateProjectCallback(name: ProjectName, callback?: AgentCallback): void {
+		const project = projects.get(name);
+		if (!project) return;
+		project.callback = callback;
 	}
 
 	// --- Agents ---
@@ -113,6 +119,7 @@ export function createStore() {
 		getProject,
 		listProjects,
 		addProject,
+		updateProjectCallback,
 		removeProject,
 		getAgent,
 		listAgents,
