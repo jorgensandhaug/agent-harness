@@ -39,6 +39,7 @@ export async function serveCommand(): Promise<void> {
 	// 5. Initialize session manager
 	const manager = createManager(config, store, eventBus, debugTracker);
 	await manager.rehydrateProjectsFromTmux();
+	await manager.rehydrateAgentsFromTmux();
 
 	// 6. Start poller
 	const poller = createPoller(config, store, manager, eventBus, debugTracker);
@@ -80,21 +81,7 @@ export async function serveCommand(): Promise<void> {
 		// Stop accepting new requests
 		server.stop(true);
 
-		// Send exit commands to active agents (best-effort, log failures)
-		const agents = store.listAgents();
-		for (const agent of agents) {
-			if (agent.status !== "exited") {
-				const result = await manager.deleteAgent(agent.project, agent.id);
-				if (!result.ok) {
-					log.warn("failed to cleanly delete agent during shutdown", {
-						agentId: agent.id,
-						error: JSON.stringify(result.error),
-					});
-				}
-			}
-		}
-
-		log.info("shutdown complete — tmux sessions left intact for inspection");
+		log.info("shutdown complete — leaving tmux sessions/windows running for reattach");
 		process.exit(0);
 	};
 

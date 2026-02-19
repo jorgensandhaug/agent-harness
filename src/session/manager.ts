@@ -10,7 +10,7 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import type { HarnessConfig, SubscriptionConfig } from "../config.ts";
 import type { DebugTracker } from "../debug/tracker.ts";
 import type { EventBus } from "../events/bus.ts";
@@ -108,7 +108,13 @@ export function createManager(
 			`${home}/.npm-global/bin`,
 			`${home}/.cargo/bin`,
 		];
-		return mergedPath([...userBins, ...inherited, "/run/current-system/sw/bin", "/usr/bin", "/bin"]);
+		return mergedPath([
+			...userBins,
+			...inherited,
+			"/run/current-system/sw/bin",
+			"/usr/bin",
+			"/bin",
+		]);
 	}
 	type ResolvedSubscription = {
 		id: string;
@@ -555,6 +561,92 @@ export function createManager(
 		return new Date(epochSeconds * 1000).toISOString();
 	}
 
+	function normalizedProviderPrefix(providerName: string): string {
+		const normalized = providerName
+			.toLowerCase()
+			.replace(/[^a-z0-9-]+/g, "-")
+			.replace(/-+/g, "-")
+			.replace(/^-+|-+$/g, "");
+		const compact = normalized.length > 0 ? normalized : "agent";
+		const sliced = compact.slice(0, 22).replace(/-+$/g, "");
+		return sliced.length > 0 ? sliced : "agent";
+	}
+
+	function unquote(value: string): string {
+		if (value.length >= 2 && value.startsWith("'") && value.endsWith("'")) {
+			return value.slice(1, -1).replaceAll(`'"'"'`, "'");
+		}
+		if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+			return value.slice(1, -1);
+		}
+		return value;
+	}
+
+	function envVarFromStartCommand(startCommand: string, name: string): string | null {
+		const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		const match = startCommand.match(new RegExp(`${escaped}=('(?:[^']*)'|"(?:[^"]*)"|\\S+)`));
+		if (!match?.[1]) return null;
+		const value = unquote(match[1].trim());
+		return value.length > 0 ? value : null;
+	}
+
+	function claudeSessionIdFromStartCommand(startCommand: string): string | null {
+		const match = startCommand.match(/--session-id\s+([0-9a-fA-F-]{36})/);
+		return match?.[1] ?? null;
+	}
+
+	function providerFromProcessCommand(command: string): string | null {
+		const normalized = command.trim().toLowerCase();
+		if (normalized.length === 0) return null;
+		const commandBase = basename(normalized);
+		for (const [providerName, providerConfig] of Object.entries(config.providers)) {
+			const configuredBase = basename(providerConfig.command.trim().toLowerCase());
+			if (
+				configuredBase.length > 0 &&
+				(normalized === configuredBase || commandBase === configuredBase)
+			) {
+				return providerName;
+			}
+		}
+		return null;
+	}
+
+	function providerFromStartCommand(startCommand: string): string | null {
+		const normalized = startCommand.trim().toLowerCase();
+		if (normalized.length === 0) return null;
+		for (const [providerName, providerConfig] of Object.entries(config.providers)) {
+			const configuredBase = basename(providerConfig.command.trim().toLowerCase());
+			if (configuredBase.length === 0) continue;
+			const escaped = configuredBase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+			if (new RegExp(`(^|\\s|/)${escaped}(\\s|$|'|")`).test(normalized)) {
+				return providerName;
+			}
+		}
+		return null;
+	}
+
+	function inferProviderName(
+		windowName: string,
+		currentCommand: string | null,
+		startCommand: string | null,
+	): string | null {
+		if (currentCommand) {
+			const fromCurrent = providerFromProcessCommand(currentCommand);
+			if (fromCurrent) return fromCurrent;
+		}
+		if (startCommand) {
+			const fromStart = providerFromStartCommand(startCommand);
+			if (fromStart) return fromStart;
+		}
+		for (const providerName of Object.keys(config.providers)) {
+			const prefix = `${normalizedProviderPrefix(providerName)}-`;
+			if (windowName.startsWith(prefix)) {
+				return providerName;
+			}
+		}
+		return null;
+	}
+
 	async function rehydrateProjectsFromTmux(): Promise<void> {
 		let sessionsResult = await tmux.listSessions(config.tmuxPrefix);
 		for (let attempt = 1; !sessionsResult.ok && attempt <= 4; attempt += 1) {
@@ -590,6 +682,108 @@ export function createManager(
 
 		if (recovered > 0) {
 			log.info("projects rehydrated from tmux sessions", { recovered });
+		}
+	}
+
+	async function rehydrateAgentsFromTmux(): Promise<void> {
+		let recovered = 0;
+		for (const project of store.listProjects()) {
+			const windowsResult = await tmux.listWindows(project.tmuxSession);
+			if (!windowsResult.ok) {
+				log.warn("failed to list tmux windows for agent rehydrate", {
+					session: project.tmuxSession,
+					error: JSON.stringify(windowsResult.error),
+				});
+				continue;
+			}
+
+			const existing = new Set(store.listAgents(project.name).map((agent) => agent.id as string));
+			for (const window of windowsResult.value) {
+				const idRaw = window.name.trim();
+				if (!isValidAgentId(idRaw)) continue;
+				if (existing.has(idRaw)) continue;
+
+				const id = agentId(idRaw);
+				const target = `${project.tmuxSession}:${window.name}`;
+				const paneDeadResult = await tmux.getPaneVar(target, "pane_dead");
+				const paneCurrentResult = await tmux.getPaneVar(target, "pane_current_command");
+				const paneStartResult = await tmux.getPaneVar(target, "pane_start_command");
+				const providerName = inferProviderName(
+					window.name,
+					paneCurrentResult.ok ? paneCurrentResult.value : null,
+					paneStartResult.ok ? paneStartResult.value : null,
+				);
+				if (!providerName) {
+					log.warn("skipping tmux window rehydrate; provider unknown", {
+						session: project.tmuxSession,
+						window: window.name,
+					});
+					continue;
+				}
+
+				const providerResult = getProvider(providerName);
+				if (!providerResult.ok) {
+					log.warn("skipping tmux window rehydrate; provider unavailable", {
+						providerName,
+						session: project.tmuxSession,
+						window: window.name,
+					});
+					continue;
+				}
+
+				const captureResult = await tmux.capturePane(target, config.captureLines);
+				const output = captureResult.ok ? captureResult.value : "";
+				let status: AgentStatus = "starting";
+				if (paneDeadResult.ok && paneDeadResult.value === "1") {
+					status = "exited";
+				} else if (captureResult.ok) {
+					status = providerResult.value.parseStatus(output);
+				}
+
+				const now = new Date().toISOString();
+				const startCommand = paneStartResult.ok ? paneStartResult.value : "";
+				const claudeSessionId = claudeSessionIdFromStartCommand(startCommand);
+				const claudeSessionFile = claudeSessionId
+					? join(claudeProjectStorageDir(project.cwd), `${claudeSessionId}.jsonl`)
+					: null;
+				const codexRuntimeDir = envVarFromStartCommand(startCommand, "CODEX_HOME");
+				const piRuntimeDir = envVarFromStartCommand(startCommand, "PI_CODING_AGENT_DIR");
+				const opencodeDataHome = envVarFromStartCommand(startCommand, "XDG_DATA_HOME");
+
+				const agent: Agent = {
+					id,
+					project: project.name,
+					provider: providerName,
+					status,
+					brief: [],
+					task: "",
+					windowName: window.name,
+					tmuxTarget: target,
+					attachCommand: formatAttachCommand(target),
+					...(providerName === "claude-code" && claudeSessionFile
+						? { providerSessionFile: claudeSessionFile }
+						: {}),
+					...(providerName === "codex" && codexRuntimeDir
+						? { providerRuntimeDir: codexRuntimeDir }
+						: {}),
+					...(providerName === "pi" && piRuntimeDir ? { providerRuntimeDir: piRuntimeDir } : {}),
+					...(providerName === "opencode" && opencodeDataHome
+						? { providerRuntimeDir: opencodeDataHome }
+						: {}),
+					createdAt: now,
+					lastActivity: now,
+					lastCapturedOutput: output,
+				};
+
+				store.addAgent(agent);
+				existing.add(idRaw);
+				debugTracker?.ensureAgent(debugAgentKey(agent.project, id));
+				recovered += 1;
+			}
+		}
+
+		if (recovered > 0) {
+			log.info("agents rehydrated from tmux windows", { recovered });
 		}
 	}
 
@@ -1175,6 +1369,7 @@ export function createManager(
 
 	return {
 		rehydrateProjectsFromTmux,
+		rehydrateAgentsFromTmux,
 		createProject,
 		getProject,
 		listProjects,

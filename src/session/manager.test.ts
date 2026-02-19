@@ -6,9 +6,9 @@ import { join } from "node:path";
 import type { HarnessConfig } from "../config.ts";
 import { createEventBus } from "../events/bus.ts";
 import type { NormalizedEvent } from "../events/types.ts";
+import * as tmux from "../tmux/client.ts";
 import { createManager } from "./manager.ts";
 import { createStore } from "./store.ts";
-import * as tmux from "../tmux/client.ts";
 
 const originalSpawn = Bun.spawn;
 const originalDelay = process.env.HARNESS_INITIAL_TASK_DELAY_MS;
@@ -16,6 +16,8 @@ const originalReadyTimeout = process.env.HARNESS_INITIAL_TASK_READY_TIMEOUT_MS;
 const originalPasteEnterDelay = process.env.HARNESS_TMUX_PASTE_ENTER_DELAY_MS;
 
 type SessionState = {
+	path: string;
+	createdAt: number;
 	allowRename: boolean;
 	automaticRename: boolean;
 	windows: Map<
@@ -24,6 +26,9 @@ type SessionState = {
 			paneId: string;
 			buffer: string;
 			provider: string;
+			startCommand: string;
+			currentCommand: string;
+			paneDead: boolean;
 			createdAtMs: number;
 			readyAfterMs: number;
 			requiresStartupConfirm: boolean;
@@ -74,6 +79,17 @@ function arg(args: readonly string[], key: string): string | undefined {
 	return args[idx + 1];
 }
 
+function commandFromStartCommand(startCommand: string): string {
+	const normalized = startCommand.replace(/^env\s+/, "");
+	const parts = normalized.split(/\s+/).filter((part) => part.length > 0);
+	for (const part of parts) {
+		if (part === "-u") continue;
+		if (part.includes("=")) continue;
+		return part.replace(/^['"]|['"]$/g, "");
+	}
+	return "sh";
+}
+
 function resolveWindow(target: string): { session: SessionState; windowName: string } | null {
 	const [sessionName, windowName] = target.split(":");
 	if (!sessionName || !windowName) return null;
@@ -102,8 +118,11 @@ beforeEach(() => {
 		switch (sub) {
 			case "new-session": {
 				const name = arg(args, "-s");
+				const cwd = arg(args, "-c");
 				if (!name) return proc(1, "", "missing session");
 				fake.sessions.set(name, {
+					path: cwd ?? ".",
+					createdAt: Math.floor(Date.now() / 1000),
 					allowRename: true,
 					automaticRename: true,
 					windows: new Map(),
@@ -136,11 +155,16 @@ beforeEach(() => {
 				if (session.allowRename && session.automaticRename) {
 					actualName = "renamed-window";
 				}
-				const provider = requestedName.split("-")[0] ?? "unknown";
+				const startCommand = args[args.length - 1] ?? "sh";
+				const currentCommand = commandFromStartCommand(startCommand);
+				const provider = requestedName.split("-")[0] ?? currentCommand;
 				session.windows.set(actualName, {
 					paneId,
 					buffer: "",
 					provider,
+					startCommand,
+					currentCommand,
+					paneDead: false,
 					createdAtMs: Date.now(),
 					readyAfterMs: simulateSlowCodexStartup && provider === "codex" ? 350 : 0,
 					requiresStartupConfirm: simulateClaudeStartupConfirm && provider === "claude",
@@ -223,6 +247,25 @@ beforeEach(() => {
 				}
 				return proc(0);
 			}
+			case "display-message": {
+				const target = arg(args, "-t");
+				const format = args[args.length - 1] ?? "";
+				if (!target) return proc(1, "", "can't find window");
+				const resolved = resolveWindow(target);
+				if (!resolved) return proc(1, "", "can't find window");
+				const window = resolved.session.windows.get(resolved.windowName);
+				if (!window) return proc(1, "", "can't find window");
+				if (format === "#{pane_dead}") {
+					return proc(0, window.paneDead ? "1\n" : "0\n");
+				}
+				if (format === "#{pane_current_command}") {
+					return proc(0, `${window.currentCommand}\n`);
+				}
+				if (format === "#{pane_start_command}") {
+					return proc(0, `${window.startCommand}\n`);
+				}
+				return proc(0, "\n");
+			}
 			case "capture-pane": {
 				const target = arg(args, "-t");
 				if (!target) return proc(1, "", "can't find window");
@@ -251,6 +294,39 @@ beforeEach(() => {
 					return proc(0, "booting...\n");
 				}
 				return proc(0, `${window.buffer}\n> `);
+			}
+			case "list-sessions": {
+				const lines = Array.from(fake.sessions.entries()).map(([name, session]) =>
+					[name, session.path, String(session.windows.size), String(session.createdAt), "0"].join(
+						"\t",
+					),
+				);
+				return proc(0, lines.join("\n"));
+			}
+			case "list-windows": {
+				const sessionName = arg(args, "-t");
+				if (!sessionName) return proc(1, "", "can't find session");
+				const session = fake.sessions.get(sessionName);
+				if (!session) return proc(1, "", "can't find session");
+				const lines = Array.from(session.windows.entries()).map(([name, window], idx) =>
+					[idx, name, idx === 0 ? "1" : "0", window.paneId].join("\t"),
+				);
+				return proc(0, lines.join("\n"));
+			}
+			case "kill-window": {
+				const target = arg(args, "-t");
+				if (!target) return proc(1, "", "can't find window");
+				const resolved = resolveWindow(target);
+				if (!resolved) return proc(1, "", "can't find window");
+				const deleted = resolved.session.windows.delete(resolved.windowName);
+				if (!deleted) return proc(1, "", "can't find window");
+				return proc(0);
+			}
+			case "has-session": {
+				const sessionName = arg(args, "-t");
+				if (!sessionName || !fake.sessions.has(sessionName))
+					return proc(1, "", "can't find session");
+				return proc(0);
 			}
 			case "kill-session": {
 				const name = arg(args, "-t");
@@ -929,6 +1005,163 @@ describe("session/manager.subscriptions", () => {
 		expect(createRes.ok).toBe(true);
 		if (!createRes.ok) throw new Error("agent create failed");
 		expect(createRes.value.subscriptionId).toBe(discoveredId);
+	});
+});
+
+describe("session/manager.rehydrate", () => {
+	it("rehydrates codex agents from existing tmux sessions/windows and is idempotent", async () => {
+		const sourceStore = createStore();
+		const sourceBus = createEventBus(500);
+		const sourceManager = createManager(makeConfig(), sourceStore, sourceBus);
+
+		const projectRes = await sourceManager.createProject("pr1", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await sourceManager.createAgent(
+			"pr1",
+			"codex",
+			"Reply with exactly: 4",
+			undefined,
+			undefined,
+			undefined,
+			"agent-reattach-1",
+		);
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+
+		const recoveredStore = createStore();
+		const recoveredBus = createEventBus(500);
+		const recoveredManager = createManager(makeConfig(), recoveredStore, recoveredBus);
+
+		await recoveredManager.rehydrateProjectsFromTmux();
+		await recoveredManager.rehydrateAgentsFromTmux();
+		await recoveredManager.rehydrateAgentsFromTmux();
+
+		const recoveredProject = recoveredManager.getProject("pr1");
+		expect(recoveredProject.ok).toBe(true);
+		if (!recoveredProject.ok) throw new Error("project missing after rehydrate");
+
+		const recoveredAgents = recoveredManager.listAgents("pr1");
+		expect(recoveredAgents.ok).toBe(true);
+		if (!recoveredAgents.ok) throw new Error("agents missing after rehydrate");
+		expect(recoveredAgents.value).toHaveLength(1);
+		expect(recoveredAgents.value[0]?.id).toBe("agent-reattach-1");
+		expect(recoveredAgents.value[0]?.provider).toBe("codex");
+		expect(recoveredAgents.value[0]?.tmuxTarget).toBe("ah-manager-test-pr1:agent-reattach-1");
+		expect(recoveredAgents.value[0]?.attachCommand).toContain("ah-manager-test-pr1");
+		expect(recoveredAgents.value[0]?.status).toBe("idle");
+		expect(recoveredAgents.value[0]?.lastCapturedOutput).toContain(">");
+		expect(recoveredAgents.value[0]?.providerRuntimeDir).toContain(
+			"logs/codex/pr1/agent-reattach-1",
+		);
+	});
+
+	it("rehydrates claude agents and restores provider session file path", async () => {
+		const sourceStore = createStore();
+		const sourceBus = createEventBus(500);
+		const sourceManager = createManager(makeConfig(), sourceStore, sourceBus);
+
+		const projectRes = await sourceManager.createProject("pr-claude", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await sourceManager.createAgent(
+			"pr-claude",
+			"claude-code",
+			"Reply with exactly: 4",
+			undefined,
+			undefined,
+			undefined,
+			"claude-reattach-1",
+		);
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+		expect(createRes.value.providerSessionFile).toBeDefined();
+
+		const recoveredStore = createStore();
+		const recoveredBus = createEventBus(500);
+		const recoveredManager = createManager(makeConfig(), recoveredStore, recoveredBus);
+
+		await recoveredManager.rehydrateProjectsFromTmux();
+		await recoveredManager.rehydrateAgentsFromTmux();
+
+		const recoveredAgents = recoveredManager.listAgents("pr-claude");
+		expect(recoveredAgents.ok).toBe(true);
+		if (!recoveredAgents.ok) throw new Error("agents missing after rehydrate");
+		expect(recoveredAgents.value).toHaveLength(1);
+		expect(recoveredAgents.value[0]?.id).toBe("claude-reattach-1");
+		expect(recoveredAgents.value[0]?.provider).toBe("claude-code");
+		expect(recoveredAgents.value[0]?.providerSessionFile).toBe(createRes.value.providerSessionFile);
+	});
+
+	it("rehydrates dead panes as exited", async () => {
+		const sourceStore = createStore();
+		const sourceBus = createEventBus(500);
+		const sourceManager = createManager(makeConfig(), sourceStore, sourceBus);
+
+		const projectRes = await sourceManager.createProject("pr-dead", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await sourceManager.createAgent(
+			"pr-dead",
+			"codex",
+			"Reply with exactly: 4",
+			undefined,
+			undefined,
+			undefined,
+			"dead-pane-1",
+		);
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+
+		const session = fake.sessions.get("ah-manager-test-pr-dead");
+		const window = session?.windows.get("dead-pane-1");
+		if (!window) throw new Error("window missing");
+		window.paneDead = true;
+
+		const recoveredStore = createStore();
+		const recoveredBus = createEventBus(500);
+		const recoveredManager = createManager(makeConfig(), recoveredStore, recoveredBus);
+
+		await recoveredManager.rehydrateProjectsFromTmux();
+		await recoveredManager.rehydrateAgentsFromTmux();
+
+		const recoveredAgents = recoveredManager.listAgents("pr-dead");
+		expect(recoveredAgents.ok).toBe(true);
+		if (!recoveredAgents.ok) throw new Error("agents missing after rehydrate");
+		expect(recoveredAgents.value).toHaveLength(1);
+		expect(recoveredAgents.value[0]?.status).toBe("exited");
+	});
+
+	it("skips windows when provider cannot be inferred", async () => {
+		const sourceStore = createStore();
+		const sourceBus = createEventBus(500);
+		const sourceManager = createManager(makeConfig(), sourceStore, sourceBus);
+
+		const projectRes = await sourceManager.createProject("pr-skip", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const sessionName = "ah-manager-test-pr-skip";
+		const manualWindow = await tmux.createWindow(sessionName, "agent-unknown-1", process.cwd(), [
+			"mystery-cli",
+		]);
+		expect(manualWindow.ok).toBe(true);
+		if (!manualWindow.ok) throw new Error("manual tmux window create failed");
+
+		const recoveredStore = createStore();
+		const recoveredBus = createEventBus(500);
+		const recoveredManager = createManager(makeConfig(), recoveredStore, recoveredBus);
+
+		await recoveredManager.rehydrateProjectsFromTmux();
+		await recoveredManager.rehydrateAgentsFromTmux();
+
+		const recoveredAgents = recoveredManager.listAgents("pr-skip");
+		expect(recoveredAgents.ok).toBe(true);
+		if (!recoveredAgents.ok) throw new Error("agents missing after rehydrate");
+		expect(recoveredAgents.value).toHaveLength(0);
 	});
 });
 
