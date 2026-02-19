@@ -73,7 +73,6 @@ export function createManager(
 	const envReadyTimeout =
 		envReadyTimeoutRaw !== undefined ? Number.parseInt(envReadyTimeoutRaw, 10) : null;
 	const READY_POLL_INTERVAL_MS = 200;
-	const CODEX_COLLAPSED_PASTE_MIN_CHARS = 256;
 	const DEFAULT_CODEX_HOME = resolve(join(homedir(), ".codex"));
 	const DEFAULT_PI_HOME = resolve(join(homedir(), ".pi", "agent"));
 	const CLAUDE_AUTH_ENV_KEYS = [
@@ -543,11 +542,8 @@ export function createManager(
 		text: string,
 		phase: "initial" | "followup",
 	) {
-		if (
-			phase === "followup" &&
-			providerName === "codex" &&
-			text.length >= CODEX_COLLAPSED_PASTE_MIN_CHARS
-		) {
+		if (phase === "followup" && providerName === "codex") {
+			// Codex follow-up inputs are always sent as explicit paste -> settle -> Enter.
 			const pasteResult = await tmux.pasteInput(target, text);
 			if (!pasteResult.ok) return pasteResult;
 			await Bun.sleep(codexFollowupPasteSettleMs());

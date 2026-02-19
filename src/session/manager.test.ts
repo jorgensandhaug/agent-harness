@@ -14,6 +14,7 @@ const originalSpawn = Bun.spawn;
 const originalDelay = process.env.HARNESS_INITIAL_TASK_DELAY_MS;
 const originalReadyTimeout = process.env.HARNESS_INITIAL_TASK_READY_TIMEOUT_MS;
 const originalPasteEnterDelay = process.env.HARNESS_TMUX_PASTE_ENTER_DELAY_MS;
+const originalCodexFollowupSettle = process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS;
 
 type SessionState = {
 	path: string;
@@ -123,6 +124,7 @@ beforeEach(() => {
 	process.env.HARNESS_INITIAL_TASK_DELAY_MS = "10";
 	process.env.HARNESS_INITIAL_TASK_READY_TIMEOUT_MS = "600";
 	process.env.HARNESS_TMUX_PASTE_ENTER_DELAY_MS = "0";
+	process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS = "0";
 	simulateSlowCodexStartup = false;
 	simulateClaudeStartupConfirm = false;
 	simulateCodexPasteEnterRace = false;
@@ -411,6 +413,11 @@ afterEach(async () => {
 	} else {
 		process.env.HARNESS_TMUX_PASTE_ENTER_DELAY_MS = originalPasteEnterDelay;
 	}
+	if (originalCodexFollowupSettle === undefined) {
+		process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS = undefined;
+	} else {
+		process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS = originalCodexFollowupSettle;
+	}
 	await Promise.all(cleanupDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
@@ -625,12 +632,12 @@ describe("session/manager.initial-input", () => {
 		}
 	});
 
-	it("codex submit survives paste-enter race by delaying Enter after paste", async () => {
+	it("codex submit survives paste-enter race by settling before follow-up Enter", async () => {
 		simulateCodexPasteEnterRace = true;
 		const priorDelay = process.env.HARNESS_INITIAL_TASK_DELAY_MS;
-		const priorPasteDelay = process.env.HARNESS_TMUX_PASTE_ENTER_DELAY_MS;
+		const priorFollowupSettle = process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS;
 		process.env.HARNESS_INITIAL_TASK_DELAY_MS = "10000";
-		process.env.HARNESS_TMUX_PASTE_ENTER_DELAY_MS = "120";
+		process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS = "120";
 		const store = createStore();
 		const eventBus = createEventBus(500);
 		const manager = createManager(makeConfig(), store, eventBus);
@@ -666,10 +673,10 @@ describe("session/manager.initial-input", () => {
 			} else {
 				process.env.HARNESS_INITIAL_TASK_DELAY_MS = priorDelay;
 			}
-			if (priorPasteDelay === undefined) {
-				process.env.HARNESS_TMUX_PASTE_ENTER_DELAY_MS = undefined;
+			if (priorFollowupSettle === undefined) {
+				process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS = undefined;
 			} else {
-				process.env.HARNESS_TMUX_PASTE_ENTER_DELAY_MS = priorPasteDelay;
+				process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS = priorFollowupSettle;
 			}
 		}
 	});
