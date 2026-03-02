@@ -1154,6 +1154,8 @@ export function createManager(
 			shouldPassInitialTaskViaCli(providerName) && formattedInitialTask.trim().length > 0;
 		let env = provider.buildEnv(effectiveConfig);
 		let unsetEnv: readonly string[] = [];
+		// Always strip nested-session guard vars so agents don't think they're nested.
+		unsetEnv = withUnsetEnvKeys(unsetEnv, ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"]);
 		let providerRuntimeDir: string | undefined;
 		let providerSessionFile: string | undefined;
 		if (providerName === "claude-code") {
