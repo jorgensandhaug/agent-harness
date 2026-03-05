@@ -275,6 +275,7 @@ export function createWebhookClient(
 	const lifecycleByAgent = new Map<string, LifecycleState>();
 	const deliveredTerminalStatusByAgent = new Map<string, AgentStatus>();
 	const lastStuckWarnAtMsByAgent = new Map<string, number>();
+	const rehydratedAgents = new Set<string>();
 	let safetyNetTimer: ReturnType<typeof setInterval> | null = null;
 
 	const runtime = {
@@ -485,6 +486,19 @@ export function createWebhookClient(
 			if (!isTerminalTransition(event.from, event.to)) return;
 
 			void (async () => {
+				// Skip webhook for agents that existed before this harness lifecycle
+				const scopedId = scopedAgentKey(event.project, event.agentId);
+				if (rehydratedAgents.has(scopedId)) {
+					rehydratedAgents.delete(scopedId);
+					deliveredTerminalStatusByAgent.set(scopedId, event.to);
+					log.info("webhook skipped for rehydrated agent", {
+						project: event.project,
+						agentId: event.agentId,
+						status: event.to,
+					});
+					return;
+				}
+
 				const agent = store.getAgent(projectName(event.project), event.agentId as AgentId);
 				const provider = agent?.provider ?? "unknown";
 				const sent = await sendTerminalWebhook("status_change", {
@@ -658,13 +672,20 @@ export function createWebhookClient(
 	function seedDeliveredFromStore(): void {
 		const agents = store.listAgents();
 		for (const agent of agents) {
-			if (!isTerminalStatus(agent.status)) continue;
 			const scopedId = scopedAgentKey(agent.project, agent.id);
-			deliveredTerminalStatusByAgent.set(scopedId, agent.status);
+			if (isTerminalStatus(agent.status)) {
+				// Already terminal — mark as delivered so safety net doesn't re-fire
+				deliveredTerminalStatusByAgent.set(scopedId, agent.status);
+			}
+			// For ALL rehydrated agents (terminal or not): suppress the next
+			// terminal transition webhook. These agents existed before this
+			// harness lifecycle — any completion was already delivered.
 			updateLifecycle(scopedId, agent.status, Date.now());
+			rehydratedAgents.add(scopedId);
 		}
-		log.info("webhook client seeded delivered status from store", {
-			seeded: deliveredTerminalStatusByAgent.size,
+		log.info("webhook client seeded from store", {
+			terminal: deliveredTerminalStatusByAgent.size,
+			rehydrated: rehydratedAgents.size,
 		});
 	}
 
