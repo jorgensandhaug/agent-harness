@@ -269,7 +269,7 @@ export function createWebhookClient(
 	globalWebhookConfig: WebhookConfig | null | undefined,
 	eventBus: EventBus,
 	store: Store,
-): WebhookClient {
+): WebhookClient & { seedDeliveredFromStore: () => void } {
 	const fallbackWebhookConfig = globalWebhookConfig ?? null;
 	const safetyNetConfig = fallbackWebhookConfig?.safetyNet ?? DEFAULT_SAFETY_NET;
 	const lifecycleByAgent = new Map<string, LifecycleState>();
@@ -655,6 +655,19 @@ export function createWebhookClient(
 		return { ok, payload };
 	}
 
+	function seedDeliveredFromStore(): void {
+		const agents = store.listAgents();
+		for (const agent of agents) {
+			if (!isTerminalStatus(agent.status)) continue;
+			const scopedId = scopedAgentKey(agent.project, agent.id);
+			deliveredTerminalStatusByAgent.set(scopedId, agent.status);
+			updateLifecycle(scopedId, agent.status, Date.now());
+		}
+		log.info("webhook client seeded delivered status from store", {
+			seeded: deliveredTerminalStatusByAgent.size,
+		});
+	}
+
 	void runSafetyNetCycle();
 	safetyNetTimer = setInterval(() => {
 		runSafetyNetCycle().catch((error) => {
@@ -683,5 +696,6 @@ export function createWebhookClient(
 
 	stop.getStatus = getStatus;
 	stop.sendTestWebhook = sendTestWebhook;
+	stop.seedDeliveredFromStore = seedDeliveredFromStore;
 	return stop;
 }

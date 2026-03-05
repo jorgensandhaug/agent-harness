@@ -41,6 +41,9 @@ export async function serveCommand(): Promise<void> {
 	await manager.rehydrateProjectsFromTmux();
 	await manager.rehydrateAgentsFromTmux();
 
+	// Seed webhook delivered status so we don't re-fire for already-idle agents
+	webhookClient.seedDeliveredFromStore();
+
 	// 6. Start poller
 	const poller = createPoller(config, store, manager, eventBus, debugTracker);
 	poller.start();
