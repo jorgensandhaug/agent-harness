@@ -66,8 +66,9 @@ export function createManager(
 	debugTracker?: DebugTracker,
 ) {
 	const callbackState = createCallbackState(config.logDir);
-	const TRUST_PROMPT_CONFIRM_PATTERN = /Enter to confirm/i;
-	const TRUST_PROMPT_CONTEXT_PATTERN = /Quick safety check|trust this folder|Accessing workspace/i;
+	const TRUST_PROMPT_CONFIRM_PATTERN = /Enter to confirm|Press enter to continue/i;
+	const TRUST_PROMPT_CONTEXT_PATTERN =
+		/Quick safety check|trust this folder|Accessing workspace|Do you trust the contents of this directory\?/i;
 	// biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket notation
 	const envInitialDelayRaw = process.env["HARNESS_INITIAL_TASK_DELAY_MS"];
 	const envInitialDelay =
@@ -492,6 +493,10 @@ export function createManager(
 		return providerName === "claude-code" || providerName === "codex";
 	}
 
+	function shouldAutoConfirmStartupTrustPrompt(providerName: string): boolean {
+		return providerName === "claude-code" || providerName === "codex";
+	}
+
 	function promptFileDir(project: ProjectName, id: AgentId): string {
 		return resolve(config.logDir, "prompt-cache", project, id);
 	}
@@ -547,9 +552,10 @@ export function createManager(
 		if (lines.length === 0) return false;
 
 		const bottom = lines.slice(-8).join("\n");
-		const nearBottom = lines.slice(-2).join("\n");
+		const lastVisibleLine = lines.at(-1) ?? "";
 		return (
-			TRUST_PROMPT_CONFIRM_PATTERN.test(nearBottom) && TRUST_PROMPT_CONTEXT_PATTERN.test(bottom)
+			TRUST_PROMPT_CONFIRM_PATTERN.test(lastVisibleLine) &&
+			TRUST_PROMPT_CONTEXT_PATTERN.test(bottom)
 		);
 	}
 
@@ -560,10 +566,17 @@ export function createManager(
 	): Promise<void> {
 		const deadline = Date.now() + 2500;
 		let attempts = 0;
+		let sawPrompt = false;
 		while (Date.now() < deadline && attempts < 8) {
 			const captureResult = await tmux.capturePane(target, 120);
 			if (!captureResult.ok) return;
-			if (!looksLikeStartupTrustPrompt(captureResult.value)) return;
+			const promptVisible = looksLikeStartupTrustPrompt(captureResult.value);
+			if (!promptVisible) {
+				if (sawPrompt) return;
+				await Bun.sleep(120);
+				continue;
+			}
+			sawPrompt = true;
 			const confirmResult = await tmux.sendKeys(target, "Enter");
 			if (!confirmResult.ok) {
 				log.warn("failed to auto-confirm startup trust prompt", {
@@ -1154,8 +1167,6 @@ export function createManager(
 			shouldPassInitialTaskViaCli(providerName) && formattedInitialTask.trim().length > 0;
 		let env = provider.buildEnv(effectiveConfig);
 		let unsetEnv: readonly string[] = [];
-		// Always strip nested-session guard vars so agents don't think they're nested.
-		unsetEnv = withUnsetEnvKeys(unsetEnv, ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"]);
 		let providerRuntimeDir: string | undefined;
 		let providerSessionFile: string | undefined;
 		if (providerName === "claude-code") {
@@ -1298,7 +1309,7 @@ export function createManager(
 		log.info("agent created", { id, provider: providerName, project: projectNameStr });
 
 		if (initialTaskViaCli) {
-			if (providerName === "claude-code") {
+			if (shouldAutoConfirmStartupTrustPrompt(providerName)) {
 				setTimeout(() => {
 					void dismissStartupTrustPrompt(target, id, providerName);
 				}, 120);
@@ -1337,7 +1348,7 @@ export function createManager(
 						break;
 					}
 					if (
-						providerName === "claude-code" &&
+						shouldAutoConfirmStartupTrustPrompt(providerName) &&
 						looksLikeStartupTrustPrompt(captureResult.value) &&
 						trustConfirmAttempts < 5
 					) {
@@ -1378,7 +1389,7 @@ export function createManager(
 			}
 
 			if (!stillExists()) return;
-			if (providerName === "claude-code") {
+			if (shouldAutoConfirmStartupTrustPrompt(providerName)) {
 				await dismissStartupTrustPrompt(target, id, providerName);
 			}
 			if (!stillExists()) return;
@@ -1442,7 +1453,7 @@ export function createManager(
 			return err({ code: "UNKNOWN_PROVIDER", name: agent.provider });
 		}
 
-		if (agent.provider === "claude-code") {
+		if (shouldAutoConfirmStartupTrustPrompt(agent.provider)) {
 			await dismissStartupTrustPrompt(agent.tmuxTarget, agent.id, agent.provider);
 		}
 		let formatted = providerResult.value.formatInput(text);

@@ -34,6 +34,7 @@ type SessionState = {
 			paneDead: boolean;
 			createdAtMs: number;
 			readyAfterMs: number;
+			startupConfirmVisibleAfterMs: number;
 			requiresStartupConfirm: boolean;
 			startupConfirmed: boolean;
 			enterKeyCount: number;
@@ -61,6 +62,8 @@ const fake: FakeTmuxState = {
 };
 let simulateSlowCodexStartup = false;
 let simulateClaudeStartupConfirm = false;
+let simulateCodexStartupConfirm = false;
+let simulateStartupConfirmVisibleAfterMs = 0;
 let simulateCodexPasteEnterRace = false;
 let simulateCodexCollapsedPasteSubmit = false;
 let simulateCodexCollapsedPasteMarkerDelayMs = 0;
@@ -118,6 +121,28 @@ function extractPromptFilePath(text: string): string | null {
 	return match?.[1] ?? null;
 }
 
+function startupTrustPromptLines(provider: string): string[] {
+	if (provider === "codex") {
+		return [
+			"OpenAI Codex",
+			"",
+			"Do you trust the contents of this directory?",
+			"Press enter to continue",
+		];
+	}
+	return [
+		"Accessing workspace:",
+		"",
+		"/tmp/fake",
+		"",
+		"Quick safety check: Is this a project you created or one you trust?",
+		"1. Yes, I trust this folder",
+		"2. No, exit",
+		"",
+		"Enter to confirm",
+	];
+}
+
 function resolveWindow(target: string): { session: SessionState; windowName: string } | null {
 	const [sessionName, windowName] = target.split(":");
 	if (!sessionName || !windowName) return null;
@@ -138,6 +163,8 @@ beforeEach(() => {
 	process.env.HARNESS_CODEX_FOLLOWUP_PASTE_SETTLE_MS = "0";
 	simulateSlowCodexStartup = false;
 	simulateClaudeStartupConfirm = false;
+	simulateCodexStartupConfirm = false;
+	simulateStartupConfirmVisibleAfterMs = 0;
 	simulateCodexPasteEnterRace = false;
 	simulateCodexCollapsedPasteSubmit = false;
 	simulateCodexCollapsedPasteMarkerDelayMs = 0;
@@ -201,7 +228,10 @@ beforeEach(() => {
 					paneDead: false,
 					createdAtMs: Date.now(),
 					readyAfterMs: simulateSlowCodexStartup && provider === "codex" ? 350 : 0,
-					requiresStartupConfirm: simulateClaudeStartupConfirm && provider === "claude",
+					startupConfirmVisibleAfterMs: simulateStartupConfirmVisibleAfterMs,
+					requiresStartupConfirm:
+						(simulateClaudeStartupConfirm && provider === "claude") ||
+						(simulateCodexStartupConfirm && provider === "codex"),
 					startupConfirmed: false,
 					enterKeyCount: 0,
 					lastPasteAtMs: 0,
@@ -218,7 +248,9 @@ beforeEach(() => {
 				const namedBuffer = arg(args, "-b");
 				const namedBufferIndex = args.indexOf("-b");
 				const path = namedBuffer
-					? (namedBufferIndex !== -1 ? args[namedBufferIndex + 2] : undefined)
+					? namedBufferIndex !== -1
+						? args[namedBufferIndex + 2]
+						: undefined
 					: args[1];
 				if (!path) return proc(1, "", "missing path");
 				try {
@@ -345,23 +377,13 @@ beforeEach(() => {
 				if (!resolved) return proc(1, "", "can't find window");
 				const window = resolved.session.windows.get(resolved.windowName);
 				if (!window) return proc(1, "", "can't find window");
-				if (window.requiresStartupConfirm && !window.startupConfirmed) {
-					return proc(
-						0,
-						[
-							"Accessing workspace:",
-							"",
-							"/tmp/fake",
-							"",
-							"Quick safety check: Is this a project you created or one you trust?",
-							"1. Yes, I trust this folder",
-							"2. No, exit",
-							"",
-							"Enter to confirm",
-						].join("\n"),
-					);
-				}
 				const ageMs = Date.now() - window.createdAtMs;
+				if (window.requiresStartupConfirm && !window.startupConfirmed) {
+					if (ageMs < window.startupConfirmVisibleAfterMs) {
+						return proc(0, "booting...\n");
+					}
+					return proc(0, startupTrustPromptLines(window.provider).join("\n"));
+				}
 				if (ageMs < window.readyAfterMs) {
 					return proc(0, "booting...\n");
 				}
@@ -630,6 +652,63 @@ describe("session/manager.initial-input", () => {
 		expect(deleteRes.ok).toBe(true);
 	});
 
+	it("passes codex initial task as startup CLI argument and auto-confirms trust prompt", async () => {
+		simulateCodexStartupConfirm = true;
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(makeConfig(), store, eventBus);
+
+		const projectRes = await manager.createProject("p3-codex", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await manager.createAgent("p3-codex", "codex", "Reply with exactly: 4");
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+		const target = createRes.value.tmuxTarget;
+		const [sessionName, windowName] = target.split(":");
+		if (!sessionName || !windowName) throw new Error("bad tmux target");
+		const session = fake.sessions.get(sessionName);
+		const window = session?.windows.get(windowName);
+		if (!window) throw new Error("window missing");
+		expect(window.startCommand).toContain("Reply with exactly: 4");
+		await waitFor(() => window.startupConfirmed, 1500);
+
+		const deleteRes = await manager.deleteProject("p3-codex");
+		expect(deleteRes.ok).toBe(true);
+	});
+
+	it("auto-confirms a codex trust prompt that appears after initial startup delay", async () => {
+		simulateCodexStartupConfirm = true;
+		simulateStartupConfirmVisibleAfterMs = 300;
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(makeConfig(), store, eventBus);
+
+		const projectRes = await manager.createProject("p3-codex-delayed", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await manager.createAgent(
+			"p3-codex-delayed",
+			"codex",
+			"Reply with exactly: 4",
+		);
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+		const target = createRes.value.tmuxTarget;
+		const [sessionName, windowName] = target.split(":");
+		if (!sessionName || !windowName) throw new Error("bad tmux target");
+		const session = fake.sessions.get(sessionName);
+		const window = session?.windows.get(windowName);
+		if (!window) throw new Error("window missing");
+
+		await waitFor(() => window.startupConfirmed, 1500);
+
+		const deleteRes = await manager.deleteProject("p3-codex-delayed");
+		expect(deleteRes.ok).toBe(true);
+	});
+
 	it("stores claude session file path with dot-segment-safe project key", async () => {
 		const store = createStore();
 		const eventBus = createEventBus(500);
@@ -684,6 +763,48 @@ describe("session/manager.initial-input", () => {
 			await waitFor(containsFollowUp, 1500);
 
 			const deleteRes = await manager.deleteProject("p4");
+			expect(deleteRes.ok).toBe(true);
+		} finally {
+			if (priorDelay === undefined) {
+				process.env.HARNESS_INITIAL_TASK_DELAY_MS = undefined;
+			} else {
+				process.env.HARNESS_INITIAL_TASK_DELAY_MS = priorDelay;
+			}
+		}
+	});
+
+	it("sendInput auto-confirms codex trust prompt before follow-up input", async () => {
+		simulateCodexStartupConfirm = true;
+		const priorDelay = process.env.HARNESS_INITIAL_TASK_DELAY_MS;
+		process.env.HARNESS_INITIAL_TASK_DELAY_MS = "10000";
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(makeConfig(), store, eventBus);
+
+		try {
+			const projectRes = await manager.createProject("p4-codex", process.cwd());
+			expect(projectRes.ok).toBe(true);
+			if (!projectRes.ok) throw new Error("project create failed");
+
+			const createRes = await manager.createAgent("p4-codex", "codex", "initial task");
+			expect(createRes.ok).toBe(true);
+			if (!createRes.ok) throw new Error("agent create failed");
+			const target = createRes.value.tmuxTarget;
+
+			const sendRes = await manager.sendInput("p4-codex", createRes.value.id, "follow-up prompt");
+			expect(sendRes.ok).toBe(true);
+
+			const containsFollowUp = (): boolean => {
+				const [sessionName, windowName] = target.split(":");
+				if (!sessionName || !windowName) return false;
+				const session = fake.sessions.get(sessionName);
+				const window = session?.windows.get(windowName);
+				return Boolean(window?.buffer.includes("follow-up prompt") && window.startupConfirmed);
+			};
+
+			await waitFor(containsFollowUp, 1500);
+
+			const deleteRes = await manager.deleteProject("p4-codex");
 			expect(deleteRes.ok).toBe(true);
 		} finally {
 			if (priorDelay === undefined) {
