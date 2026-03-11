@@ -121,6 +121,18 @@ function extractPromptFilePath(text: string): string | null {
 	return match?.[1] ?? null;
 }
 
+function resolveWindow(target: string): { session: SessionState; windowName: string } | null {
+	const [sessionName, windowName] = target.split(":");
+	if (!sessionName || !windowName) return null;
+	const session = fake.sessions.get(sessionName);
+	if (!session) return null;
+	return { session, windowName };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
+}
+
 function startupTrustPromptLines(provider: string): string[] {
 	if (provider === "codex") {
 		return [
@@ -141,18 +153,6 @@ function startupTrustPromptLines(provider: string): string[] {
 		"",
 		"Enter to confirm",
 	];
-}
-
-function resolveWindow(target: string): { session: SessionState; windowName: string } | null {
-	const [sessionName, windowName] = target.split(":");
-	if (!sessionName || !windowName) return null;
-	const session = fake.sessions.get(sessionName);
-	if (!session) return null;
-	return { session, windowName };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
 }
 
 beforeEach(() => {
@@ -708,7 +708,6 @@ describe("session/manager.initial-input", () => {
 		const deleteRes = await manager.deleteProject("p3-codex-delayed");
 		expect(deleteRes.ok).toBe(true);
 	});
-
 	it("stores claude session file path with dot-segment-safe project key", async () => {
 		const store = createStore();
 		const eventBus = createEventBus(500);
