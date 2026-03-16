@@ -2158,6 +2158,68 @@ describe("session/manager.rehydrate", () => {
 		expect(recovered.value.finalMessage).toBe("done");
 		expect(recovered.value.deliveryState).toBe("pending");
 	});
+
+	it("keeps the finalized status for quiesced agents even if the pane is dead on restart", async () => {
+		const logDir = await makeTempDir("ah-terminal-rehydrate-dead-pane-");
+		const config = makeConfig(logDir);
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(config, store, eventBus);
+
+		const projectRes = await manager.createProject("pr-quiesced-dead", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await manager.createAgent(
+			"pr-quiesced-dead",
+			"codex",
+			"initial task",
+			undefined,
+			undefined,
+			undefined,
+			"quiesced-dead-1",
+		);
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+
+		const persisted = store.getAgent("pr-quiesced-dead", "quiesced-dead-1");
+		if (!persisted) throw new Error("agent missing from store");
+		persisted.status = "idle";
+		persisted.pollState = "quiesced";
+		persisted.terminalStatus = "idle";
+		persisted.terminalObservedAt = "2026-02-18T09:59:58.000Z";
+		persisted.terminalQuietSince = "2026-02-18T09:59:59.000Z";
+		persisted.finalizedAt = "2026-02-18T10:00:00.000Z";
+		persisted.finalMessage = "done";
+		persisted.finalMessageSource = "internals_codex_jsonl";
+		persisted.deliveryState = "sent";
+		persisted.deliveryId = "delivery-quiesced-dead-1";
+		persisted.deliverySentAt = "2026-02-18T10:00:01.000Z";
+		await manager.persistAgentTerminalState("pr-quiesced-dead", "quiesced-dead-1");
+
+		const [sessionName, windowName] = persisted.tmuxTarget.split(":");
+		if (!sessionName || !windowName) throw new Error("bad tmux target");
+		const session = fake.sessions.get(sessionName);
+		const window = session?.windows.get(windowName);
+		if (!window) throw new Error("window missing");
+		window.paneDead = true;
+
+		const recoveredStore = createStore();
+		const recoveredBus = createEventBus(500);
+		const recoveredManager = createManager(config, recoveredStore, recoveredBus);
+		await recoveredManager.rehydrateProjectsFromTmux();
+		await recoveredManager.rehydrateAgentsFromTmux();
+
+		const recovered = recoveredManager.getAgent("pr-quiesced-dead", "quiesced-dead-1");
+		expect(recovered.ok).toBe(true);
+		if (!recovered.ok) throw new Error("rehydrated agent missing");
+		expect(recovered.value.status).toBe("idle");
+		expect(recovered.value.pollState).toBe("quiesced");
+		expect(recovered.value.terminalStatus).toBe("idle");
+		expect(recovered.value.finalizedAt).toBe("2026-02-18T10:00:00.000Z");
+		expect(recovered.value.deliveryState).toBe("sent");
+		expect(recovered.value.deliverySentAt).toBe("2026-02-18T10:00:01.000Z");
+	});
 });
 
 describe("session/manager.quiesced-reactivation", () => {

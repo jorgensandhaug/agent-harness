@@ -1008,9 +1008,9 @@ export function createManager(
 				const persistedTerminalState = await loadPersistedTerminalState(project.name, id);
 				const restoredTerminalState = persistedTerminalState ?? defaultTerminalState();
 				if (
-					status !== "exited" &&
-					restoredTerminalState.pollState !== "active" &&
-					restoredTerminalState.terminalStatus !== null
+					restoredTerminalState.terminalStatus !== null &&
+					(restoredTerminalState.pollState === "quiesced" ||
+						(restoredTerminalState.pollState === "finalizing" && status !== "exited"))
 				) {
 					status = restoredTerminalState.terminalStatus;
 				}
