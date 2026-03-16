@@ -443,6 +443,8 @@ export function createPoller(
 					);
 					return;
 				}
+			} else {
+				runtime.consecutiveSessionNotFound = 0;
 			}
 			debugTracker?.noteError(
 				scopedAgentId,

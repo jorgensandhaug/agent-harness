@@ -872,6 +872,99 @@ describe("session/poller.finalization", () => {
 			unsubscribe();
 		}
 	});
+
+	it("does not mark agents exited when a non-missing pane_dead error breaks the sequence", async () => {
+		const config = makeConfig();
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(config, store, eventBus);
+		const poller = createPoller(config, store, manager, eventBus);
+		const seen: NormalizedEvent[] = [];
+		const unsubscribe = eventBus.subscribe({ project: "pf-mixed-missing-session" }, (event) =>
+			seen.push(event),
+		);
+
+		try {
+			const projectRes = await manager.createProject("pf-mixed-missing-session", process.cwd());
+			expect(projectRes.ok).toBe(true);
+			if (!projectRes.ok) throw new Error("project create failed");
+
+			const createRes = await manager.createAgent(
+				"pf-mixed-missing-session",
+				"codex",
+				"initial task",
+				undefined,
+				undefined,
+				undefined,
+				"codex-mixed-missing-session",
+			);
+			expect(createRes.ok).toBe(true);
+			if (!createRes.ok) throw new Error("agent create failed");
+
+			const target = createRes.value.tmuxTarget;
+			const priorSpawn = Bun.spawn;
+			let paneDeadReads = 0;
+			(Bun as { spawn: typeof Bun.spawn }).spawn = ((cmd, options) => {
+				if (Array.isArray(cmd) && cmd[0] === "tmux") {
+					const args = cmd.slice(1);
+					const sub = args[0];
+					const targetIndex = args.indexOf("-t");
+					const cmdTarget = targetIndex === -1 ? undefined : args[targetIndex + 1];
+					const format = args[args.length - 1];
+					if (
+						sub === "display-message" &&
+						cmdTarget === target &&
+						format === "#{pane_dead}"
+					) {
+						paneDeadReads += 1;
+						if (paneDeadReads === 1 || paneDeadReads === 2 || paneDeadReads === 4) {
+							return proc(1, "", "can't find window");
+						}
+						if (paneDeadReads === 3) {
+							return proc(1, "", "unexpected tmux failure");
+						}
+					}
+				}
+				return priorSpawn(cmd, options);
+			}) as typeof Bun.spawn;
+
+			try {
+				await poller.poll();
+				await poller.poll();
+				await poller.poll();
+				await poller.poll();
+			} finally {
+				(Bun as { spawn: typeof Bun.spawn }).spawn = priorSpawn;
+			}
+
+			expect(paneDeadReads).toBe(4);
+			const agentRes = manager.getAgent(
+				"pf-mixed-missing-session",
+				"codex-mixed-missing-session",
+			);
+			expect(agentRes.ok).toBe(true);
+			if (!agentRes.ok) throw new Error("agent missing after mixed pane_dead errors");
+			expect(agentRes.value.status).not.toBe("exited");
+			expect(agentRes.value.pollState).not.toBe("quiesced");
+			expect(
+				seen.some(
+					(event) =>
+						event.type === "status_changed" &&
+						event.agentId === "codex-mixed-missing-session" &&
+						event.to === "exited",
+				),
+			).toBe(false);
+			expect(
+				seen.some(
+					(event) =>
+						event.type === "agent_exited" &&
+						event.agentId === "codex-mixed-missing-session",
+				),
+			).toBe(false);
+		} finally {
+			unsubscribe();
+		}
+	});
 });
 
 describe("session/manager.initial-input", () => {
