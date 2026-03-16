@@ -421,6 +421,7 @@ ${PROVIDER_OPTIONS_HTML}
 					"tool_result",
 					"error",
 					"agent_exited",
+					"agent_terminal_finalized",
 					"input_sent",
 					"permission_requested",
 					"question_asked",

@@ -218,7 +218,9 @@ describe("tmux/client.command-shape", () => {
 			buffers.add(bufferName);
 		}
 
-		const pasteCalls = state.calls.filter((call) => call[0] === "tmux" && call[1] === "paste-buffer");
+		const pasteCalls = state.calls.filter(
+			(call) => call[0] === "tmux" && call[1] === "paste-buffer",
+		);
 		expect(pasteCalls.length).toBe(2);
 		const targets = new Set<string>();
 		for (const call of pasteCalls) {

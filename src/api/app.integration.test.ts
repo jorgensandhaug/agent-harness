@@ -165,7 +165,9 @@ class FakeTmux {
 		const namedBuffer = this.arg(args, "-b");
 		const namedBufferIndex = args.indexOf("-b");
 		const path = namedBuffer
-			? (namedBufferIndex !== -1 ? args[namedBufferIndex + 2] : undefined)
+			? namedBufferIndex !== -1
+				? args[namedBufferIndex + 2]
+				: undefined
 			: args[1];
 		if (!path) return this.fail("missing path");
 		try {

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { HarnessConfig } from "../config.ts";
 import type { DebugTracker } from "../debug/tracker.ts";
 import type { EventBus } from "../events/bus.ts";
@@ -6,7 +7,9 @@ import { log } from "../log.ts";
 import { getProvider } from "../providers/registry.ts";
 import type { AgentStatus } from "../providers/types.ts";
 import type { Manager } from "../session/manager.ts";
+import { readAgentMessages } from "../session/messages.ts";
 import type { Store } from "../session/store.ts";
+import type { Agent, AgentTerminalMessageSource, AgentTerminalStatus } from "../session/types.ts";
 import * as tmux from "../tmux/client.ts";
 import { type AgentId, type ProjectName, newEventId } from "../types.ts";
 import { newClaudeInternalsCursor, readClaudeInternalsStatus } from "./claude-internals.ts";
@@ -16,6 +19,53 @@ import { newOpenCodeInternalsCursor, readOpenCodeInternalsStatus } from "./openc
 import { newPiInternalsCursor, readPiInternalsStatus } from "./pi-internals.ts";
 import { shouldUseUiParserForStatus } from "./status-source.ts";
 import { deriveStatusFromSignals } from "./status.ts";
+
+type FinalMessageSnapshot = {
+	message: string | null;
+	source: AgentTerminalMessageSource | null;
+};
+
+type PollRuntime = {
+	lastDiffAtMs: number | null;
+	lastFinalMessage: string | null | undefined;
+	lastFinalMessageSource: AgentTerminalMessageSource | null | undefined;
+	finalMessageReadCount: number;
+	stableFinalMessageReads: number;
+	codexCursor: ReturnType<typeof newCodexInternalsCursor>;
+	claudeCursor: ReturnType<typeof newClaudeInternalsCursor>;
+	piCursor: ReturnType<typeof newPiInternalsCursor>;
+	opencodeCursor: ReturnType<typeof newOpenCodeInternalsCursor>;
+	lastPaneDeadErrorWarnAtMs: number | null;
+	lastPaneCommandErrorWarnAtMs: number | null;
+	lastCaptureErrorWarnAtMs: number | null;
+};
+
+const IDLE_ERROR_QUIET_MS = 2_000;
+const FINALIZATION_HARD_STOP_MS = 10_000;
+const EXITED_READ_WINDOW_MS = 1_000;
+const EXITED_READ_SETTLE_MS = 250;
+
+function parseIsoMs(value: string | null | undefined): number | null {
+	if (!value) return null;
+	const parsed = Date.parse(value);
+	return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isTerminalStatus(status: AgentStatus): status is AgentTerminalStatus {
+	return status === "idle" || status === "error" || status === "exited";
+}
+
+function deliveryIdFor(
+	project: string,
+	agentId: string,
+	status: AgentTerminalStatus,
+	observedAt: string,
+): string {
+	return createHash("sha256")
+		.update(`${project}\u0000${agentId}\u0000${status}\u0000${observedAt}`)
+		.digest("hex")
+		.slice(0, 24);
+}
 
 export function createPoller(
 	config: HarnessConfig,
@@ -27,34 +77,17 @@ export function createPoller(
 	const ERROR_LOG_THROTTLE_MS = 30_000;
 	let timer: ReturnType<typeof setInterval> | null = null;
 	let polling = false;
-	const statusRuntime = new Map<
-		string,
-		{
-			lastDiffAtMs: number | null;
-			codexCursor: ReturnType<typeof newCodexInternalsCursor>;
-			claudeCursor: ReturnType<typeof newClaudeInternalsCursor>;
-			piCursor: ReturnType<typeof newPiInternalsCursor>;
-			opencodeCursor: ReturnType<typeof newOpenCodeInternalsCursor>;
-			lastPaneDeadErrorWarnAtMs: number | null;
-			lastPaneCommandErrorWarnAtMs: number | null;
-			lastCaptureErrorWarnAtMs: number | null;
-		}
-	>();
+	const statusRuntime = new Map<string, PollRuntime>();
 
-	function runtimeFor(agentId: string): {
-		lastDiffAtMs: number | null;
-		codexCursor: ReturnType<typeof newCodexInternalsCursor>;
-		claudeCursor: ReturnType<typeof newClaudeInternalsCursor>;
-		piCursor: ReturnType<typeof newPiInternalsCursor>;
-		opencodeCursor: ReturnType<typeof newOpenCodeInternalsCursor>;
-		lastPaneDeadErrorWarnAtMs: number | null;
-		lastPaneCommandErrorWarnAtMs: number | null;
-		lastCaptureErrorWarnAtMs: number | null;
-	} {
+	function runtimeFor(agentId: string): PollRuntime {
 		let found = statusRuntime.get(agentId);
 		if (!found) {
 			found = {
 				lastDiffAtMs: null,
+				lastFinalMessage: undefined,
+				lastFinalMessageSource: undefined,
+				finalMessageReadCount: 0,
+				stableFinalMessageReads: 0,
 				codexCursor: newCodexInternalsCursor(),
 				claudeCursor: newClaudeInternalsCursor(),
 				piCursor: newPiInternalsCursor(),
@@ -68,21 +101,265 @@ export function createPoller(
 		return found;
 	}
 
+	function resetFinalizationRuntime(scopedAgentId: string): void {
+		const runtime = runtimeFor(scopedAgentId);
+		runtime.lastFinalMessage = undefined;
+		runtime.lastFinalMessageSource = undefined;
+		runtime.finalMessageReadCount = 0;
+		runtime.stableFinalMessageReads = 0;
+	}
+
 	function shouldWarn(lastWarnAtMs: number | null, nowMs: number): boolean {
 		if (lastWarnAtMs === null) return true;
 		return nowMs - lastWarnAtMs >= ERROR_LOG_THROTTLE_MS;
 	}
 
-	async function pollAgent(agent: {
-		id: string;
-		provider: string;
-		tmuxTarget: string;
-		project: string;
-		status: AgentStatus;
-		lastCapturedOutput: string;
-		providerRuntimeDir?: string;
-		providerSessionFile?: string;
-	}): Promise<void> {
+	async function readFinalMessageSnapshot(agent: Agent): Promise<FinalMessageSnapshot> {
+		try {
+			const result = await readAgentMessages(agent, { limit: 1, role: "assistant" });
+			return {
+				message: result.lastAssistantMessage?.text ?? null,
+				source: result.source,
+			};
+		} catch {
+			return {
+				message: null,
+				source: null,
+			};
+		}
+	}
+
+	function recordFinalMessageSnapshot(
+		runtime: PollRuntime,
+		snapshot: FinalMessageSnapshot,
+	): FinalMessageSnapshot {
+		runtime.finalMessageReadCount += 1;
+		if (
+			runtime.lastFinalMessage === snapshot.message &&
+			runtime.lastFinalMessageSource === snapshot.source
+		) {
+			runtime.stableFinalMessageReads += 1;
+		} else {
+			runtime.lastFinalMessage = snapshot.message;
+			runtime.lastFinalMessageSource = snapshot.source;
+			runtime.stableFinalMessageReads = 1;
+		}
+		return snapshot;
+	}
+
+	async function persistTerminalState(agent: Agent): Promise<void> {
+		await manager.persistAgentTerminalState(agent.project, agent.id);
+	}
+
+	async function clearTerminalLifecycle(agent: Agent, scopedAgentId: string): Promise<void> {
+		const hadTerminalState =
+			agent.pollState !== "active" ||
+			agent.terminalStatus !== null ||
+			agent.terminalObservedAt !== null ||
+			agent.terminalQuietSince !== null ||
+			agent.finalizedAt !== null ||
+			agent.deliveryId !== null ||
+			agent.deliveryState !== "not_applicable" ||
+			agent.deliveryInFlight;
+		if (!hadTerminalState) return;
+
+		agent.pollState = "active";
+		agent.terminalStatus = null;
+		agent.terminalObservedAt = null;
+		agent.terminalQuietSince = null;
+		agent.finalizedAt = null;
+		agent.finalMessage = null;
+		agent.finalMessageSource = null;
+		agent.deliveryState = "not_applicable";
+		agent.deliveryInFlight = false;
+		agent.deliveryId = null;
+		agent.deliverySentAt = null;
+		resetFinalizationRuntime(scopedAgentId);
+		await persistTerminalState(agent);
+	}
+
+	async function beginFinalizing(
+		agent: Agent,
+		scopedAgentId: string,
+		terminalStatus: AgentTerminalStatus,
+		diffHasContent: boolean,
+		nowIso: string,
+	): Promise<void> {
+		const nextQuietSince = terminalStatus === "exited" ? null : diffHasContent ? null : nowIso;
+		const needsReset =
+			agent.pollState !== "finalizing" ||
+			agent.terminalStatus !== terminalStatus ||
+			agent.terminalObservedAt === null ||
+			agent.finalizedAt !== null ||
+			agent.deliveryId === null;
+
+		if (needsReset) {
+			agent.pollState = "finalizing";
+			agent.terminalStatus = terminalStatus;
+			agent.terminalObservedAt = nowIso;
+			agent.terminalQuietSince = nextQuietSince;
+			agent.finalizedAt = null;
+			agent.finalMessage = null;
+			agent.finalMessageSource = null;
+			agent.deliveryState = "pending";
+			agent.deliveryInFlight = false;
+			agent.deliveryId = deliveryIdFor(agent.project, agent.id, terminalStatus, nowIso);
+			agent.deliverySentAt = null;
+			resetFinalizationRuntime(scopedAgentId);
+			await persistTerminalState(agent);
+			return;
+		}
+
+		if (terminalStatus !== "exited") {
+			if (diffHasContent && agent.terminalQuietSince !== null) {
+				agent.terminalQuietSince = null;
+				resetFinalizationRuntime(scopedAgentId);
+				await persistTerminalState(agent);
+				return;
+			}
+			if (!diffHasContent && agent.terminalQuietSince === null) {
+				agent.terminalQuietSince = nowIso;
+				await persistTerminalState(agent);
+			}
+		}
+	}
+
+	async function finalizeTerminal(
+		agent: Agent,
+		scopedAgentId: string,
+		terminalStatus: AgentTerminalStatus,
+		snapshot: FinalMessageSnapshot,
+		nowIso: string,
+	): Promise<void> {
+		agent.pollState = "quiesced";
+		agent.terminalStatus = terminalStatus;
+		if (terminalStatus !== "exited" && agent.terminalQuietSince === null) {
+			agent.terminalQuietSince = nowIso;
+		}
+		agent.finalizedAt = nowIso;
+		agent.finalMessage = snapshot.message;
+		agent.finalMessageSource = snapshot.source;
+		agent.deliveryState = "pending";
+		agent.deliveryInFlight = false;
+		agent.deliverySentAt = null;
+		if (agent.deliveryId === null && agent.terminalObservedAt) {
+			agent.deliveryId = deliveryIdFor(
+				agent.project,
+				agent.id,
+				terminalStatus,
+				agent.terminalObservedAt,
+			);
+		}
+
+		await persistTerminalState(agent);
+		resetFinalizationRuntime(scopedAgentId);
+		statusRuntime.delete(scopedAgentId);
+		eventBus.emit({
+			id: newEventId(),
+			ts: nowIso,
+			project: agent.project,
+			agentId: agent.id,
+			type: "agent_terminal_finalized",
+			provider: agent.provider,
+			status: terminalStatus,
+			finalizedAt: nowIso,
+			terminalObservedAt: agent.terminalObservedAt ?? nowIso,
+			lastMessage: snapshot.message,
+			messageSource: snapshot.source,
+			deliveryId: agent.deliveryId,
+		});
+	}
+
+	async function maybeFinalizeExited(
+		agent: Agent,
+		scopedAgentId: string,
+		runtime: PollRuntime,
+		nowMs: number,
+		nowIso: string,
+	): Promise<void> {
+		const observedAtMs = parseIsoMs(agent.terminalObservedAt) ?? nowMs;
+		const deadlineMs = observedAtMs + EXITED_READ_WINDOW_MS;
+		let snapshot = recordFinalMessageSnapshot(runtime, await readFinalMessageSnapshot(agent));
+
+		while (runtime.finalMessageReadCount < 2 && Date.now() < deadlineMs) {
+			const remainingMs = deadlineMs - Date.now();
+			if (remainingMs <= 0) break;
+			await Bun.sleep(Math.min(EXITED_READ_SETTLE_MS, remainingMs));
+			snapshot = recordFinalMessageSnapshot(runtime, await readFinalMessageSnapshot(agent));
+		}
+
+		if (runtime.finalMessageReadCount >= 2 || Date.now() >= deadlineMs) {
+			await finalizeTerminal(agent, scopedAgentId, "exited", snapshot, nowIso);
+		}
+	}
+
+	async function maybeFinalizeIdleOrError(
+		agent: Agent,
+		scopedAgentId: string,
+		runtime: PollRuntime,
+		diffHasContent: boolean,
+		nowMs: number,
+		nowIso: string,
+	): Promise<void> {
+		if (diffHasContent) {
+			if (agent.terminalQuietSince !== null) {
+				agent.terminalQuietSince = null;
+				await persistTerminalState(agent);
+			}
+			resetFinalizationRuntime(scopedAgentId);
+			return;
+		}
+
+		if (agent.terminalQuietSince === null) {
+			agent.terminalQuietSince = nowIso;
+			await persistTerminalState(agent);
+		}
+
+		const snapshot = recordFinalMessageSnapshot(runtime, await readFinalMessageSnapshot(agent));
+		const quietSinceMs = parseIsoMs(agent.terminalQuietSince) ?? nowMs;
+		const observedAtMs = parseIsoMs(agent.terminalObservedAt) ?? nowMs;
+		const quietEnough = nowMs - quietSinceMs >= IDLE_ERROR_QUIET_MS;
+		const hardStopReached = nowMs - observedAtMs >= FINALIZATION_HARD_STOP_MS;
+
+		if (!quietEnough || runtime.stableFinalMessageReads < 2) return;
+		if (snapshot.message !== null || hardStopReached) {
+			await finalizeTerminal(
+				agent,
+				scopedAgentId,
+				agent.terminalStatus ?? "idle",
+				snapshot,
+				nowIso,
+			);
+		}
+	}
+
+	async function reconcileTerminalLifecycle(
+		agent: Agent,
+		scopedAgentId: string,
+		runtime: PollRuntime,
+		status: AgentStatus,
+		diffHasContent: boolean,
+		nowMs: number,
+		nowIso: string,
+	): Promise<void> {
+		if (!isTerminalStatus(status)) {
+			await clearTerminalLifecycle(agent, scopedAgentId);
+			return;
+		}
+
+		await beginFinalizing(agent, scopedAgentId, status, diffHasContent, nowIso);
+
+		if (status === "exited") {
+			await maybeFinalizeExited(agent, scopedAgentId, runtime, nowMs, nowIso);
+			return;
+		}
+
+		await maybeFinalizeIdleOrError(agent, scopedAgentId, runtime, diffHasContent, nowMs, nowIso);
+	}
+
+	async function pollAgent(agent: Agent): Promise<void> {
+		if ((agent.pollState ?? "active") === "quiesced") return;
+
 		const scopedAgentId = `${agent.project}:${agent.id}`;
 		const pollTs = new Date().toISOString();
 		debugTracker?.notePoll(scopedAgentId, { lastPollAt: pollTs });
@@ -92,8 +369,8 @@ export function createPoller(
 		const provider = providerResult.value;
 		const runtime = runtimeFor(scopedAgentId);
 		const nowMs = Date.now();
+		const nowIso = new Date(nowMs).toISOString();
 
-		// Check if pane is dead (process exited)
 		const paneDeadResult = await tmux.getPaneVar(agent.tmuxTarget, "pane_dead");
 		if (!paneDeadResult.ok) {
 			debugTracker?.noteError(
@@ -135,13 +412,12 @@ export function createPoller(
 		}
 
 		if (paneDeadResult.ok && paneDeadResult.value === "1") {
-			statusRuntime.delete(scopedAgentId);
 			if (agent.status !== "exited") {
 				const from = agent.status;
 				manager.updateAgentStatus(agent.project as ProjectName, agent.id as AgentId, "exited");
 				eventBus.emit({
 					id: newEventId(),
-					ts: new Date().toISOString(),
+					ts: nowIso,
 					project: agent.project,
 					agentId: agent.id,
 					type: "status_changed",
@@ -151,17 +427,25 @@ export function createPoller(
 				});
 				eventBus.emit({
 					id: newEventId(),
-					ts: new Date().toISOString(),
+					ts: nowIso,
 					project: agent.project,
 					agentId: agent.id,
 					type: "agent_exited",
 					exitCode: null,
 				});
 			}
+			await reconcileTerminalLifecycle(
+				agent,
+				scopedAgentId,
+				runtime,
+				"exited",
+				false,
+				nowMs,
+				nowIso,
+			);
 			return;
 		}
 
-		// Capture pane content
 		const captureResult = await tmux.capturePane(agent.tmuxTarget, config.captureLines);
 		if (!captureResult.ok) {
 			debugTracker?.noteError(
@@ -184,7 +468,6 @@ export function createPoller(
 		const currentOutput = captureResult.value;
 		debugTracker?.notePoll(scopedAgentId, { lastCaptureBytes: currentOutput.length });
 
-		// Detect new content via diff
 		const diff = diffCaptures(agent.lastCapturedOutput, currentOutput);
 		debugTracker?.notePoll(scopedAgentId, { lastDiffBytes: diff.length });
 		const diffHasContent = diff.trim().length > 0;
@@ -193,7 +476,6 @@ export function createPoller(
 			runtime.lastDiffAtMs = statusNowMs;
 		}
 
-		// Update stored output
 		manager.updateAgentOutput(agent.project as ProjectName, agent.id as AgentId, currentOutput);
 
 		let providerEvents: ReturnType<typeof provider.parseOutputDiff> = [];
@@ -315,10 +597,10 @@ export function createPoller(
 				debugTracker?.noteError(scopedAgentId, "parse", `opencode internals read failed: ${msg}`);
 			}
 		}
+
 		let newStatus: AgentStatus;
 		let statusSource: StatusChangeSource;
 		if (codexStrictStatus) {
-			// For Codex, trust internals only. If no new internals status is available, keep current status.
 			newStatus = parsedStatus === "starting" ? agent.status : parsedStatus;
 			statusSource = "internals_codex_jsonl";
 		} else {
@@ -343,7 +625,7 @@ export function createPoller(
 			manager.updateAgentStatus(agent.project as ProjectName, agent.id as AgentId, newStatus);
 			eventBus.emit({
 				id: newEventId(),
-				ts: new Date().toISOString(),
+				ts: nowIso,
 				project: agent.project,
 				agentId: agent.id,
 				type: "status_changed",
@@ -353,7 +635,16 @@ export function createPoller(
 			});
 		}
 
-		// Parse new output into events
+		await reconcileTerminalLifecycle(
+			agent,
+			scopedAgentId,
+			runtime,
+			newStatus,
+			diffHasContent,
+			nowMs,
+			nowIso,
+		);
+
 		if (diffHasContent) {
 			const ts = new Date().toISOString();
 			const warnings: string[] = [];
@@ -458,27 +749,18 @@ export function createPoller(
 	}
 
 	async function poll(): Promise<void> {
-		if (polling) return; // Skip if previous poll still running
+		if (polling) return;
 		polling = true;
 
 		try {
 			const agents = store.listAgents();
-			const activeAgents = agents.filter((a) => a.status !== "exited");
+			const activeAgents = agents.filter((agent) => (agent.pollState ?? "active") !== "quiesced");
 
 			const promises = activeAgents.map((agent) =>
-				pollAgent({
-					id: agent.id,
-					provider: agent.provider,
-					tmuxTarget: agent.tmuxTarget,
-					project: agent.project,
-					status: agent.status,
-					lastCapturedOutput: agent.lastCapturedOutput,
-					...(agent.providerRuntimeDir ? { providerRuntimeDir: agent.providerRuntimeDir } : {}),
-					...(agent.providerSessionFile ? { providerSessionFile: agent.providerSessionFile } : {}),
-				}).catch((e) => {
+				pollAgent(agent).catch((error) => {
 					log.error("poll error for agent", {
 						agentId: agent.id,
-						error: e instanceof Error ? e.message : String(e),
+						error: error instanceof Error ? error.message : String(error),
 					});
 				}),
 			);
@@ -493,9 +775,9 @@ export function createPoller(
 		if (timer) return;
 		log.info("poller started", { intervalMs: config.pollIntervalMs });
 		timer = setInterval(() => {
-			poll().catch((e) => {
+			poll().catch((error) => {
 				log.error("poll cycle error", {
-					error: e instanceof Error ? e.message : String(e),
+					error: error instanceof Error ? error.message : String(error),
 				});
 			});
 		}, config.pollIntervalMs);

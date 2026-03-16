@@ -3,7 +3,7 @@ import type { EventBus } from "../events/bus.ts";
 import type { NormalizedEvent } from "../events/types.ts";
 import { log } from "../log.ts";
 import type { AgentStatus } from "../providers/types.ts";
-import { readAgentMessages } from "../session/messages.ts";
+import type { Manager } from "../session/manager.ts";
 import type { Store } from "../session/store.ts";
 import type { Agent, AgentCallback } from "../session/types.ts";
 import { type AgentId, projectName } from "../types.ts";
@@ -16,6 +16,7 @@ export type WebhookPayload = {
 	status: string;
 	lastMessage: string | null;
 	timestamp: string;
+	deliveryId?: string;
 	discordChannel?: string;
 	sessionKey?: string;
 	extra?: Record<string, string>;
@@ -26,7 +27,7 @@ type LifecycleState = {
 	sinceMs: number;
 };
 
-type DeliverySource = "status_change" | "safety_net" | "manual_test";
+type DeliverySource = "terminal_finalized" | "safety_net" | "manual_test";
 type DeliveryTargetKind = "agent_callback" | "project_callback" | "global_fallback";
 
 type WebhookDeliveryTarget = {
@@ -34,6 +35,18 @@ type WebhookDeliveryTarget = {
 	url: string;
 	token?: string;
 	callback?: AgentCallback;
+};
+
+type FinalizedDeliveryInput = {
+	project: string;
+	agentId: string;
+	provider: string;
+	status: Extract<AgentStatus, "idle" | "error" | "exited">;
+	finalizedAt: string;
+	terminalObservedAt: string;
+	lastMessage: string | null;
+	messageSource: string | null;
+	deliveryId: string | null;
 };
 
 export type WebhookDeliveryAttempt = {
@@ -140,16 +153,6 @@ function defaultStatusForEvent(event: WebhookEvent): string {
 	}
 }
 
-function isTerminalStatus(status: AgentStatus): boolean {
-	return status === "idle" || status === "error" || status === "exited";
-}
-
-function isTerminalTransition(from: AgentStatus, to: AgentStatus): boolean {
-	if (!isTerminalStatus(to)) return false;
-	if (isTerminalStatus(from)) return false;
-	return from !== to;
-}
-
 function isStuckCandidateStatus(status: AgentStatus): boolean {
 	return status === "starting" || status === "processing";
 }
@@ -196,22 +199,6 @@ function callbackPayloadFields(
 		...(callback.sessionKey ? { sessionKey: callback.sessionKey } : {}),
 		...(callback.extra ? { extra: callback.extra } : {}),
 	};
-}
-
-async function getLastMessage(
-	store: Store,
-	project: string,
-	agentId: AgentId,
-): Promise<string | null> {
-	const agent = store.getAgent(projectName(project), agentId);
-	if (!agent) return null;
-
-	try {
-		const result = await readAgentMessages(agent, { limit: 1, role: "assistant" });
-		return result.lastAssistantMessage?.text ?? null;
-	} catch {
-		return null;
-	}
 }
 
 function resolveTargetForEvent(
@@ -265,17 +252,33 @@ function scopedAgentKey(project: string, agentId: string): string {
 	return `${project}:${agentId}`;
 }
 
+function finalizedDeliveryFromAgent(agent: Agent): FinalizedDeliveryInput | null {
+	if (!agent.finalizedAt || !agent.terminalObservedAt || !agent.terminalStatus) return null;
+	return {
+		project: agent.project,
+		agentId: agent.id,
+		provider: agent.provider,
+		status: agent.terminalStatus,
+		finalizedAt: agent.finalizedAt,
+		terminalObservedAt: agent.terminalObservedAt,
+		lastMessage: agent.finalMessage,
+		messageSource: agent.finalMessageSource,
+		deliveryId: agent.deliveryId,
+	};
+}
+
+type WebhookStateWriter = Pick<Manager, "persistAgentTerminalState">;
+
 export function createWebhookClient(
 	globalWebhookConfig: WebhookConfig | null | undefined,
 	eventBus: EventBus,
 	store: Store,
-): WebhookClient & { seedDeliveredFromStore: () => void } {
+	stateWriter: WebhookStateWriter,
+): WebhookClient {
 	const fallbackWebhookConfig = globalWebhookConfig ?? null;
 	const safetyNetConfig = fallbackWebhookConfig?.safetyNet ?? DEFAULT_SAFETY_NET;
 	const lifecycleByAgent = new Map<string, LifecycleState>();
-	const deliveredTerminalStatusByAgent = new Map<string, AgentStatus>();
 	const lastStuckWarnAtMsByAgent = new Map<string, number>();
-	const rehydratedAgents = new Set<string>();
 	let safetyNetTimer: ReturnType<typeof setInterval> | null = null;
 
 	const runtime = {
@@ -305,9 +308,6 @@ export function createWebhookClient(
 
 	function updateLifecycle(agentId: string, status: AgentStatus, sinceMs: number): void {
 		lifecycleByAgent.set(agentId, { status, sinceMs });
-		if (!isTerminalStatus(status)) {
-			deliveredTerminalStatusByAgent.delete(agentId);
-		}
 		if (!isStuckCandidateStatus(status)) {
 			lastStuckWarnAtMsByAgent.delete(agentId);
 		}
@@ -318,6 +318,18 @@ export function createWebhookClient(
 		return store
 			.listAgents()
 			.some((agent) => hasValidCallback(agent) || hasValidProjectCallback(store, agent.project));
+	}
+
+	async function persistAgent(agent: Agent): Promise<void> {
+		try {
+			await stateWriter.persistAgentTerminalState(agent.project, agent.id);
+		} catch (error) {
+			log.warn("failed to persist terminal delivery state", {
+				project: agent.project,
+				agentId: agent.id,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
 	}
 
 	async function postWebhookAttempt(
@@ -436,20 +448,47 @@ export function createWebhookClient(
 		return postWebhookAttempt(payload, target, source, 2);
 	}
 
-	async function sendTerminalWebhook(
-		source: "status_change" | "safety_net",
-		input: {
-			project: string;
-			agentId: string;
-			provider: string;
-			status: AgentStatus;
-			timestamp: string;
-		},
+	async function beginTerminalDelivery(
+		agent: Agent,
+		expectedDeliveryId: string | null,
 	): Promise<boolean> {
+		if (agent.deliveryState !== "pending") return false;
+		if (agent.deliveryInFlight) return false;
+		if (expectedDeliveryId !== null && agent.deliveryId !== expectedDeliveryId) return false;
+		agent.deliveryInFlight = true;
+		await persistAgent(agent);
+		return true;
+	}
+
+	async function finishTerminalDelivery(agent: Agent, sent: boolean): Promise<void> {
+		agent.deliveryInFlight = false;
+		if (sent) {
+			agent.deliveryState = "sent";
+			agent.deliverySentAt = new Date().toISOString();
+		} else {
+			agent.deliveryState = "pending";
+		}
+		await persistAgent(agent);
+	}
+
+	function canRetryTarget(target: WebhookDeliveryTarget): boolean {
+		if (target.kind === "global_fallback") {
+			return safetyNetConfig.enabled;
+		}
+		return true;
+	}
+
+	async function sendTerminalWebhook(
+		source: Exclude<DeliverySource, "manual_test">,
+		input: FinalizedDeliveryInput,
+	): Promise<boolean> {
+		const agent = store.getAgent(projectName(input.project), input.agentId as AgentId);
+		if (!agent) return false;
+		if (!agent.finalizedAt || !agent.terminalObservedAt || !agent.terminalStatus) return false;
+
 		const webhookEvent = statusToWebhookEvent(input.status);
 		if (!webhookEvent) return false;
 
-		const agent = store.getAgent(projectName(input.project), input.agentId as AgentId);
 		const projectRecord = store.getProject(projectName(input.project));
 		const target = resolveTargetForEvent(
 			webhookEvent,
@@ -457,61 +496,59 @@ export function createWebhookClient(
 			projectRecord?.callback,
 			fallbackWebhookConfig,
 		);
-		if (!target) return false;
-		const callbackAgentId = agent?.id ?? input.agentId;
+		if (!target) {
+			agent.deliveryState = "not_applicable";
+			agent.deliveryInFlight = false;
+			agent.deliverySentAt = null;
+			await persistAgent(agent);
+			return false;
+		}
 
-		const lastMessage = await getLastMessage(store, input.project, callbackAgentId as AgentId);
+		if (source === "safety_net" && !canRetryTarget(target)) return false;
+		const armed = await beginTerminalDelivery(agent, input.deliveryId);
+		if (!armed) return false;
+
 		const payload: WebhookPayload = {
 			event: webhookEvent,
 			project: input.project,
-			agentId: callbackAgentId,
-			provider: agent?.provider ?? input.provider,
+			agentId: input.agentId,
+			provider: input.provider,
 			status: input.status,
-			lastMessage,
-			timestamp: input.timestamp,
+			lastMessage: input.lastMessage,
+			timestamp: input.finalizedAt,
+			...(input.deliveryId ? { deliveryId: input.deliveryId } : {}),
 			...callbackPayloadFields(target.callback),
 		};
 
-		return postWebhookWithRetry(payload, target, source);
+		const sent = await postWebhookWithRetry(payload, target, source);
+		await finishTerminalDelivery(agent, sent);
+		return sent;
 	}
 
 	const unsubscribe = eventBus.subscribe(
-		{ types: ["status_changed"] },
+		{ types: ["status_changed", "agent_terminal_finalized"] },
 		(event: NormalizedEvent) => {
-			if (event.type !== "status_changed") return;
-			const sinceMs = parseIsoMs(event.ts) ?? Date.now();
-			const scopedId = scopedAgentKey(event.project, event.agentId);
-			updateLifecycle(scopedId, event.to, sinceMs);
+			if (event.type === "status_changed") {
+				const sinceMs = parseIsoMs(event.ts) ?? Date.now();
+				updateLifecycle(scopedAgentKey(event.project, event.agentId), event.to, sinceMs);
+				return;
+			}
+			if (event.type !== "agent_terminal_finalized") return;
 
-			if (!isTerminalTransition(event.from, event.to)) return;
+			const sinceMs = parseIsoMs(event.finalizedAt) ?? parseIsoMs(event.ts) ?? Date.now();
+			updateLifecycle(scopedAgentKey(event.project, event.agentId), event.status, sinceMs);
 
-			void (async () => {
-				// Skip webhook for agents that existed before this harness lifecycle
-				const scopedId = scopedAgentKey(event.project, event.agentId);
-				if (rehydratedAgents.has(scopedId)) {
-					rehydratedAgents.delete(scopedId);
-					deliveredTerminalStatusByAgent.set(scopedId, event.to);
-					log.info("webhook skipped for rehydrated agent", {
-						project: event.project,
-						agentId: event.agentId,
-						status: event.to,
-					});
-					return;
-				}
-
-				const agent = store.getAgent(projectName(event.project), event.agentId as AgentId);
-				const provider = agent?.provider ?? "unknown";
-				const sent = await sendTerminalWebhook("status_change", {
-					project: event.project,
-					agentId: event.agentId,
-					provider,
-					status: event.to,
-					timestamp: event.ts,
-				});
-				if (sent) {
-					deliveredTerminalStatusByAgent.set(scopedId, event.to);
-				}
-			})();
+			void sendTerminalWebhook("terminal_finalized", {
+				project: event.project,
+				agentId: event.agentId,
+				provider: event.provider,
+				status: event.status,
+				finalizedAt: event.finalizedAt,
+				terminalObservedAt: event.terminalObservedAt,
+				lastMessage: event.lastMessage,
+				messageSource: event.messageSource,
+				deliveryId: event.deliveryId,
+			});
 		},
 	);
 
@@ -520,7 +557,6 @@ export function createWebhookClient(
 
 		runtime.counters.safetyNetCycles += 1;
 		const nowMs = Date.now();
-		const nowIso = new Date(nowMs).toISOString();
 		const agents = store.listAgents();
 		const liveAgentIds = new Set<string>();
 
@@ -531,43 +567,17 @@ export function createWebhookClient(
 
 			if (!previous || previous.status !== agent.status) {
 				updateLifecycle(scopedId, agent.status, nowMs);
-				if (isTerminalStatus(agent.status)) {
-					if (deliveredTerminalStatusByAgent.get(scopedId) !== agent.status) {
-						const timestamp = agent.lastActivity.trim().length > 0 ? agent.lastActivity : nowIso;
-						const sent = await sendTerminalWebhook("safety_net", {
-							project: agent.project,
-							agentId: agent.id,
-							provider: agent.provider,
-							status: agent.status,
-							timestamp,
-						});
-						if (sent) {
-							deliveredTerminalStatusByAgent.set(scopedId, agent.status);
-						}
-					}
-				}
-				continue;
 			}
 
-			if (isTerminalStatus(agent.status)) {
-				if (deliveredTerminalStatusByAgent.get(scopedId) !== agent.status) {
-					const timestamp = agent.lastActivity.trim().length > 0 ? agent.lastActivity : nowIso;
-					const sent = await sendTerminalWebhook("safety_net", {
-						project: agent.project,
-						agentId: agent.id,
-						provider: agent.provider,
-						status: agent.status,
-						timestamp,
-					});
-					if (sent) {
-						deliveredTerminalStatusByAgent.set(scopedId, agent.status);
-					}
+			if (agent.deliveryState === "pending" && !agent.deliveryInFlight) {
+				const snapshot = finalizedDeliveryFromAgent(agent);
+				if (snapshot) {
+					await sendTerminalWebhook("safety_net", snapshot);
 				}
-				continue;
 			}
 
 			if (!isStuckCandidateStatus(agent.status)) continue;
-			const ageMs = nowMs - previous.sinceMs;
+			const ageMs = nowMs - (lifecycleByAgent.get(scopedId)?.sinceMs ?? nowMs);
 			if (ageMs < safetyNetConfig.stuckAfterMs) continue;
 
 			const lastWarnMs = lastStuckWarnAtMsByAgent.get(scopedId) ?? 0;
@@ -587,7 +597,6 @@ export function createWebhookClient(
 		for (const agentId of lifecycleByAgent.keys()) {
 			if (!liveAgentIds.has(agentId)) {
 				lifecycleByAgent.delete(agentId);
-				deliveredTerminalStatusByAgent.delete(agentId);
 				lastStuckWarnAtMsByAgent.delete(agentId);
 			}
 		}
@@ -613,7 +622,8 @@ export function createWebhookClient(
 			lastSafetyNetWarningAt: runtime.lastSafetyNetWarningAt,
 			trackedAgents: {
 				lifecycle: lifecycleByAgent.size,
-				deliveredTerminal: deliveredTerminalStatusByAgent.size,
+				deliveredTerminal: store.listAgents().filter((agent) => agent.deliveryState === "sent")
+					.length,
 				stuckWarned: lastStuckWarnAtMsByAgent.size,
 			},
 			recentAttempts: [...runtime.recentAttempts],
@@ -669,26 +679,6 @@ export function createWebhookClient(
 		return { ok, payload };
 	}
 
-	function seedDeliveredFromStore(): void {
-		const agents = store.listAgents();
-		for (const agent of agents) {
-			const scopedId = scopedAgentKey(agent.project, agent.id);
-			if (isTerminalStatus(agent.status)) {
-				// Already terminal — mark as delivered so safety net doesn't re-fire
-				deliveredTerminalStatusByAgent.set(scopedId, agent.status);
-			}
-			// For ALL rehydrated agents (terminal or not): suppress the next
-			// terminal transition webhook. These agents existed before this
-			// harness lifecycle — any completion was already delivered.
-			updateLifecycle(scopedId, agent.status, Date.now());
-			rehydratedAgents.add(scopedId);
-		}
-		log.info("webhook client seeded from store", {
-			terminal: deliveredTerminalStatusByAgent.size,
-			rehydrated: rehydratedAgents.size,
-		});
-	}
-
 	void runSafetyNetCycle();
 	safetyNetTimer = setInterval(() => {
 		runSafetyNetCycle().catch((error) => {
@@ -717,6 +707,5 @@ export function createWebhookClient(
 
 	stop.getStatus = getStatus;
 	stop.sendTestWebhook = sendTestWebhook;
-	stop.seedDeliveredFromStore = seedDeliveredFromStore;
 	return stop;
 }

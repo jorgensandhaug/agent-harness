@@ -1,6 +1,19 @@
 import { readAgentMessages } from "../session/messages.ts";
 import type { Agent } from "../session/types.ts";
 
+type InternalAgentFields =
+	| "pollState"
+	| "terminalStatus"
+	| "terminalObservedAt"
+	| "terminalQuietSince"
+	| "finalizedAt"
+	| "finalMessage"
+	| "finalMessageSource"
+	| "deliveryState"
+	| "deliveryInFlight"
+	| "deliveryId"
+	| "deliverySentAt";
+
 export type PublicAgentCallback = {
 	url: string;
 	discordChannel?: string | undefined;
@@ -8,7 +21,7 @@ export type PublicAgentCallback = {
 	extra?: Record<string, string> | undefined;
 };
 
-export type PublicAgent = Omit<Agent, "callback"> & {
+export type PublicAgent = Omit<Agent, "callback" | InternalAgentFields> & {
 	callback?: PublicAgentCallback | undefined;
 };
 
@@ -60,6 +73,20 @@ export async function resolveAgentBrief(agent: Agent): Promise<string[]> {
 
 export function redactAgentForApi(agent: Agent): PublicAgent {
 	const callback = agent.callback;
+	const {
+		pollState: _pollState,
+		terminalStatus: _terminalStatus,
+		terminalObservedAt: _terminalObservedAt,
+		terminalQuietSince: _terminalQuietSince,
+		finalizedAt: _finalizedAt,
+		finalMessage: _finalMessage,
+		finalMessageSource: _finalMessageSource,
+		deliveryState: _deliveryState,
+		deliveryInFlight: _deliveryInFlight,
+		deliveryId: _deliveryId,
+		deliverySentAt: _deliverySentAt,
+		...publicAgent
+	} = agent;
 	const redactedCallback = callback
 		? {
 				url: callback.url,
@@ -69,7 +96,7 @@ export function redactAgentForApi(agent: Agent): PublicAgent {
 			}
 		: undefined;
 	return {
-		...agent,
+		...publicAgent,
 		...(redactedCallback ? { callback: redactedCallback } : {}),
 	};
 }

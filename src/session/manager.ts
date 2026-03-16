@@ -39,6 +39,16 @@ import { formatAttachCommand } from "./attach.ts";
 import { createCallbackState } from "./callback-state.ts";
 import { claudeProjectStorageDir } from "./claude-path.ts";
 import type { Store } from "./store.ts";
+import {
+	type PersistedTerminalState,
+	type TerminalState,
+	applyTerminalState,
+	clearTerminalState,
+	createTerminalState,
+	defaultTerminalState,
+	normalizeRecoveredTerminalState,
+	terminalStateFromAgent,
+} from "./terminal-state.ts";
 import type { Agent, AgentCallback, Project } from "./types.ts";
 
 export type ManagerError =
@@ -64,6 +74,7 @@ export function createManager(
 	store: Store,
 	eventBus: EventBus,
 	debugTracker?: DebugTracker,
+	terminalState: TerminalState = createTerminalState(config.logDir),
 ) {
 	const callbackState = createCallbackState(config.logDir);
 	const TRUST_PROMPT_CONFIRM_PATTERN = /Enter to confirm|Press enter to continue/i;
@@ -563,8 +574,9 @@ export function createManager(
 		target: string,
 		agentIdForLog: string,
 		providerNameForLog: string,
+		mode: "startup" | "followup" = "startup",
 	): Promise<void> {
-		const deadline = Date.now() + 2500;
+		const deadline = Date.now() + (mode === "startup" ? 2500 : 350);
 		let attempts = 0;
 		let sawPrompt = false;
 		while (Date.now() < deadline && attempts < 8) {
@@ -573,6 +585,7 @@ export function createManager(
 			const promptVisible = looksLikeStartupTrustPrompt(captureResult.value);
 			if (!promptVisible) {
 				if (sawPrompt) return;
+				if (mode === "followup") return;
 				await Bun.sleep(120);
 				continue;
 			}
@@ -716,6 +729,71 @@ export function createManager(
 			await callbackState.prune(projects, agents);
 		} catch (error) {
 			log.warn("failed to prune persisted callback state", {
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+	}
+
+	async function loadPersistedTerminalState(
+		project: ProjectName,
+		id: AgentId,
+	): Promise<PersistedTerminalState | undefined> {
+		try {
+			const persisted = await terminalState.getAgentState(project, id);
+			return persisted ? normalizeRecoveredTerminalState(persisted) : undefined;
+		} catch (error) {
+			log.warn("failed to load persisted terminal state", {
+				project,
+				agentId: id,
+				error: error instanceof Error ? error.message : String(error),
+			});
+			return undefined;
+		}
+	}
+
+	async function persistAgentTerminalState(project: ProjectName, id: AgentId): Promise<void> {
+		const agent = store.getAgent(project, id);
+		if (!agent) return;
+		try {
+			await terminalState.setAgentState(project, id, terminalStateFromAgent(agent));
+		} catch (error) {
+			log.warn("failed to persist terminal state", {
+				project,
+				agentId: id,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+	}
+
+	async function removePersistedTerminalProject(project: ProjectName): Promise<void> {
+		try {
+			await terminalState.removeProject(project);
+		} catch (error) {
+			log.warn("failed to remove persisted project terminal state", {
+				project,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+	}
+
+	async function removePersistedTerminalAgent(project: ProjectName, id: AgentId): Promise<void> {
+		try {
+			await terminalState.removeAgent(project, id);
+		} catch (error) {
+			log.warn("failed to remove persisted agent terminal state", {
+				project,
+				agentId: id,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+	}
+
+	async function prunePersistedTerminalState(): Promise<void> {
+		const agents = new Set(store.listAgents().map((agent) => `${agent.project}:${agent.id}`));
+		try {
+			await terminalState.prune(agents);
+		} catch (error) {
+			log.warn("failed to prune persisted terminal state", {
 				error: error instanceof Error ? error.message : String(error),
 			});
 		}
@@ -927,6 +1005,15 @@ export function createManager(
 				const piRuntimeDir = envVarFromStartCommand(startCommand, "PI_CODING_AGENT_DIR");
 				const opencodeDataHome = envVarFromStartCommand(startCommand, "XDG_DATA_HOME");
 				const callback = await loadPersistedAgentCallback(project.name, id);
+				const persistedTerminalState = await loadPersistedTerminalState(project.name, id);
+				const restoredTerminalState = persistedTerminalState ?? defaultTerminalState();
+				if (
+					restoredTerminalState.terminalStatus !== null &&
+					(restoredTerminalState.pollState === "quiesced" ||
+						(restoredTerminalState.pollState === "finalizing" && status !== "exited"))
+				) {
+					status = restoredTerminalState.terminalStatus;
+				}
 
 				const agent: Agent = {
 					id,
@@ -952,11 +1039,16 @@ export function createManager(
 					createdAt: now,
 					lastActivity: now,
 					lastCapturedOutput: output,
+					...restoredTerminalState,
 				};
+				applyTerminalState(agent, restoredTerminalState);
 
 				store.addAgent(agent);
 				existing.add(idRaw);
 				debugTracker?.ensureAgent(debugAgentKey(agent.project, id));
+				if (persistedTerminalState?.deliveryInFlight) {
+					await persistAgentTerminalState(project.name, id);
+				}
 				recovered += 1;
 			}
 		}
@@ -965,6 +1057,7 @@ export function createManager(
 			log.info("agents rehydrated from tmux windows", { recovered });
 		}
 		await prunePersistedCallbacks();
+		await prunePersistedTerminalState();
 	}
 
 	// --- Projects ---
@@ -1073,6 +1166,7 @@ export function createManager(
 
 		store.removeProject(pName);
 		await removePersistedProject(pName);
+		await removePersistedTerminalProject(pName);
 		log.info("project deleted", { name });
 		return ok(undefined);
 	}
@@ -1290,10 +1384,13 @@ export function createManager(
 			createdAt: now,
 			lastActivity: now,
 			lastCapturedOutput: "",
+			...defaultTerminalState(),
 		};
+		applyTerminalState(agent);
 
 		store.addAgent(agent);
 		await persistAgentCallback(pName, id, effectiveCallback);
+		await persistAgentTerminalState(pName, id);
 		debugTracker?.ensureAgent(debugAgentKey(agent.project, id));
 
 		// Emit agent_started event
@@ -1453,8 +1550,25 @@ export function createManager(
 			return err({ code: "UNKNOWN_PROVIDER", name: agent.provider });
 		}
 
+		if ((agent.pollState ?? "active") === "quiesced") {
+			const paneDeadResult = await tmux.getPaneVar(agent.tmuxTarget, "pane_dead");
+			if (!paneDeadResult.ok) {
+				return err({
+					code: "TMUX_ERROR",
+					message: `Failed to inspect pane state: ${JSON.stringify(paneDeadResult.error)}`,
+				});
+			}
+			if (paneDeadResult.value === "1") {
+				transitionAgentStatus(projectNameStr, agent, "exited", "manager_send_input_preflight");
+				return err({
+					code: "TMUX_ERROR",
+					message: `Cannot send input to exited agent '${id}' in project '${projectNameStr}'`,
+				});
+			}
+		}
+
 		if (shouldAutoConfirmStartupTrustPrompt(agent.provider)) {
-			await dismissStartupTrustPrompt(agent.tmuxTarget, agent.id, agent.provider);
+			await dismissStartupTrustPrompt(agent.tmuxTarget, agent.id, agent.provider, "followup");
 		}
 		let formatted = providerResult.value.formatInput(text);
 		if (shouldUsePromptFile(agent.provider, formatted)) {
@@ -1478,6 +1592,10 @@ export function createManager(
 			type: "input_sent",
 			text,
 		});
+		if ((agent.pollState ?? "active") !== "active") {
+			clearTerminalState(agent);
+			await persistAgentTerminalState(agent.project, agent.id);
+		}
 		transitionAgentStatus(projectNameStr, agent, "processing", "manager_followup_input");
 
 		return ok(undefined);
@@ -1578,6 +1696,7 @@ export function createManager(
 
 		store.removeAgent(agent.project, agent.id);
 		await removePersistedAgent(agent.project, agent.id);
+		await removePersistedTerminalAgent(agent.project, agent.id);
 		debugTracker?.removeAgent(debugAgentKey(agent.project, agent.id));
 		log.info("agent deleted", { id, project: projectNameStr });
 		return ok(undefined);
@@ -1614,6 +1733,7 @@ export function createManager(
 		updateAgentStatus,
 		updateAgentBrief,
 		updateAgentOutput,
+		persistAgentTerminalState,
 	};
 }
 

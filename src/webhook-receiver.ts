@@ -14,6 +14,7 @@ const WebhookPayloadSchema = z
 		status: z.string().min(1),
 		lastMessage: z.string().nullable(),
 		timestamp: z.string().datetime(),
+		deliveryId: z.string().min(1).optional(),
 		discordChannel: z.string().min(1).optional(),
 		sessionKey: z.string().min(1).optional(),
 		extra: z.record(z.string()).optional(),
