@@ -7,6 +7,7 @@ export type StatusChangeSource =
 	| "manager_followup_input"
 	| "manager_send_input_preflight"
 	| "poller_pane_dead"
+	| "poller_session_not_found"
 	| "ui_parser"
 	| "internals_codex_jsonl"
 	| "internals_claude_jsonl"

@@ -804,6 +804,74 @@ describe("session/poller.finalization", () => {
 			unsubscribe();
 		}
 	});
+
+	it("marks agents exited after repeated SESSION_NOT_FOUND poll failures", async () => {
+		const config = makeConfig();
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(config, store, eventBus);
+		const poller = createPoller(config, store, manager, eventBus);
+		const seen: NormalizedEvent[] = [];
+		const unsubscribe = eventBus.subscribe({ project: "pf-missing-session" }, (event) =>
+			seen.push(event),
+		);
+
+		try {
+			const projectRes = await manager.createProject("pf-missing-session", process.cwd());
+			expect(projectRes.ok).toBe(true);
+			if (!projectRes.ok) throw new Error("project create failed");
+
+			const createRes = await manager.createAgent(
+				"pf-missing-session",
+				"codex",
+				"initial task",
+				undefined,
+				undefined,
+				undefined,
+				"codex-missing-session",
+			);
+			expect(createRes.ok).toBe(true);
+			if (!createRes.ok) throw new Error("agent create failed");
+
+			const sessionName = "ah-manager-test-pf-missing-session";
+			fake.sessions.delete(sessionName);
+
+			await poller.poll();
+			await poller.poll();
+
+			let agentRes = manager.getAgent("pf-missing-session", "codex-missing-session");
+			expect(agentRes.ok).toBe(true);
+			if (!agentRes.ok) throw new Error("agent missing after missing-session polls");
+			expect(agentRes.value.status).toBe("processing");
+
+			await poller.poll();
+
+			agentRes = manager.getAgent("pf-missing-session", "codex-missing-session");
+			expect(agentRes.ok).toBe(true);
+			if (!agentRes.ok) throw new Error("agent missing after exited transition");
+			expect(agentRes.value.status).toBe("exited");
+			expect(agentRes.value.pollState).toBe("quiesced");
+			expect(agentRes.value.terminalStatus).toBe("exited");
+			expect(
+				seen.some(
+					(event) =>
+						event.type === "status_changed" &&
+						event.agentId === "codex-missing-session" &&
+						event.from === "processing" &&
+						event.to === "exited" &&
+						event.source === "poller_session_not_found",
+				),
+			).toBe(true);
+			expect(
+				seen.some(
+					(event) =>
+						event.type === "agent_exited" && event.agentId === "codex-missing-session",
+				),
+			).toBe(true);
+		} finally {
+			unsubscribe();
+		}
+	});
 });
 
 describe("session/manager.initial-input", () => {
