@@ -28,6 +28,7 @@ const FINAL_MESSAGE_SOURCES = new Set<AgentTerminalMessageSource | null>([
 	"manager_initial_input",
 	"manager_followup_input",
 	"poller_pane_dead",
+	"poller_session_not_found",
 	"ui_parser",
 	"internals_codex_jsonl",
 	"internals_claude_jsonl",

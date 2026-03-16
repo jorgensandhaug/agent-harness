@@ -11,6 +11,7 @@ import { readAgentMessages } from "../session/messages.ts";
 import type { Store } from "../session/store.ts";
 import type { Agent, AgentTerminalMessageSource, AgentTerminalStatus } from "../session/types.ts";
 import * as tmux from "../tmux/client.ts";
+import type { TmuxError } from "../tmux/types.ts";
 import { type AgentId, type ProjectName, newEventId } from "../types.ts";
 import { newClaudeInternalsCursor, readClaudeInternalsStatus } from "./claude-internals.ts";
 import { newCodexInternalsCursor, readCodexInternalsStatus } from "./codex-internals.ts";
@@ -31,6 +32,7 @@ type PollRuntime = {
 	lastFinalMessageSource: AgentTerminalMessageSource | null | undefined;
 	finalMessageReadCount: number;
 	stableFinalMessageReads: number;
+	consecutiveSessionNotFound: number;
 	codexCursor: ReturnType<typeof newCodexInternalsCursor>;
 	claudeCursor: ReturnType<typeof newClaudeInternalsCursor>;
 	piCursor: ReturnType<typeof newPiInternalsCursor>;
@@ -44,6 +46,11 @@ const IDLE_ERROR_QUIET_MS = 2_000;
 const FINALIZATION_HARD_STOP_MS = 10_000;
 const EXITED_READ_WINDOW_MS = 1_000;
 const EXITED_READ_SETTLE_MS = 250;
+const SESSION_NOT_FOUND_EXIT_THRESHOLD = 3;
+
+function isMissingTmuxTargetError(error: TmuxError): boolean {
+	return error.code === "SESSION_NOT_FOUND" || error.code === "WINDOW_NOT_FOUND";
+}
 
 function parseIsoMs(value: string | null | undefined): number | null {
 	if (!value) return null;
@@ -88,6 +95,7 @@ export function createPoller(
 				lastFinalMessageSource: undefined,
 				finalMessageReadCount: 0,
 				stableFinalMessageReads: 0,
+				consecutiveSessionNotFound: 0,
 				codexCursor: newCodexInternalsCursor(),
 				claudeCursor: newClaudeInternalsCursor(),
 				piCursor: newPiInternalsCursor(),
@@ -357,6 +365,48 @@ export function createPoller(
 		await maybeFinalizeIdleOrError(agent, scopedAgentId, runtime, diffHasContent, nowMs, nowIso);
 	}
 
+	async function markAgentExited(
+		agent: Agent,
+		scopedAgentId: string,
+		runtime: PollRuntime,
+		nowMs: number,
+		nowIso: string,
+		source: StatusChangeSource,
+	): Promise<void> {
+		runtime.consecutiveSessionNotFound = 0;
+		if (agent.status !== "exited") {
+			const from = agent.status;
+			manager.updateAgentStatus(agent.project as ProjectName, agent.id as AgentId, "exited");
+			eventBus.emit({
+				id: newEventId(),
+				ts: nowIso,
+				project: agent.project,
+				agentId: agent.id,
+				type: "status_changed",
+				from,
+				to: "exited",
+				source,
+			});
+			eventBus.emit({
+				id: newEventId(),
+				ts: nowIso,
+				project: agent.project,
+				agentId: agent.id,
+				type: "agent_exited",
+				exitCode: null,
+			});
+		}
+		await reconcileTerminalLifecycle(
+			agent,
+			scopedAgentId,
+			runtime,
+			"exited",
+			false,
+			nowMs,
+			nowIso,
+		);
+	}
+
 	async function pollAgent(agent: Agent): Promise<void> {
 		if ((agent.pollState ?? "active") === "quiesced") return;
 
@@ -373,6 +423,29 @@ export function createPoller(
 
 		const paneDeadResult = await tmux.getPaneVar(agent.tmuxTarget, "pane_dead");
 		if (!paneDeadResult.ok) {
+			if (isMissingTmuxTargetError(paneDeadResult.error)) {
+				runtime.consecutiveSessionNotFound += 1;
+				if (runtime.consecutiveSessionNotFound >= SESSION_NOT_FOUND_EXIT_THRESHOLD) {
+					log.warn("poller marking agent exited after persistent missing tmux target", {
+						agentId: agent.id,
+						project: agent.project,
+						tmuxTarget: agent.tmuxTarget,
+						consecutiveSessionNotFound: runtime.consecutiveSessionNotFound,
+						errorCode: paneDeadResult.error.code,
+					});
+					await markAgentExited(
+						agent,
+						scopedAgentId,
+						runtime,
+						nowMs,
+						nowIso,
+						"poller_session_not_found",
+					);
+					return;
+				}
+			} else {
+				runtime.consecutiveSessionNotFound = 0;
+			}
 			debugTracker?.noteError(
 				scopedAgentId,
 				"tmux",
@@ -387,6 +460,7 @@ export function createPoller(
 				});
 			}
 		} else {
+			runtime.consecutiveSessionNotFound = 0;
 			debugTracker?.noteTmux(scopedAgentId, { paneDead: paneDeadResult.value === "1" });
 			runtime.lastPaneDeadErrorWarnAtMs = null;
 		}
@@ -412,37 +486,7 @@ export function createPoller(
 		}
 
 		if (paneDeadResult.ok && paneDeadResult.value === "1") {
-			if (agent.status !== "exited") {
-				const from = agent.status;
-				manager.updateAgentStatus(agent.project as ProjectName, agent.id as AgentId, "exited");
-				eventBus.emit({
-					id: newEventId(),
-					ts: nowIso,
-					project: agent.project,
-					agentId: agent.id,
-					type: "status_changed",
-					from,
-					to: "exited",
-					source: "poller_pane_dead",
-				});
-				eventBus.emit({
-					id: newEventId(),
-					ts: nowIso,
-					project: agent.project,
-					agentId: agent.id,
-					type: "agent_exited",
-					exitCode: null,
-				});
-			}
-			await reconcileTerminalLifecycle(
-				agent,
-				scopedAgentId,
-				runtime,
-				"exited",
-				false,
-				nowMs,
-				nowIso,
-			);
+			await markAgentExited(agent, scopedAgentId, runtime, nowMs, nowIso, "poller_pane_dead");
 			return;
 		}
 

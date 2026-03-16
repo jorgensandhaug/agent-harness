@@ -1042,6 +1042,23 @@ export function createManager(
 					...restoredTerminalState,
 				};
 				applyTerminalState(agent, restoredTerminalState);
+				if (agent.pollState === "active" && agent.status !== "exited") {
+					const verifyPaneResult = await tmux.getPaneVar(target, "pane_dead");
+					if (
+						(!verifyPaneResult.ok &&
+							(verifyPaneResult.error.code === "SESSION_NOT_FOUND" ||
+								verifyPaneResult.error.code === "WINDOW_NOT_FOUND")) ||
+						(verifyPaneResult.ok && verifyPaneResult.value === "1")
+					) {
+						log.warn("rehydrated agent lost tmux target; marking exited", {
+							project: project.name,
+							agentId: id,
+							tmuxTarget: target,
+							error: verifyPaneResult.ok ? null : JSON.stringify(verifyPaneResult.error),
+						});
+						agent.status = "exited";
+					}
+				}
 
 				store.addAgent(agent);
 				existing.add(idRaw);
@@ -1172,6 +1189,30 @@ export function createManager(
 	}
 
 	// --- Agents ---
+
+	async function ensureProjectSession(
+		project: Project,
+		reason: "create_agent_preflight" | "create_agent_retry",
+	): Promise<Result<void, ManagerError>> {
+		if (await tmux.hasSession(project.tmuxSession)) {
+			return ok(undefined);
+		}
+
+		log.warn("project tmux session missing; recreating", {
+			project: project.name,
+			session: project.tmuxSession,
+			cwd: project.cwd,
+			reason,
+		});
+		const sessionResult = await tmux.createSession(project.tmuxSession, project.cwd);
+		if (!sessionResult.ok) {
+			return err({
+				code: "TMUX_ERROR",
+				message: `Failed to recreate tmux session: ${JSON.stringify(sessionResult.error)}`,
+			});
+		}
+		return ok(undefined);
+	}
 
 	async function createAgent(
 		projectNameStr: string,
@@ -1348,9 +1389,11 @@ export function createManager(
 			cmd = [...cmd, formattedInitialTask];
 		}
 		const target = `${project.tmuxSession}:${wName}`;
+		const sessionReadyResult = await ensureProjectSession(project, "create_agent_preflight");
+		if (!sessionReadyResult.ok) return sessionReadyResult;
 
 		// Create tmux window with the agent command
-		const windowResult = await tmux.createWindow(
+		let windowResult = await tmux.createWindow(
 			project.tmuxSession,
 			wName,
 			project.cwd,
@@ -1358,6 +1401,22 @@ export function createManager(
 			env,
 			unsetEnv,
 		);
+		if (
+			!windowResult.ok &&
+			(windowResult.error.code === "SESSION_NOT_FOUND" ||
+				windowResult.error.code === "WINDOW_NOT_FOUND")
+		) {
+			const retrySessionResult = await ensureProjectSession(project, "create_agent_retry");
+			if (!retrySessionResult.ok) return retrySessionResult;
+			windowResult = await tmux.createWindow(
+				project.tmuxSession,
+				wName,
+				project.cwd,
+				cmd,
+				env,
+				unsetEnv,
+			);
+		}
 		if (!windowResult.ok) {
 			return err({
 				code: "TMUX_ERROR",

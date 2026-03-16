@@ -804,6 +804,167 @@ describe("session/poller.finalization", () => {
 			unsubscribe();
 		}
 	});
+
+	it("marks agents exited after repeated SESSION_NOT_FOUND poll failures", async () => {
+		const config = makeConfig();
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(config, store, eventBus);
+		const poller = createPoller(config, store, manager, eventBus);
+		const seen: NormalizedEvent[] = [];
+		const unsubscribe = eventBus.subscribe({ project: "pf-missing-session" }, (event) =>
+			seen.push(event),
+		);
+
+		try {
+			const projectRes = await manager.createProject("pf-missing-session", process.cwd());
+			expect(projectRes.ok).toBe(true);
+			if (!projectRes.ok) throw new Error("project create failed");
+
+			const createRes = await manager.createAgent(
+				"pf-missing-session",
+				"codex",
+				"initial task",
+				undefined,
+				undefined,
+				undefined,
+				"codex-missing-session",
+			);
+			expect(createRes.ok).toBe(true);
+			if (!createRes.ok) throw new Error("agent create failed");
+
+			const sessionName = "ah-manager-test-pf-missing-session";
+			fake.sessions.delete(sessionName);
+
+			await poller.poll();
+			await poller.poll();
+
+			let agentRes = manager.getAgent("pf-missing-session", "codex-missing-session");
+			expect(agentRes.ok).toBe(true);
+			if (!agentRes.ok) throw new Error("agent missing after missing-session polls");
+			expect(agentRes.value.status).toBe("processing");
+
+			await poller.poll();
+
+			agentRes = manager.getAgent("pf-missing-session", "codex-missing-session");
+			expect(agentRes.ok).toBe(true);
+			if (!agentRes.ok) throw new Error("agent missing after exited transition");
+			expect(agentRes.value.status).toBe("exited");
+			expect(agentRes.value.pollState).toBe("quiesced");
+			expect(agentRes.value.terminalStatus).toBe("exited");
+			expect(
+				seen.some(
+					(event) =>
+						event.type === "status_changed" &&
+						event.agentId === "codex-missing-session" &&
+						event.from === "processing" &&
+						event.to === "exited" &&
+						event.source === "poller_session_not_found",
+				),
+			).toBe(true);
+			expect(
+				seen.some(
+					(event) =>
+						event.type === "agent_exited" && event.agentId === "codex-missing-session",
+				),
+			).toBe(true);
+		} finally {
+			unsubscribe();
+		}
+	});
+
+	it("does not mark agents exited when a non-missing pane_dead error breaks the sequence", async () => {
+		const config = makeConfig();
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(config, store, eventBus);
+		const poller = createPoller(config, store, manager, eventBus);
+		const seen: NormalizedEvent[] = [];
+		const unsubscribe = eventBus.subscribe({ project: "pf-mixed-missing-session" }, (event) =>
+			seen.push(event),
+		);
+
+		try {
+			const projectRes = await manager.createProject("pf-mixed-missing-session", process.cwd());
+			expect(projectRes.ok).toBe(true);
+			if (!projectRes.ok) throw new Error("project create failed");
+
+			const createRes = await manager.createAgent(
+				"pf-mixed-missing-session",
+				"codex",
+				"initial task",
+				undefined,
+				undefined,
+				undefined,
+				"codex-mixed-missing-session",
+			);
+			expect(createRes.ok).toBe(true);
+			if (!createRes.ok) throw new Error("agent create failed");
+
+			const target = createRes.value.tmuxTarget;
+			const priorSpawn = Bun.spawn;
+			let paneDeadReads = 0;
+			(Bun as { spawn: typeof Bun.spawn }).spawn = ((cmd, options) => {
+				if (Array.isArray(cmd) && cmd[0] === "tmux") {
+					const args = cmd.slice(1);
+					const sub = args[0];
+					const targetIndex = args.indexOf("-t");
+					const cmdTarget = targetIndex === -1 ? undefined : args[targetIndex + 1];
+					const format = args[args.length - 1];
+					if (
+						sub === "display-message" &&
+						cmdTarget === target &&
+						format === "#{pane_dead}"
+					) {
+						paneDeadReads += 1;
+						if (paneDeadReads === 1 || paneDeadReads === 2 || paneDeadReads === 4) {
+							return proc(1, "", "can't find window");
+						}
+						if (paneDeadReads === 3) {
+							return proc(1, "", "unexpected tmux failure");
+						}
+					}
+				}
+				return priorSpawn(cmd, options);
+			}) as typeof Bun.spawn;
+
+			try {
+				await poller.poll();
+				await poller.poll();
+				await poller.poll();
+				await poller.poll();
+			} finally {
+				(Bun as { spawn: typeof Bun.spawn }).spawn = priorSpawn;
+			}
+
+			expect(paneDeadReads).toBe(4);
+			const agentRes = manager.getAgent(
+				"pf-mixed-missing-session",
+				"codex-mixed-missing-session",
+			);
+			expect(agentRes.ok).toBe(true);
+			if (!agentRes.ok) throw new Error("agent missing after mixed pane_dead errors");
+			expect(agentRes.value.status).not.toBe("exited");
+			expect(agentRes.value.pollState).not.toBe("quiesced");
+			expect(
+				seen.some(
+					(event) =>
+						event.type === "status_changed" &&
+						event.agentId === "codex-mixed-missing-session" &&
+						event.to === "exited",
+				),
+			).toBe(false);
+			expect(
+				seen.some(
+					(event) =>
+						event.type === "agent_exited" &&
+						event.agentId === "codex-mixed-missing-session",
+				),
+			).toBe(false);
+		} finally {
+			unsubscribe();
+		}
+	});
 });
 
 describe("session/manager.initial-input", () => {
@@ -1951,6 +2112,37 @@ describe("session/manager.subscriptions", () => {
 });
 
 describe("session/manager.rehydrate", () => {
+	it("recreates a missing project tmux session before creating a new agent", async () => {
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(makeConfig(), store, eventBus);
+
+		const projectRes = await manager.createProject("pr-recreate-session", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const sessionName = "ah-manager-test-pr-recreate-session";
+		fake.sessions.delete(sessionName);
+
+		const createRes = await manager.createAgent(
+			"pr-recreate-session",
+			"codex",
+			"Reply with exactly: 4",
+			undefined,
+			undefined,
+			undefined,
+			"recreate-session-1",
+		);
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed after session resurrection");
+
+		const session = fake.sessions.get(sessionName);
+		expect(session).toBeDefined();
+		expect(session?.allowRename).toBe(false);
+		expect(session?.automaticRename).toBe(false);
+		expect(session?.windows.has("recreate-session-1")).toBe(true);
+	});
+
 	it("rehydrates codex agents from existing tmux sessions/windows and is idempotent", async () => {
 		const config = makeConfig();
 		const sourceStore = createStore();
@@ -2219,6 +2411,68 @@ describe("session/manager.rehydrate", () => {
 		expect(recovered.value.finalizedAt).toBe("2026-02-18T10:00:00.000Z");
 		expect(recovered.value.deliveryState).toBe("sent");
 		expect(recovered.value.deliverySentAt).toBe("2026-02-18T10:00:01.000Z");
+	});
+
+	it("marks active rehydrated agents exited when the tmux target disappears during rehydrate", async () => {
+		const sourceStore = createStore();
+		const sourceBus = createEventBus(500);
+		const sourceManager = createManager(makeConfig(), sourceStore, sourceBus);
+
+		const projectRes = await sourceManager.createProject("pr-rehydrate-missing", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await sourceManager.createAgent(
+			"pr-rehydrate-missing",
+			"codex",
+			"Reply with exactly: 4",
+			undefined,
+			undefined,
+			undefined,
+			"rehydrate-missing-1",
+		);
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+
+		const target = createRes.value.tmuxTarget;
+		const sessionName = "ah-manager-test-pr-rehydrate-missing";
+		const recoveredStore = createStore();
+		const recoveredBus = createEventBus(500);
+		const recoveredManager = createManager(makeConfig(), recoveredStore, recoveredBus);
+
+		await recoveredManager.rehydrateProjectsFromTmux();
+
+		const priorSpawn = Bun.spawn;
+		let paneDeadChecks = 0;
+		(Bun as { spawn: typeof Bun.spawn }).spawn = ((cmd, options) => {
+			if (Array.isArray(cmd) && cmd[0] === "tmux") {
+				const args = cmd.slice(1);
+				const sub = args[0];
+				const targetIndex = args.indexOf("-t");
+				const cmdTarget = targetIndex === -1 ? undefined : args[targetIndex + 1];
+				const format = args[args.length - 1];
+				if (sub === "display-message" && cmdTarget === target && format === "#{pane_dead}") {
+					paneDeadChecks += 1;
+					if (paneDeadChecks === 2) {
+						fake.sessions.delete(sessionName);
+					}
+				}
+			}
+			return priorSpawn(cmd, options);
+		}) as typeof Bun.spawn;
+
+		try {
+			await recoveredManager.rehydrateAgentsFromTmux();
+		} finally {
+			(Bun as { spawn: typeof Bun.spawn }).spawn = priorSpawn;
+		}
+
+		expect(paneDeadChecks).toBe(2);
+		const recovered = recoveredManager.getAgent("pr-rehydrate-missing", "rehydrate-missing-1");
+		expect(recovered.ok).toBe(true);
+		if (!recovered.ok) throw new Error("rehydrated agent missing");
+		expect(recovered.value.status).toBe("exited");
+		expect(recovered.value.pollState).toBe("active");
 	});
 });
 
