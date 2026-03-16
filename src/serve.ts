@@ -6,6 +6,7 @@ import { log, setLogLevel } from "./log.ts";
 import { createPoller } from "./poller/poller.ts";
 import { createManager } from "./session/manager.ts";
 import { createStore } from "./session/store.ts";
+import { createTerminalState } from "./session/terminal-state.ts";
 import * as tmux from "./tmux/client.ts";
 import { createWebhookClient } from "./webhook/client.ts";
 
@@ -34,15 +35,13 @@ export async function serveCommand(): Promise<void> {
 	log.info("event bus initialized");
 	const debugTracker = createDebugTracker(config, eventBus);
 	log.info("debug tracker initialized");
-	const webhookClient = createWebhookClient(config.webhook ?? null, eventBus, store);
+	const terminalState = createTerminalState(config.logDir);
 
 	// 5. Initialize session manager
-	const manager = createManager(config, store, eventBus, debugTracker);
+	const manager = createManager(config, store, eventBus, debugTracker, terminalState);
 	await manager.rehydrateProjectsFromTmux();
 	await manager.rehydrateAgentsFromTmux();
-
-	// Seed webhook delivered status so we don't re-fire for already-idle agents
-	webhookClient.seedDeliveredFromStore();
+	const webhookClient = createWebhookClient(config.webhook ?? null, eventBus, store, manager);
 
 	// 6. Start poller
 	const poller = createPoller(config, store, manager, eventBus, debugTracker);

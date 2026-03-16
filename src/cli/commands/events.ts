@@ -11,6 +11,7 @@ const FILTERABLE_EVENT_TYPES = [
 	"tool_result",
 	"error",
 	"agent_exited",
+	"agent_terminal_finalized",
 	"input_sent",
 	"permission_requested",
 	"question_asked",
@@ -29,6 +30,8 @@ type EventPayload = {
 	output?: unknown;
 	message?: unknown;
 	exitCode?: unknown;
+	status?: unknown;
+	deliveryId?: unknown;
 	description?: unknown;
 	question?: unknown;
 	provider?: unknown;
@@ -91,6 +94,10 @@ function eventSummary(eventType: string, payload: EventPayload | null): string {
 			return trimSummary(valueToString(payload.message));
 		case "agent_exited":
 			return trimSummary(`exitCode=${valueToString(payload.exitCode)}`);
+		case "agent_terminal_finalized":
+			return trimSummary(
+				`${valueToString(payload.status)} deliveryId=${valueToString(payload.deliveryId)}`,
+			);
 		case "input_sent":
 			return trimSummary(valueToString(payload.text));
 		case "permission_requested":

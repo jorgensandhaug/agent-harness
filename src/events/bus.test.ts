@@ -31,6 +31,18 @@ function evt(
 			return { ...base, type, message: "bad" };
 		case "agent_exited":
 			return { ...base, type, exitCode: null };
+		case "agent_terminal_finalized":
+			return {
+				...base,
+				type,
+				provider: "codex",
+				status: "idle",
+				finalizedAt: "2026-01-01T00:00:02.000Z",
+				terminalObservedAt: "2026-01-01T00:00:01.000Z",
+				lastMessage: "final answer",
+				messageSource: "internals_codex_jsonl",
+				deliveryId: "delivery-1",
+			};
 		case "input_sent":
 			return { ...base, type, text: "in" };
 		case "permission_requested":

@@ -50,7 +50,7 @@ describe("config/load.defaults", () => {
 		expect(config.port).toBe(7070);
 		expect(config.bindAddress).toBe("127.0.0.1");
 		expect(config.tmuxPrefix).toBe("ah");
-		expect(config.pollIntervalMs).toBe(5000);
+		expect(config.pollIntervalMs).toBe(1000);
 		expect(Object.keys(config.providers).sort()).toEqual([
 			"claude-code",
 			"codex",

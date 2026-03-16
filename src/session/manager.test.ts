@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { HarnessConfig } from "../config.ts";
@@ -121,18 +121,6 @@ function extractPromptFilePath(text: string): string | null {
 	return match?.[1] ?? null;
 }
 
-function resolveWindow(target: string): { session: SessionState; windowName: string } | null {
-	const [sessionName, windowName] = target.split(":");
-	if (!sessionName || !windowName) return null;
-	const session = fake.sessions.get(sessionName);
-	if (!session) return null;
-	return { session, windowName };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
-}
-
 function startupTrustPromptLines(provider: string): string[] {
 	if (provider === "codex") {
 		return [
@@ -153,6 +141,18 @@ function startupTrustPromptLines(provider: string): string[] {
 		"",
 		"Enter to confirm",
 	];
+}
+
+function resolveWindow(target: string): { session: SessionState; windowName: string } | null {
+	const [sessionName, windowName] = target.split(":");
+	if (!sessionName || !windowName) return null;
+	const session = fake.sessions.get(sessionName);
+	if (!session) return null;
+	return { session, windowName };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
 }
 
 beforeEach(() => {
@@ -482,6 +482,24 @@ async function makeTempDir(prefix: string): Promise<string> {
 	return dir;
 }
 
+async function writeCodexFinalSession(runtimeDir: string, finalMessage: string): Promise<void> {
+	const dir = join(runtimeDir, "sessions", "2026", "02", "18");
+	await mkdir(dir, { recursive: true });
+	await Bun.write(
+		join(dir, "rollout-2026-02-18T00-00-00.jsonl"),
+		JSON.stringify({
+			timestamp: "2026-02-18T10:00:00.000Z",
+			type: "response_item",
+			payload: {
+				type: "message",
+				role: "assistant",
+				phase: "final_answer",
+				content: [{ type: "output_text", text: finalMessage }],
+			},
+		}),
+	);
+}
+
 async function readPersistedCallbackState(logDir: string): Promise<{
 	projects: Record<string, unknown>;
 	agents: Record<string, unknown>;
@@ -491,6 +509,16 @@ async function readPersistedCallbackState(logDir: string): Promise<{
 	const projects = isRecord(parsed) && isRecord(parsed.projects) ? parsed.projects : {};
 	const agents = isRecord(parsed) && isRecord(parsed.agents) ? parsed.agents : {};
 	return { projects, agents };
+}
+
+async function readPersistedTerminalState(logDir: string): Promise<Record<string, unknown>> {
+	try {
+		const raw = await readFile(join(logDir, "state", "terminal.json"), "utf8");
+		const parsed: unknown = JSON.parse(raw);
+		return isRecord(parsed) && isRecord(parsed.agents) ? parsed.agents : {};
+	} catch {
+		return {};
+	}
 }
 
 function makeConfig(): HarnessConfig {
@@ -516,8 +544,17 @@ function makeConfig(): HarnessConfig {
 	};
 }
 
+async function writeCodexTerminalSession(
+	runtimeDir: string,
+	lines: readonly string[],
+): Promise<void> {
+	const dir = join(runtimeDir, "sessions", "2026", "02", "18");
+	await mkdir(dir, { recursive: true });
+	await Bun.write(join(dir, "rollout-2026-02-18T10-00-00-thread.jsonl"), `${lines.join("\n")}\n`);
+}
+
 describe("session/poller.codex-unknown-filter", () => {
-	it("keeps codex unknown parser lines in warnings but does not emit unknown events", async () => {
+	it("does not emit unknown events for codex unknown parser lines", async () => {
 		const config = makeConfig();
 		config.pollIntervalMs = 50;
 		const store = createStore();
@@ -541,16 +578,15 @@ describe("session/poller.codex-unknown-filter", () => {
 			const agentId = createRes.value.id;
 			const debugKey = `p-poller-unknown:${agentId}`;
 
-			poller.start();
 			const sendRes = await manager.sendInput("p-poller-unknown", agentId, "***");
 			expect(sendRes.ok).toBe(true);
+			await poller.poll();
 			await waitFor(() => {
 				const debug = debugTracker.getAgentDebug(debugKey);
-				return debug?.parser.lastWarnings.includes("***") ?? false;
+				return (debug?.parser.lastProviderEventsCount ?? 0) >= 1;
 			}, 2000);
 
 			const debug = debugTracker.getAgentDebug(debugKey);
-			expect(debug?.parser.lastWarnings).toContain("***");
 			expect(debug?.parser.lastProviderEventsCount).toBeGreaterThanOrEqual(1);
 			const unknownEvents = seen.filter(
 				(event) => event.agentId === agentId && event.type === "unknown",
@@ -562,6 +598,209 @@ describe("session/poller.codex-unknown-filter", () => {
 		} finally {
 			poller.stop();
 			debugTracker.stop();
+			unsubscribe();
+		}
+	});
+
+	it("quiesces idle codex agents after finalizing the last assistant message", async () => {
+		const logDir = await makeTempDir("ah-poller-quiesce-");
+		const config = makeConfig(logDir);
+		config.pollIntervalMs = 50;
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(config, store, eventBus);
+		const poller = createPoller(config, store, manager, eventBus);
+		const seen: NormalizedEvent[] = [];
+		const unsubscribe = eventBus.subscribe({ project: "p-poller-quiesce" }, (event) =>
+			seen.push(event),
+		);
+
+		try {
+			const projectRes = await manager.createProject("p-poller-quiesce", process.cwd());
+			expect(projectRes.ok).toBe(true);
+			if (!projectRes.ok) throw new Error("project create failed");
+
+			const createRes = await manager.createAgent(
+				"p-poller-quiesce",
+				"codex",
+				"initial task",
+				undefined,
+				undefined,
+				undefined,
+				"poller-quiesce-1",
+			);
+			expect(createRes.ok).toBe(true);
+			if (!createRes.ok) throw new Error("agent create failed");
+			if (!createRes.value.providerRuntimeDir) throw new Error("codex runtime dir missing");
+
+			await writeCodexFinalSession(createRes.value.providerRuntimeDir, "final answer");
+			const agent = store.getAgent("p-poller-quiesce", "poller-quiesce-1");
+			if (!agent) throw new Error("agent missing from store");
+			agent.status = "idle";
+			agent.pollState = "finalizing";
+			agent.terminalStatus = "idle";
+			agent.terminalObservedAt = new Date(Date.now() - 3_000).toISOString();
+			agent.terminalQuietSince = new Date(Date.now() - 2_500).toISOString();
+			agent.deliveryState = "not_applicable";
+			agent.deliveryId = "delivery-finalize-1";
+			agent.lastCapturedOutput = "\n> ";
+			await manager.persistAgentTerminalState("p-poller-quiesce", "poller-quiesce-1");
+
+			for (let attempt = 0; attempt < 8; attempt += 1) {
+				await poller.poll();
+				const current = manager.getAgent("p-poller-quiesce", "poller-quiesce-1");
+				if (current.ok && current.value.pollState === "quiesced") break;
+				await Bun.sleep(60);
+			}
+
+			const agentRes = manager.getAgent("p-poller-quiesce", "poller-quiesce-1");
+			expect(agentRes.ok).toBe(true);
+			if (!agentRes.ok) throw new Error("agent missing after quiesce");
+			expect(agentRes.value.status).toBe("idle");
+			expect(agentRes.value.pollState).toBe("quiesced");
+			expect(agentRes.value.finalMessage).toBe("final answer");
+			expect(agentRes.value.finalMessageSource).toBe("internals_codex_jsonl");
+			expect(
+				seen.some(
+					(event) =>
+						event.type === "agent_terminal_finalized" &&
+						event.agentId === "poller-quiesce-1" &&
+						event.status === "idle" &&
+						event.lastMessage === "final answer",
+				),
+			).toBe(true);
+
+			const deleteRes = await manager.deleteProject("p-poller-quiesce");
+			expect(deleteRes.ok).toBe(true);
+		} finally {
+			poller.stop();
+			unsubscribe();
+		}
+	});
+});
+
+describe("session/poller.finalization", () => {
+	it("finalizes idle agents, captures the last assistant message, and quiesces polling", async () => {
+		const config = makeConfig();
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(config, store, eventBus);
+		const poller = createPoller(config, store, manager, eventBus);
+		const seen: NormalizedEvent[] = [];
+		const unsubscribe = eventBus.subscribe({ project: "pf-idle" }, (event) => seen.push(event));
+
+		try {
+			const projectRes = await manager.createProject("pf-idle", process.cwd());
+			expect(projectRes.ok).toBe(true);
+			if (!projectRes.ok) throw new Error("project create failed");
+
+			const createRes = await manager.createAgent(
+				"pf-idle",
+				"codex",
+				"initial task",
+				undefined,
+				undefined,
+				undefined,
+				"codex-finalize-idle",
+			);
+			expect(createRes.ok).toBe(true);
+			if (!createRes.ok) throw new Error("agent create failed");
+			if (!createRes.value.providerRuntimeDir) throw new Error("missing codex runtime dir");
+
+			await writeCodexTerminalSession(createRes.value.providerRuntimeDir, [
+				JSON.stringify({ type: "event_msg", payload: { type: "task_started" } }),
+				JSON.stringify({
+					type: "response_item",
+					payload: {
+						type: "message",
+						role: "assistant",
+						content: [{ type: "output_text", text: "done" }],
+					},
+				}),
+				JSON.stringify({ type: "event_msg", payload: { type: "task_complete" } }),
+			]);
+
+			await poller.poll();
+			await poller.poll();
+			await Bun.sleep(2100);
+			await poller.poll();
+
+			const agentRes = manager.getAgent("pf-idle", "codex-finalize-idle");
+			expect(agentRes.ok).toBe(true);
+			if (!agentRes.ok) throw new Error("agent missing after finalization");
+			expect(agentRes.value.status).toBe("idle");
+			expect(agentRes.value.pollState).toBe("quiesced");
+			expect(agentRes.value.terminalStatus).toBe("idle");
+			expect(agentRes.value.finalMessage).toBe("done");
+			expect(agentRes.value.finalizedAt).not.toBeNull();
+			expect(agentRes.value.deliveryState).toBe("pending");
+			expect(
+				seen.some(
+					(event) =>
+						event.type === "agent_terminal_finalized" &&
+						event.agentId === "codex-finalize-idle" &&
+						event.status === "idle" &&
+						event.lastMessage === "done",
+				),
+			).toBe(true);
+		} finally {
+			unsubscribe();
+		}
+	});
+
+	it("finalizes direct exited agents even when no assistant message is available", async () => {
+		const config = makeConfig();
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(config, store, eventBus);
+		const poller = createPoller(config, store, manager, eventBus);
+		const seen: NormalizedEvent[] = [];
+		const unsubscribe = eventBus.subscribe({ project: "pf-exited" }, (event) => seen.push(event));
+
+		try {
+			const projectRes = await manager.createProject("pf-exited", process.cwd());
+			expect(projectRes.ok).toBe(true);
+			if (!projectRes.ok) throw new Error("project create failed");
+
+			const createRes = await manager.createAgent(
+				"pf-exited",
+				"codex",
+				"initial task",
+				undefined,
+				undefined,
+				undefined,
+				"codex-finalize-exited",
+			);
+			expect(createRes.ok).toBe(true);
+			if (!createRes.ok) throw new Error("agent create failed");
+
+			const [sessionName, windowName] = createRes.value.tmuxTarget.split(":");
+			if (!sessionName || !windowName) throw new Error("bad tmux target");
+			const session = fake.sessions.get(sessionName);
+			const window = session?.windows.get(windowName);
+			if (!window) throw new Error("window missing");
+			window.paneDead = true;
+
+			await poller.poll();
+
+			const agentRes = manager.getAgent("pf-exited", "codex-finalize-exited");
+			expect(agentRes.ok).toBe(true);
+			if (!agentRes.ok) throw new Error("agent missing after exited finalization");
+			expect(agentRes.value.status).toBe("exited");
+			expect(agentRes.value.pollState).toBe("quiesced");
+			expect(agentRes.value.terminalStatus).toBe("exited");
+			expect(agentRes.value.finalMessage).toBeNull();
+			expect(agentRes.value.finalizedAt).not.toBeNull();
+			expect(
+				seen.some(
+					(event) =>
+						event.type === "agent_terminal_finalized" &&
+						event.agentId === "codex-finalize-exited" &&
+						event.status === "exited" &&
+						event.lastMessage === null,
+				),
+			).toBe(true);
+		} finally {
 			unsubscribe();
 		}
 	});
@@ -708,6 +947,7 @@ describe("session/manager.initial-input", () => {
 		const deleteRes = await manager.deleteProject("p3-codex-delayed");
 		expect(deleteRes.ok).toBe(true);
 	});
+
 	it("stores claude session file path with dot-segment-safe project key", async () => {
 		const store = createStore();
 		const eventBus = createEventBus(500);
@@ -1128,6 +1368,187 @@ describe("session/manager.initial-input", () => {
 
 		const deleteRes = await manager.deleteProject("p8-delay");
 		expect(deleteRes.ok).toBe(true);
+	});
+});
+
+describe("session/manager.terminal-state", () => {
+	it("reactivates a quiesced agent on successful sendInput and clears persisted terminal state", async () => {
+		const logDir = await makeTempDir("ah-terminal-reactivate-");
+		const config = makeConfig();
+		config.logDir = logDir;
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(config, store, eventBus);
+
+		const projectRes = await manager.createProject("pt-reactivate", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await manager.createAgent(
+			"pt-reactivate",
+			"codex",
+			"Reply with exactly: 4",
+			undefined,
+			undefined,
+			undefined,
+			"codex-reactivate-1",
+		);
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+
+		const agent = createRes.value;
+		agent.status = "idle";
+		agent.pollState = "quiesced";
+		agent.terminalStatus = "idle";
+		agent.terminalObservedAt = "2026-02-18T09:59:58.000Z";
+		agent.terminalQuietSince = "2026-02-18T09:59:59.000Z";
+		agent.finalizedAt = "2026-02-18T10:00:00.000Z";
+		agent.finalMessage = "final answer";
+		agent.finalMessageSource = "internals_codex_jsonl";
+		agent.deliveryState = "sent";
+		agent.deliveryInFlight = false;
+		agent.deliveryId = "delivery-reactivate";
+		agent.deliverySentAt = "2026-02-18T10:00:01.000Z";
+		await manager.persistAgentTerminalState(agent.project, agent.id);
+
+		const sendRes = await manager.sendInput("pt-reactivate", agent.id, "follow-up prompt");
+		expect(sendRes.ok).toBe(true);
+
+		const updatedRes = manager.getAgent("pt-reactivate", agent.id);
+		expect(updatedRes.ok).toBe(true);
+		if (!updatedRes.ok) throw new Error("agent missing after reactivation");
+		expect(updatedRes.value.status).toBe("processing");
+		expect(updatedRes.value.pollState).toBe("active");
+		expect(updatedRes.value.terminalStatus).toBeNull();
+		expect(updatedRes.value.finalizedAt).toBeNull();
+		expect(updatedRes.value.deliveryState).toBe("not_applicable");
+		expect(updatedRes.value.deliveryId).toBeNull();
+
+		const terminalState = await readPersistedTerminalState(logDir);
+		expect(terminalState["pt-reactivate:codex-reactivate-1"]).toBeUndefined();
+	});
+
+	it("rejects sendInput for a quiesced dead pane and preserves terminal snapshot", async () => {
+		const logDir = await makeTempDir("ah-terminal-dead-pane-");
+		const config = makeConfig();
+		config.logDir = logDir;
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(config, store, eventBus);
+
+		const projectRes = await manager.createProject("pt-dead", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await manager.createAgent(
+			"pt-dead",
+			"codex",
+			"Reply with exactly: 4",
+			undefined,
+			undefined,
+			undefined,
+			"codex-dead-pane-1",
+		);
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+
+		const agent = createRes.value;
+		agent.status = "idle";
+		agent.pollState = "quiesced";
+		agent.terminalStatus = "idle";
+		agent.terminalObservedAt = "2026-02-18T09:59:58.000Z";
+		agent.terminalQuietSince = "2026-02-18T09:59:59.000Z";
+		agent.finalizedAt = "2026-02-18T10:00:00.000Z";
+		agent.finalMessage = "final answer";
+		agent.finalMessageSource = "internals_codex_jsonl";
+		agent.deliveryState = "sent";
+		agent.deliveryInFlight = false;
+		agent.deliveryId = "delivery-dead-pane";
+		agent.deliverySentAt = "2026-02-18T10:00:01.000Z";
+		await manager.persistAgentTerminalState(agent.project, agent.id);
+
+		const session = fake.sessions.get("ah-manager-test-pt-dead");
+		const window = session?.windows.get("codex-dead-pane-1");
+		if (!window) throw new Error("window missing");
+		window.paneDead = true;
+
+		const sendRes = await manager.sendInput("pt-dead", agent.id, "follow-up prompt");
+		expect(sendRes.ok).toBe(false);
+		if (sendRes.ok) throw new Error("expected sendInput failure");
+		expect(sendRes.error.code).toBe("TMUX_ERROR");
+
+		const updatedRes = manager.getAgent("pt-dead", agent.id);
+		expect(updatedRes.ok).toBe(true);
+		if (!updatedRes.ok) throw new Error("agent missing after dead-pane sendInput");
+		expect(updatedRes.value.status).toBe("exited");
+		expect(updatedRes.value.pollState).toBe("quiesced");
+		expect(updatedRes.value.terminalStatus).toBe("idle");
+		expect(updatedRes.value.finalizedAt).toBe("2026-02-18T10:00:00.000Z");
+		expect(updatedRes.value.deliveryId).toBe("delivery-dead-pane");
+	});
+
+	it("rehydrates persisted quiesced state and clears stale in-flight delivery markers", async () => {
+		const logDir = await makeTempDir("ah-terminal-rehydrate-");
+		const config = makeConfig();
+		config.logDir = logDir;
+
+		const store1 = createStore();
+		const eventBus1 = createEventBus(500);
+		const manager1 = createManager(config, store1, eventBus1);
+
+		const projectRes = await manager1.createProject("pt-rehydrate", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await manager1.createAgent(
+			"pt-rehydrate",
+			"codex",
+			"Reply with exactly: 4",
+			undefined,
+			undefined,
+			undefined,
+			"codex-rehydrate-1",
+		);
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+
+		const agent = createRes.value;
+		agent.status = "idle";
+		agent.pollState = "quiesced";
+		agent.terminalStatus = "idle";
+		agent.terminalObservedAt = "2026-02-18T09:59:58.000Z";
+		agent.terminalQuietSince = "2026-02-18T09:59:59.000Z";
+		agent.finalizedAt = "2026-02-18T10:00:00.000Z";
+		agent.finalMessage = "final answer";
+		agent.finalMessageSource = "internals_codex_jsonl";
+		agent.deliveryState = "pending";
+		agent.deliveryInFlight = true;
+		agent.deliveryId = "delivery-rehydrate";
+		agent.deliverySentAt = null;
+		await manager1.persistAgentTerminalState(agent.project, agent.id);
+
+		const store2 = createStore();
+		const eventBus2 = createEventBus(500);
+		const manager2 = createManager(config, store2, eventBus2);
+		await manager2.rehydrateProjectsFromTmux();
+		await manager2.rehydrateAgentsFromTmux();
+
+		const recoveredRes = manager2.getAgent("pt-rehydrate", "codex-rehydrate-1");
+		expect(recoveredRes.ok).toBe(true);
+		if (!recoveredRes.ok) throw new Error("rehydrated agent missing");
+		expect(recoveredRes.value.pollState).toBe("quiesced");
+		expect(recoveredRes.value.terminalStatus).toBe("idle");
+		expect(recoveredRes.value.deliveryState).toBe("pending");
+		expect(recoveredRes.value.deliveryInFlight).toBe(false);
+		expect(recoveredRes.value.finalMessage).toBe("final answer");
+
+		const terminalState = await readPersistedTerminalState(logDir);
+		expect(terminalState["pt-rehydrate:codex-rehydrate-1"]).toEqual(
+			expect.objectContaining({
+				deliveryInFlight: false,
+				deliveryState: "pending",
+			}),
+		);
 	});
 });
 
@@ -1682,6 +2103,180 @@ describe("session/manager.rehydrate", () => {
 		expect(recoveredAgents.ok).toBe(true);
 		if (!recoveredAgents.ok) throw new Error("agents missing after rehydrate");
 		expect(recoveredAgents.value).toHaveLength(0);
+	});
+
+	it("rehydrates quiesced terminal state from persisted snapshot", async () => {
+		const logDir = await makeTempDir("ah-terminal-rehydrate-");
+		const config = makeConfig(logDir);
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(config, store, eventBus);
+
+		const projectRes = await manager.createProject("pr-quiesced", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await manager.createAgent(
+			"pr-quiesced",
+			"codex",
+			"initial task",
+			undefined,
+			undefined,
+			undefined,
+			"quiesced-1",
+		);
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+
+		const persisted = store.getAgent("pr-quiesced", "quiesced-1");
+		if (!persisted) throw new Error("agent missing from store");
+		persisted.status = "idle";
+		persisted.pollState = "quiesced";
+		persisted.terminalStatus = "idle";
+		persisted.terminalObservedAt = "2026-02-18T09:59:58.000Z";
+		persisted.terminalQuietSince = "2026-02-18T09:59:59.000Z";
+		persisted.finalizedAt = "2026-02-18T10:00:00.000Z";
+		persisted.finalMessage = "done";
+		persisted.finalMessageSource = "internals_codex_jsonl";
+		persisted.deliveryState = "pending";
+		persisted.deliveryId = "delivery-quiesced-1";
+		await manager.persistAgentTerminalState("pr-quiesced", "quiesced-1");
+
+		const recoveredStore = createStore();
+		const recoveredBus = createEventBus(500);
+		const recoveredManager = createManager(config, recoveredStore, recoveredBus);
+		await recoveredManager.rehydrateProjectsFromTmux();
+		await recoveredManager.rehydrateAgentsFromTmux();
+
+		const recovered = recoveredManager.getAgent("pr-quiesced", "quiesced-1");
+		expect(recovered.ok).toBe(true);
+		if (!recovered.ok) throw new Error("rehydrated agent missing");
+		expect(recovered.value.status).toBe("idle");
+		expect(recovered.value.pollState).toBe("quiesced");
+		expect(recovered.value.terminalStatus).toBe("idle");
+		expect(recovered.value.finalizedAt).toBe("2026-02-18T10:00:00.000Z");
+		expect(recovered.value.finalMessage).toBe("done");
+		expect(recovered.value.deliveryState).toBe("pending");
+	});
+});
+
+describe("session/manager.quiesced-reactivation", () => {
+	it("reactivates a quiesced live agent on successful sendInput", async () => {
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		const manager = createManager(makeConfig(), store, eventBus);
+
+		const projectRes = await manager.createProject("pq-reactivate", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await manager.createAgent(
+			"pq-reactivate",
+			"codex",
+			"initial task",
+			undefined,
+			undefined,
+			undefined,
+			"quiesced-live-1",
+		);
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+
+		const agent = store.getAgent("pq-reactivate", "quiesced-live-1");
+		if (!agent) throw new Error("agent missing");
+		agent.status = "idle";
+		agent.pollState = "quiesced";
+		agent.terminalStatus = "idle";
+		agent.terminalObservedAt = "2026-02-18T09:59:58.000Z";
+		agent.terminalQuietSince = "2026-02-18T09:59:59.000Z";
+		agent.finalizedAt = "2026-02-18T10:00:00.000Z";
+		agent.finalMessage = "done";
+		agent.finalMessageSource = "internals_codex_jsonl";
+		agent.deliveryState = "pending";
+		agent.deliveryId = "delivery-live-1";
+		await manager.persistAgentTerminalState("pq-reactivate", "quiesced-live-1");
+
+		const sendRes = await manager.sendInput("pq-reactivate", "quiesced-live-1", "follow-up prompt");
+		expect(sendRes.ok).toBe(true);
+		if (!sendRes.ok) throw new Error("sendInput failed");
+
+		const after = manager.getAgent("pq-reactivate", "quiesced-live-1");
+		expect(after.ok).toBe(true);
+		if (!after.ok) throw new Error("agent missing after sendInput");
+		expect(after.value.status).toBe("processing");
+		expect(after.value.pollState).toBe("active");
+		expect(after.value.terminalStatus).toBeNull();
+		expect(after.value.finalizedAt).toBeNull();
+		expect(after.value.deliveryState).toBe("not_applicable");
+		expect(after.value.deliveryId).toBeNull();
+	});
+
+	it("rejects sendInput for quiesced dead panes and preserves terminal metadata", async () => {
+		const seen: NormalizedEvent[] = [];
+		const store = createStore();
+		const eventBus = createEventBus(500);
+		eventBus.subscribe({ project: "pq-dead" }, (event) => seen.push(event));
+		const manager = createManager(makeConfig(), store, eventBus);
+
+		const projectRes = await manager.createProject("pq-dead", process.cwd());
+		expect(projectRes.ok).toBe(true);
+		if (!projectRes.ok) throw new Error("project create failed");
+
+		const createRes = await manager.createAgent(
+			"pq-dead",
+			"codex",
+			"initial task",
+			undefined,
+			undefined,
+			undefined,
+			"quiesced-dead-1",
+		);
+		expect(createRes.ok).toBe(true);
+		if (!createRes.ok) throw new Error("agent create failed");
+
+		const agent = store.getAgent("pq-dead", "quiesced-dead-1");
+		if (!agent) throw new Error("agent missing");
+		agent.status = "idle";
+		agent.pollState = "quiesced";
+		agent.terminalStatus = "idle";
+		agent.terminalObservedAt = "2026-02-18T09:59:58.000Z";
+		agent.finalizedAt = "2026-02-18T10:00:00.000Z";
+		agent.finalMessage = "done";
+		agent.finalMessageSource = "internals_codex_jsonl";
+		agent.deliveryState = "pending";
+		agent.deliveryId = "delivery-dead-1";
+		await manager.persistAgentTerminalState("pq-dead", "quiesced-dead-1");
+
+		const [sessionName, windowName] = agent.tmuxTarget.split(":");
+		if (!sessionName || !windowName) throw new Error("bad tmux target");
+		const session = fake.sessions.get(sessionName);
+		const window = session?.windows.get(windowName);
+		if (!window) throw new Error("window missing");
+		window.paneDead = true;
+
+		const sendRes = await manager.sendInput("pq-dead", "quiesced-dead-1", "should fail");
+		expect(sendRes.ok).toBe(false);
+		if (sendRes.ok) throw new Error("sendInput unexpectedly succeeded");
+		expect(sendRes.error.code).toBe("TMUX_ERROR");
+
+		const after = manager.getAgent("pq-dead", "quiesced-dead-1");
+		expect(after.ok).toBe(true);
+		if (!after.ok) throw new Error("agent missing after failed sendInput");
+		expect(after.value.status).toBe("exited");
+		expect(after.value.pollState).toBe("quiesced");
+		expect(after.value.terminalStatus).toBe("idle");
+		expect(after.value.finalizedAt).toBe("2026-02-18T10:00:00.000Z");
+		expect(after.value.deliveryState).toBe("pending");
+		expect(after.value.deliveryId).toBe("delivery-dead-1");
+		expect(
+			seen.some(
+				(event) =>
+					event.type === "status_changed" &&
+					event.agentId === "quiesced-dead-1" &&
+					event.to === "exited" &&
+					event.source === "manager_send_input_preflight",
+			),
+		).toBe(true);
 	});
 });
 

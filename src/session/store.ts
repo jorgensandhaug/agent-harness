@@ -101,10 +101,6 @@ export function createStore() {
 		if (agent) {
 			agent.status = status;
 			agent.lastActivity = new Date().toISOString();
-			// Free captured output for terminal agents — no longer needed
-			if (status === "idle" || status === "error" || status === "exited") {
-				agent.lastCapturedOutput = "";
-			}
 		}
 	}
 

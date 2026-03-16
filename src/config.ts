@@ -162,7 +162,7 @@ const HarnessConfigSchema = z
 		tmuxPrefix: z.string().min(1).default("ah"),
 		logDir: z.string().default("./logs"),
 		logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
-		pollIntervalMs: z.number().int().min(100).max(30000).default(5000),
+		pollIntervalMs: z.number().int().min(100).max(30000).default(1000),
 		captureLines: z.number().int().min(10).max(10000).default(500),
 		maxEventHistory: z.number().int().min(100).max(100000).default(10000),
 		auth: AuthConfigSchema.optional(),
